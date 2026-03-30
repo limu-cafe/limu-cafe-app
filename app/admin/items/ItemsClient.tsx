@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { Plus, Pencil, Trash2, Eye, EyeOff } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Plus, Pencil, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useRouter } from 'next/navigation';
 import type { Item, Category } from '@/types';
@@ -15,10 +15,20 @@ const EMPTY_FORM = {
 
 export default function ItemsClient({ items, categories }: Props) {
   const router = useRouter();
+  const [localItems, setLocalItems] = useState<Item[]>(items);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Item | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    setLocalItems(items);
+  }, [items]);
+
+  const attachCategory = (item: Item) => ({
+    ...item,
+    category: categories.find((category) => category.id === item.category_id),
+  });
 
   const openCreate = () => { setEditing(null); setForm(EMPTY_FORM); setShowForm(true); };
   const openEdit = (item: Item) => {
@@ -51,6 +61,15 @@ export default function ItemsClient({ items, categories }: Props) {
         body: JSON.stringify(body),
       });
       if (!res.ok) throw new Error((await res.json()).error);
+      const savedItem = attachCategory(await res.json());
+
+      setLocalItems((current) => {
+        if (editing) {
+          return current.map((item) => (item.id === savedItem.id ? savedItem : item));
+        }
+        return [savedItem, ...current];
+      });
+
       toast.success(editing ? '商品を更新しました' : '商品を登録しました');
       setShowForm(false);
       router.refresh();
@@ -61,7 +80,11 @@ export default function ItemsClient({ items, categories }: Props) {
   const handleDelete = async (id: string, name: string) => {
     if (!confirm(`「${name}」を削除しますか？`)) return;
     const res = await fetch(`/api/items/${id}`, { method: 'DELETE' });
-    if (res.ok) { toast.success('削除しました'); router.refresh(); }
+    if (res.ok) {
+      setLocalItems((current) => current.filter((item) => item.id !== id));
+      toast.success('削除しました');
+      router.refresh();
+    }
     else toast.error('削除に失敗しました');
   };
 
@@ -71,7 +94,13 @@ export default function ItemsClient({ items, categories }: Props) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ is_available: !item.is_available }),
     });
-    if (res.ok) router.refresh();
+    if (res.ok) {
+      const updatedItem = attachCategory(await res.json());
+      setLocalItems((current) => current.map((currentItem) => (
+        currentItem.id === updatedItem.id ? updatedItem : currentItem
+      )));
+      router.refresh();
+    }
   };
 
   return (
@@ -79,7 +108,7 @@ export default function ItemsClient({ items, categories }: Props) {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="font-display font-bold text-2xl text-white">商品管理</h1>
-          <p className="text-gray-400 text-sm mt-1">{items.length}件の商品</p>
+          <p className="text-gray-400 text-sm mt-1">{localItems.length}件の商品</p>
         </div>
         <button onClick={openCreate} className="flex items-center gap-2 bg-white text-gray-950 px-4 py-2 rounded-lg font-medium text-sm hover:bg-gray-100 active:scale-95 transition-all">
           <Plus size={16} /> 商品を追加
@@ -97,7 +126,7 @@ export default function ItemsClient({ items, categories }: Props) {
             </tr>
           </thead>
           <tbody>
-            {items.map((item) => (
+            {localItems.map((item) => (
               <tr key={item.id} className="border-b border-gray-800/50 hover:bg-gray-800/30 transition-colors">
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-2">
@@ -137,7 +166,7 @@ export default function ItemsClient({ items, categories }: Props) {
             ))}
           </tbody>
         </table>
-        {items.length === 0 && (
+        {localItems.length === 0 && (
           <div className="text-center py-12 text-gray-500">商品がありません</div>
         )}
       </div>

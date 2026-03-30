@@ -1,20 +1,17 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/server';
 
 export async function POST(
   _request: Request,
   { params }: { params: { id: string; action: string } }
 ) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
+  const supabase = createAdminClient();
   const { id, action } = params;
+
   if (!['approve', 'reject'].includes(action)) {
     return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
   }
 
-  // チャージ申請を取得
   const { data: req, error: fetchError } = await supabase
     .from('charge_requests')
     .select('*')
@@ -26,19 +23,14 @@ export async function POST(
     return NextResponse.json({ error: '申請が見つかりません' }, { status: 404 });
   }
 
-  // ステータス更新
-  const { error: updateError } = await supabase
+  await supabase
     .from('charge_requests')
     .update({
       status: action === 'approve' ? 'approved' : 'rejected',
-      approved_by: user.id,
       approved_at: new Date().toISOString(),
     })
     .eq('id', id);
 
-  if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 });
-
-  // 承認の場合は残高を加算
   if (action === 'approve') {
     const { data: targetUser } = await supabase
       .from('users').select('balance').eq('id', req.user_id).single();

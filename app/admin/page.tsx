@@ -1,11 +1,13 @@
-import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/server';
 import { ShoppingBag, Users, AlertTriangle, Wallet, TrendingUp, Clock } from 'lucide-react';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 import { ja } from 'date-fns/locale';
 import Link from 'next/link';
 
+export const dynamic = 'force-dynamic';
+
 export default async function AdminDashboard() {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
   const now = new Date();
   const monthStart = startOfMonth(now).toISOString();
   const monthEnd = endOfMonth(now).toISOString();
@@ -28,7 +30,7 @@ export default async function AdminDashboard() {
       .eq('is_available', true)
       .filter('stock', 'lte', 'stock_alert_threshold'),
     supabase.from('orders')
-      .select('*, user:users(name), order_items(item_name, quantity, subtotal)')
+      .select('*, user:users!orders_user_id_fkey(name), order_items(item_name, quantity, subtotal)')
       .order('created_at', { ascending: false })
       .limit(5),
     supabase.from('orders')
@@ -38,7 +40,7 @@ export default async function AdminDashboard() {
       .eq('payment_status', 'completed'),
   ]);
 
-  const monthlyRevenue = monthlyOrders?.reduce((sum, o) => sum + o.total_amount, 0) ?? 0;
+  const monthlyRevenue = monthlyOrders?.reduce((sum: number, o: { total_amount: number }) => sum + o.total_amount, 0) ?? 0;
 
   const stats = [
     { label: '今月の売上', value: `¥${monthlyRevenue.toLocaleString()}`, icon: TrendingUp, color: 'text-green-400', bg: 'bg-green-400/10' },
@@ -101,7 +103,7 @@ export default async function AdminDashboard() {
             <p className="text-center py-6 text-gray-500 text-sm">注文なし</p>
           ) : (
             <div className="space-y-2">
-              {recentOrders.map((order) => (
+              {recentOrders.map((order: any) => (
                 <div key={order.id} className="flex items-center justify-between py-2 border-b border-gray-800 last:border-0">
                   <div>
                     <p className="text-sm text-white">{(order.user as any)?.name}</p>
@@ -136,7 +138,7 @@ export default async function AdminDashboard() {
             </div>
           ) : (
             <div className="space-y-2">
-              {lowStockItems.map((item) => (
+              {lowStockItems.map((item: any) => (
                 <div key={item.id} className="flex items-center justify-between py-2 border-b border-gray-800 last:border-0">
                   <p className="text-sm text-white">{item.name}</p>
                   <div className="flex items-center gap-2">

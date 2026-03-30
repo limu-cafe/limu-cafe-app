@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { revalidatePath } from 'next/cache';
+import { createAdminClient } from '@/lib/supabase/server';
 
 export async function GET() {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
   const { data, error } = await supabase
     .from('price_watches')
     .select('*')
@@ -13,18 +14,19 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const supabase = createAdminClient();
 
   const body = await request.json();
 
   const { data, error } = await supabase
     .from('price_watches')
-    .insert({ ...body, created_by: user.id })
+    .insert({ ...body, created_by: null })
     .select()
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  revalidatePath('/admin/price-watch');
+
   return NextResponse.json(data);
 }

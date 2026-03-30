@@ -1,8 +1,10 @@
-import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/server';
 import StockClient from './StockClient';
 
+export const dynamic = 'force-dynamic';
+
 export default async function StockPage() {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
   const { data: items } = await supabase
     .from('items')
     .select('*, category:categories(*)')

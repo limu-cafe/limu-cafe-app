@@ -18,7 +18,7 @@ export default function LoginPage() {
       },
     });
     if (error) {
-      toast.error('ログインに失敗しました');
+      toast.error('ログインに失敗しました: ' + error.message);
       setLoading(false);
     }
   };
@@ -26,7 +26,6 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen texture-bg flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
-        {/* ロゴ */}
         <div className="text-center mb-10">
           <div className="text-6xl mb-4">☕</div>
           <h1 className="font-display font-bold text-4xl text-espresso">
@@ -34,15 +33,13 @@ export default function LoginPage() {
           </h1>
           <p className="text-espresso-400 mt-2">研究室のオンライン購買</p>
         </div>
-
         <div className="card space-y-6">
           <div className="text-center space-y-2">
             <h2 className="font-medium text-espresso">研究室のSlackでログイン</h2>
             <p className="text-sm text-espresso-400">
-              LIMUのSlackワークスペースに参加しているメンバーのみログインできます
+              LIMUのSlackワークスペースのメンバーはすぐに利用できます
             </p>
           </div>
-
           <button
             onClick={handleSlackLogin}
             disabled={loading}
@@ -62,10 +59,6 @@ export default function LoginPage() {
               </>
             )}
           </button>
-
-          <p className="text-center text-xs text-espresso-400">
-            初回ログイン時は管理者の承認が必要です
-          </p>
         </div>
       </div>
     </div>

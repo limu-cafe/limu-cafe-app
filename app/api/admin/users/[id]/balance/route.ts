@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { revalidatePath } from 'next/cache';
+import { createAdminClient } from '@/lib/supabase/server';
 
 export async function POST(
   request: Request,
   { params }: { params: { id: string } }
 ) {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
   const { amount } = await request.json();
 
   if (!amount || amount <= 0) {
@@ -21,5 +22,8 @@ export async function POST(
     .eq('id', params.id);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  revalidatePath('/admin/users');
+
   return NextResponse.json({ ok: true });
 }

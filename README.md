@@ -56,25 +56,76 @@ npm install
    - `#limu-admin` → `SLACK_WEBHOOK_ADMIN`
 6. **Bot Token** をコピー → `SLACK_BOT_TOKEN`
 
+注意:
+- Slack アプリを再インストールしたり、Webhook を作り直した場合は URL が変わることがあります
+- 通知が急に来なくなった場合は、まず `SLACK_WEBHOOK_ORDERS` / `SLACK_WEBHOOK_ADMIN` を再確認してください
+
 ### 4. Stripe のセットアップ（クレカ払いを使う場合）
 
 1. [stripe.com](https://stripe.com) でアカウント作成
 2. **Developers → API keys** からキーを取得
 3. テスト環境で動作確認後、本番キーに切り替え
 
+現在の運用:
+- Stripe はまだ本格運用していません
+- UI には「開発中」と表示されます
+- 実運用は現金チャージを利用してください
+
+### 4.5 Keepa について
+
+現在の運用:
+- Keepa API は本格運用していません
+- 管理画面の価格監視は「開発中」の予告枠です
+- API キーを未設定でも通常運用は可能です
+
 ### 5. 環境変数の設定
 
+このリポジトリでは、秘密情報をプロジェクト内に置かない運用を推奨します。
+
+1. プロジェクト内の [`.env.example`](/Users/miyoshishouhei/Documents/dev/limu-cafe-app/.env.example) を見ながら、プロジェクト外に env ファイルを作成  
+   例: `~/.config/limu-cafe/env`
+2. 実際の秘密情報はその外部ファイルにだけ書く
+3. [`.env.local`](/Users/miyoshishouhei/Documents/dev/limu-cafe-app/.env.local) は空のままにする
+
+外部 env ファイルの例:
+
 ```bash
-cp .env.local.example .env.local
-# .env.local を編集して各値を設定
+NEXT_PUBLIC_SUPABASE_URL=...
+NEXT_PUBLIC_SUPABASE_ANON_KEY=...
+SUPABASE_SERVICE_ROLE_KEY=...
+SLACK_WEBHOOK_ORDERS=...
+SLACK_WEBHOOK_ADMIN=...
+SLACK_BOT_TOKEN=...
+ADMIN_PASSWORD=...
+CRON_SECRET=...
+KEEPA_API_KEY=...
 ```
 
 ### 6. 開発サーバーの起動
 
 ```bash
+cd /path/to/limu-cafe-app
+set -a
+source ~/.config/limu-cafe/env
+set +a
 npm run dev
 # → http://localhost:3000
 ```
+
+毎回の起動を簡単にしたい場合は、リポジトリ外に起動スクリプトを作ると運用しやすいです。
+
+例: `~/bin/limu-cafe-dev`
+
+```bash
+#!/bin/zsh
+cd /path/to/limu-cafe-app || exit 1
+set -a
+source ~/.config/limu-cafe/env
+set +a
+npm run dev
+```
+
+以後は `~/bin/limu-cafe-dev` だけで起動できます。
 
 ### 7. Vercel へのデプロイ
 
@@ -85,41 +136,133 @@ npx vercel
 # または GitHub連携で自動デプロイ
 ```
 
-Vercel ダッシュボード → **Settings → Environment Variables** で `.env.local` の内容をすべて登録。
+Vercel ダッシュボード → **Settings → Environment Variables** で、外部 env ファイルと同じ値を登録。
 
 ---
 
 ## 年次引き継ぎ手順
 
-### 管理者アカウントの引き継ぎ
+この章は「新しい担当者が、ほぼゼロからでも運用を引き継げる」ことを目的にしています。
 
-1. **環境変数 `ADMIN_PASSWORD` を変更**
-   - Vercel ダッシュボード → Settings → Environment Variables
-   - `ADMIN_PASSWORD` の値を新しいパスワードに変更
-   - Vercel で再デプロイ（自動）
+### まず把握しておくこと
 
-2. **Supabase のオーナー移譲**
-   - Supabase ダッシュボード → Organization Settings → Members
-   - 新管理者をメンバーに追加 → Ownerに変更
+- ローカル開発では、秘密情報をリポジトリ内に置きません
+- 本物の秘密情報は `~/.config/limu-cafe/env` に置きます
+- 管理者画面のログインは `ADMIN_PASSWORD` です
+- 本番環境の設定は Vercel / Supabase / Slack に分かれています
+- 通知が来ない場合、原因は Slack Webhook URL の期限切れ・差し替わりが多いです
 
-3. **Vercel のオーナー移譲**
-   - Vercel ダッシュボード → Team Settings → Members
-   - 新管理者を追加
+### 引き継ぎの全体像
 
-4. **Slack アプリの管理者追加**
-   - Slack API ダッシュボード → Collaborators
-   - 新管理者のSlackアカウントを追加
+1. GitHub / Vercel / Supabase / Slack の権限を新担当者に渡す
+2. ローカル開発用の env ファイルを新担当者に渡す
+3. `ADMIN_PASSWORD` を新しいものに変更する
+4. ローカルで起動して動作確認する
+5. Slack通知・商品登録・注文・チャージ承認まで一通り確認する
 
-5. **GitHub リポジトリの移譲**
-   - Settings → Collaborators → 新管理者を追加
+### 手順1. 新担当者のPCで env ファイルを用意する
 
-### 引き継ぎ時の確認事項チェックリスト
+新担当者のMacで以下を実行します。
 
-- [ ] 新管理者が管理者画面にログインできる
-- [ ] Slack通知が届く
-- [ ] 商品の追加・編集ができる
-- [ ] チャージ申請の承認ができる
-- [ ] 後払い残高がすべて精算済み
+```bash
+mkdir -p ~/.config/limu-cafe
+touch ~/.config/limu-cafe/env
+```
+
+その `~/.config/limu-cafe/env` に、旧担当者から受け取った環境変数を書きます。
+キーの一覧は [`.env.example`](/Users/miyoshishouhei/Documents/dev/limu-cafe-app/.env.example) を参照してください。
+
+### 手順2. ローカルで起動する
+
+```bash
+cd /path/to/limu-cafe-app
+set -a
+source ~/.config/limu-cafe/env
+set +a
+npm install
+npm run dev
+```
+
+ブラウザで `http://localhost:3000` を開きます。
+
+### 手順3. 管理者パスワードを変更する
+
+1. Vercel ダッシュボードを開く
+2. 対象プロジェクト → **Settings**
+3. **Environment Variables**
+4. `ADMIN_PASSWORD` を新しい値に変更
+5. 再デプロイを待つ
+
+### 手順4. 権限を移譲する
+
+`Supabase`
+- Organization Settings → Members
+- 新担当者を追加
+- 必要なら Owner に変更
+
+`Vercel`
+- Team Settings → Members
+- 新担当者を追加
+
+`Slack`
+- Slack API Dashboard → Your Apps → LIMU喫茶bot
+- Collaborators に新担当者を追加
+
+`GitHub`
+- Repository Settings → Collaborators
+- 新担当者を追加
+
+### 手順5. Slack Webhook を必ず確認する
+
+とても重要です。Slack アプリを再インストールしたり Webhook を作り直すと、Webhook URL が変わることがあります。
+
+確認する場所:
+- Slack API Dashboard → LIMU喫茶bot → **Incoming Webhooks**
+
+確認する内容:
+- `#limu-orders` 用の Webhook URL
+- `#limu-admin` 用の Webhook URL
+
+変わっていた場合:
+1. 新しい URL をコピー
+2. `~/.config/limu-cafe/env` の `SLACK_WEBHOOK_ORDERS` / `SLACK_WEBHOOK_ADMIN` を更新
+3. Vercel の Environment Variables も同じ値に更新
+4. `npm run dev` を再起動
+
+### 手順6. Supabase の SQL を確認する
+
+初回構築時または新環境を作り直したときは、必ず以下を実行します。
+
+1. [supabase/migrations/001_initial_schema.sql](/Users/miyoshishouhei/Documents/dev/limu-cafe-app/supabase/migrations/001_initial_schema.sql)
+2. [supabase/migrations/002_rpc_functions.sql](/Users/miyoshishouhei/Documents/dev/limu-cafe-app/supabase/migrations/002_rpc_functions.sql)
+
+RLS やポリシー周りで不具合があった場合は、別途 SQL Editor で修正 SQL を実行することがあります。
+
+### 引き継ぎ後の確認チェックリスト
+
+以下を上から順番に確認してください。
+
+- [ ] `/login` から Slack ログインできる
+- [ ] ユーザー側で商品一覧が見える
+- [ ] ユーザー側で要望送信ができる
+- [ ] ユーザー側で現金チャージ申請ができる
+- [ ] ユーザー側で現金払い / 後払い注文ができる
+- [ ] 管理者画面にログインできる
+- [ ] `商品管理` で商品一覧が見える
+- [ ] `在庫入力` で在庫追加が反映される
+- [ ] `注文一覧` に現金注文が表示される
+- [ ] `チャージ承認` にチャージ申請が表示される
+- [ ] `商品要望` に要望が表示される
+- [ ] `#limu-orders` に注文通知が届く
+- [ ] `#limu-admin` に要望・チャージ申請・現金注文確認待ちの通知が届く
+
+### 困ったときの優先確認ポイント
+
+1. `npm run dev` のログに 500 エラーが出ていないか
+2. Supabase の Table Editor でデータ自体は入っているか
+3. Slack Webhook URL が古くなっていないか
+4. `~/.config/limu-cafe/env` と Vercel の環境変数が一致しているか
+5. ブラウザをリロードしたか、必要なら再ログインしたか
 
 ---
 
@@ -182,7 +325,8 @@ Redirect URL が Supabase のものになっているか確認。
 → Supabase SQL Editor で `002_rpc_functions.sql` が実行されているか確認。
 
 ### Slack通知が来ない
-→ `.env.local` の `SLACK_WEBHOOK_ORDERS` / `SLACK_WEBHOOK_ADMIN` が正しいか確認。
+→ 外部 env ファイルの `SLACK_WEBHOOK_ORDERS` / `SLACK_WEBHOOK_ADMIN` が正しいか確認。
+Slack アプリを再インストールした場合は Webhook URL が変わっていることがあります。
 
 ### 管理者画面に入れない
 → `ADMIN_PASSWORD` 環境変数が設定されているか確認。

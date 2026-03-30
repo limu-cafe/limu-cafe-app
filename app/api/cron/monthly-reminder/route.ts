@@ -2,6 +2,12 @@ import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/server';
 import { notifyMonthlySettlement } from '@/lib/slack';
 
+type ReminderUser = {
+  slack_user_id: string | null;
+  name: string;
+  deferred_balance: number;
+};
+
 // Vercel Cron: 毎月1日 朝9時に実行
 // vercel.json で "schedule": "0 0 1 * *" を設定
 export async function GET(request: Request) {
@@ -21,9 +27,9 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, notified: 0 });
   }
 
-  const targets = users
-    .filter(u => u.slack_user_id)
-    .map(u => ({
+  const targets = (users as ReminderUser[])
+    .filter((u) => u.slack_user_id)
+    .map((u) => ({
       slackUserId: u.slack_user_id!,
       name: u.name,
       amount: u.deferred_balance,

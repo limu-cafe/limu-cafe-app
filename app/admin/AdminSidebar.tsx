@@ -17,7 +17,7 @@ const navItems = [
   { href: '/admin/settlement', label: '精算管理', icon: BarChart3 },
   { href: '/admin/users', label: 'ユーザー管理', icon: Users },
   { href: '/admin/requests', label: '商品要望', icon: MessageSquare },
-  { href: '/admin/price-watch', label: '価格監視', icon: Search },
+  { href: '/admin/price-watch', label: '価格監視', icon: Search, badge: '開発中' },
 ];
 
 export default function AdminSidebar() {
@@ -44,7 +44,7 @@ export default function AdminSidebar() {
 
       {/* ナビ */}
       <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
-        {navItems.map(({ href, label, icon: Icon }) => {
+        {navItems.map(({ href, label, icon: Icon, badge }) => {
           const isActive = pathname === href;
           return (
             <Link
@@ -57,7 +57,12 @@ export default function AdminSidebar() {
               }`}
             >
               <Icon size={17} />
-              {label}
+              <span className="flex-1">{label}</span>
+              {badge && (
+                <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-medium text-amber-300">
+                  {badge}
+                </span>
+              )}
             </Link>
           );
         })}

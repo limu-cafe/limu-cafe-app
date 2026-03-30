@@ -75,6 +75,59 @@ export async function notifyCashChargeRequest(params: {
   });
 }
 
+// 商品要望が来たとき
+export async function notifyNewItemRequest(params: {
+  userName: string;
+  itemName: string;
+  desiredPrice?: number | null;
+  reason?: string | null;
+}) {
+  await sendWebhook(WEBHOOK_ADMIN, {
+    blocks: [
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text:
+            `📝 *新しい商品要望が届きました*\n` +
+            `*申請者:* ${params.userName}\n` +
+            `*商品名:* ${params.itemName}` +
+            (params.desiredPrice ? `\n*希望価格:* ¥${params.desiredPrice.toLocaleString()}` : '') +
+            (params.reason ? `\n*理由:* ${params.reason}` : ''),
+        },
+      },
+    ],
+  });
+}
+
+// 現金注文の確認待ち
+export async function notifyCashOrderPending(params: {
+  userName: string;
+  total: number;
+  items: { name: string; quantity: number }[];
+}) {
+  const itemList = params.items
+    .map((item) => `• ${item.name} × ${item.quantity}`)
+    .join('\n');
+
+  await sendWebhook(WEBHOOK_ADMIN, {
+    blocks: [
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text:
+            `💵 *現金払い注文の確認待ちがあります*\n` +
+            `*注文者:* ${params.userName}\n` +
+            `*合計:* ¥${params.total.toLocaleString()}\n\n` +
+            `*注文内容:*\n${itemList}\n\n` +
+            `管理者画面で受け取り確認をしてください。`,
+        },
+      },
+    ],
+  });
+}
+
 // 在庫アラート
 export async function notifyLowStock(params: {
   itemName: string;

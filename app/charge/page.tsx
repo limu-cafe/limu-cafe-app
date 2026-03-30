@@ -11,7 +11,7 @@ const PRESET_AMOUNTS = [500, 1000, 2000, 3000, 5000];
 export default function ChargePage() {
   const router = useRouter();
   const [amount, setAmount] = useState<number | ''>('');
-  const [method, setMethod] = useState<'cash' | 'stripe'>('cash');
+  const [method, setMethod] = useState<'cash'>('cash');
   const [loading, setLoading] = useState(false);
 
   const handleCharge = async () => {
@@ -107,18 +107,19 @@ export default function ChargePage() {
           </button>
 
           <button
-            onClick={() => setMethod('stripe')}
-            className={`w-full flex items-center gap-4 p-4 rounded-xl border-2 transition-all duration-200 ${
-              method === 'stripe'
-                ? 'border-espresso bg-espresso text-cream-50'
-                : 'border-cream-200 hover:border-espresso-400'
-            }`}
+            disabled
+            className="w-full flex items-center gap-4 p-4 rounded-xl border-2 border-cream-200 bg-cream-50/70 opacity-70 cursor-not-allowed"
           >
-            <CreditCard size={22} className={method === 'stripe' ? 'text-cream-50' : 'text-espresso-600'} />
+            <CreditCard size={22} className="text-espresso-600" />
             <div className="text-left flex-1">
-              <p className="font-medium">クレジットカード</p>
-              <p className={`text-sm ${method === 'stripe' ? 'text-cream-200' : 'text-espresso-400'}`}>
-                Stripe経由で即時チャージ
+              <div className="flex items-center gap-2">
+                <p className="font-medium">クレジットカード</p>
+                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
+                  開発中
+                </span>
+              </div>
+              <p className="text-sm text-espresso-400">
+                Stripe 連携は準備中です。現在は現金チャージをご利用ください。
               </p>
             </div>
           </button>

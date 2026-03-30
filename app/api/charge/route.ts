@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { notifyCashChargeRequest } from '@/lib/slack';
 
@@ -27,17 +28,19 @@ export async function POST(request: Request) {
       status: 'approved',
       approved_at: new Date().toISOString(),
     });
-    await supabase
-      .from('users')
-      .update({ balance: supabase.rpc('increment_balance', { p_user_id: user.id, p_amount: amount }) })
-      .eq('id', user.id);
-    // 残高を直接更新
+
     const { data: currentUser } = await supabase
       .from('users').select('balance').eq('id', user.id).single();
     await supabase
       .from('users')
       .update({ balance: (currentUser?.balance ?? 0) + amount })
       .eq('id', user.id);
+
+    revalidatePath('/mypage');
+    revalidatePath('/admin');
+    revalidatePath('/admin/charge');
+    revalidatePath('/admin/users');
+
     return NextResponse.json({ ok: true });
   }
 
@@ -55,6 +58,10 @@ export async function POST(request: Request) {
     amount,
     requestId: req.id,
   });
+
+  revalidatePath('/mypage');
+  revalidatePath('/admin');
+  revalidatePath('/admin/charge');
 
   return NextResponse.json({ ok: true });
 }

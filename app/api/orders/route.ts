@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
+import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
-import { notifyNewOrder, notifyLowStock } from '@/lib/slack';
+import { notifyCashOrderPending, notifyNewOrder, notifyLowStock } from '@/lib/slack';
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -109,6 +110,24 @@ export async function POST(request: Request) {
     total: total_amount,
     paymentMethod: payment_method,
   });
+
+  if (payment_method === 'cash') {
+    await notifyCashOrderPending({
+      userName: profile.name,
+      total: total_amount,
+      items: items.map((item: any) => ({
+        name: item.item_name,
+        quantity: item.quantity,
+      })),
+    });
+  }
+
+  revalidatePath('/mypage');
+  revalidatePath('/');
+  revalidatePath('/admin');
+  revalidatePath('/admin/orders');
+  revalidatePath('/admin/stock');
+  revalidatePath('/admin/items');
 
   return NextResponse.json({ ok: true, order_id: order.id });
 }

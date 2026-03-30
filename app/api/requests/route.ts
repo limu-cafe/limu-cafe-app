@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
+import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
+import { notifyNewItemRequest } from '@/lib/slack';
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -19,5 +21,23 @@ export async function POST(request: Request) {
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  const { data: profile } = await supabase
+    .from('users')
+    .select('name')
+    .eq('id', user.id)
+    .single();
+
+  await notifyNewItemRequest({
+    userName: profile?.name ?? '不明',
+    itemName: item_name,
+    desiredPrice: desired_price,
+    reason,
+  });
+
+  revalidatePath('/request');
+  revalidatePath('/admin');
+  revalidatePath('/admin/requests');
+
   return NextResponse.json(data);
 }
