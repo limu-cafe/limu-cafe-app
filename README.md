@@ -190,6 +190,23 @@ git pull
 git switch -c docs/update-readme
 ```
 
+### 作業後の push と Pull Request
+
+作業が終わったら、まず自分の作業ブランチに commit して GitHub に push します。
+
+```bash
+git push -u origin docs/update-readme
+```
+
+その後、GitHub 上で `dev` に向けた Pull Request を作成します。  
+`dev` で確認が終わって本番反映するときは、`dev` から `main` へ Pull Request を作成します。
+
+### マージ後の考え方
+
+- `feature/*` `fix/*` `docs/*` は作業用ブランチです
+- `dev` へのマージが終わったら、不要になった作業ブランチは削除して構いません
+- 常設するブランチは基本的に `main` と `dev` だけです
+
 ### Vercel との対応
 
 - `main` → 本番デプロイ
