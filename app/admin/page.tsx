@@ -1,5 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/server';
-import { ShoppingBag, Users, AlertTriangle, Wallet, TrendingUp, Clock } from 'lucide-react';
+import { calculateCashboxBalance } from '@/lib/cashbox';
+import { ShoppingBag, Users, AlertTriangle, Wallet, TrendingUp, Clock, Banknote } from 'lucide-react';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 import { ja } from 'date-fns/locale';
 import Link from 'next/link';
@@ -19,6 +20,7 @@ export default async function AdminDashboard() {
     { data: lowStockItems },
     { data: recentOrders },
     { data: monthlyOrders },
+    { data: cashboxBalanceRows },
   ] = await Promise.all([
     supabase.from('orders').select('*', { count: 'exact', head: true })
       .eq('payment_status', 'pending').eq('payment_method', 'cash'),
@@ -38,14 +40,17 @@ export default async function AdminDashboard() {
       .gte('created_at', monthStart)
       .lte('created_at', monthEnd)
       .eq('payment_status', 'completed'),
+    supabase.from('cashbox_entries').select('amount, direction'),
   ]);
 
   const monthlyRevenue = monthlyOrders?.reduce((sum: number, o: { total_amount: number }) => sum + o.total_amount, 0) ?? 0;
+  const cashboxBalance = calculateCashboxBalance((cashboxBalanceRows ?? []) as { amount: number; direction: 'in' | 'out' }[]);
 
   const stats = [
     { label: '今月の売上', value: `¥${monthlyRevenue.toLocaleString()}`, icon: TrendingUp, color: 'text-green-400', bg: 'bg-green-400/10' },
     { label: '現金承認待ち', value: `${pendingOrders ?? 0}件`, icon: Wallet, color: 'text-amber-400', bg: 'bg-amber-400/10', href: '/admin/orders' },
     { label: 'チャージ承認待ち', value: `${pendingCharges ?? 0}件`, icon: Clock, color: 'text-blue-400', bg: 'bg-blue-400/10', href: '/admin/charge' },
+    { label: '計算上の金庫残高', value: `¥${cashboxBalance.toLocaleString()}`, icon: Banknote, color: 'text-emerald-400', bg: 'bg-emerald-400/10', href: '/admin/cashbox' },
     { label: '承認待ちユーザー', value: `${pendingUsers ?? 0}人`, icon: Users, color: 'text-purple-400', bg: 'bg-purple-400/10', href: '/admin/users' },
   ];
 
@@ -63,7 +68,7 @@ export default async function AdminDashboard() {
       </div>
 
       {/* サマリーカード */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         {stats.map(({ label, value, icon: Icon, color, bg, href }) => (
           <div key={label} className={href ? 'cursor-pointer' : ''}>
             {href ? (

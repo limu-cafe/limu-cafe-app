@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   LayoutDashboard, Package, Archive, ShoppingBag,
-  Wallet, BarChart3, Users, MessageSquare, Search, LogOut
+  Wallet, BarChart3, Users, MessageSquare, Search, LogOut, Banknote
 } from 'lucide-react';
 import { clearAdminSession } from './AdminAuthGuard';
 
@@ -15,6 +15,7 @@ const navItems = [
   { href: '/admin/orders', label: '注文一覧', icon: ShoppingBag },
   { href: '/admin/charge', label: 'チャージ承認', icon: Wallet },
   { href: '/admin/settlement', label: '精算管理', icon: BarChart3 },
+  { href: '/admin/cashbox', label: '金庫管理', icon: Banknote },
   { href: '/admin/users', label: 'ユーザー管理', icon: Users },
   { href: '/admin/requests', label: '商品要望', icon: MessageSquare },
   { href: '/admin/price-watch', label: '価格監視', icon: Search, badge: '開発中' },

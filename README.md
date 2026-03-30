@@ -34,6 +34,7 @@ npm install
 2. **SQL Editor** で以下を順番に実行：
    - `supabase/migrations/001_initial_schema.sql`
    - `supabase/migrations/002_rpc_functions.sql`
+   - `supabase/migrations/003_cashbox_management.sql`
 3. **Project Settings → API** から以下をコピー：
    - `Project URL` → `NEXT_PUBLIC_SUPABASE_URL`
    - `anon public` キー → `NEXT_PUBLIC_SUPABASE_ANON_KEY`
