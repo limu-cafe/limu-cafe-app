@@ -353,6 +353,8 @@ npm run dev
 
 1. [supabase/migrations/001_initial_schema.sql](/Users/miyoshishouhei/Documents/dev/limu-cafe-app/supabase/migrations/001_initial_schema.sql)
 2. [supabase/migrations/002_rpc_functions.sql](/Users/miyoshishouhei/Documents/dev/limu-cafe-app/supabase/migrations/002_rpc_functions.sql)
+3. [supabase/migrations/003_cashbox_management.sql](/Users/miyoshishouhei/Documents/dev/limu-cafe-app/supabase/migrations/003_cashbox_management.sql)
+4. [supabase/migrations/004_cashbox_backfill.sql](/Users/miyoshishouhei/Documents/dev/limu-cafe-app/supabase/migrations/004_cashbox_backfill.sql)
 
 RLS やポリシー周りで不具合があった場合は、別途 SQL Editor で修正 SQL を実行することがあります。
 
@@ -450,8 +452,13 @@ npm -v
 cd ~/Documents/dev
 git clone <リポジトリURL>
 cd limu-cafe-app
+git fetch
+git switch feature/cashbox-management
 npm install
 ```
+
+今日の最終版を再現したい場合は、`feature/cashbox-management` を使います。  
+`main` や `dev` ではなく、このブランチに切り替えてから作業を始めてください。
 
 #### 3. 外部 env ファイルを作る
 
@@ -508,6 +515,8 @@ npm run dev
 - `/admin/charge` にチャージ申請が出る
 - `/admin/requests` に要望が出る
 - `/admin/stock` で在庫追加が反映される
+- `/admin/cashbox` が開く
+- `/admin/cashbox` にバックフィル済みの案内が出る
 
 #### 9. Slack通知を確認する
 
@@ -557,8 +566,32 @@ Slack アプリを再インストールしたり Webhook を作り直した場�
 - `charge_requests`
 - `item_requests`
 - `stock_history`
+- `cashbox_entries`
+- `cashbox_counts`
+- `cashbox_backfill_runs`
 
-#### 12. Vercel を確認する
+#### 12. 今日の最終版を別PCで再現する最短手順
+
+今日の作業内容まで含めて再現したい場合は、次の順番で進めます。
+
+1. GitHub から `feature/cashbox-management` を取得して切り替える
+2. `~/.config/limu-cafe/env` を旧PCと同じ内容で用意する
+3. Supabase の SQL Editor で以下を順番に実行する
+   - [supabase/migrations/001_initial_schema.sql](/Users/miyoshishouhei/Documents/dev/limu-cafe-app/supabase/migrations/001_initial_schema.sql)
+   - [supabase/migrations/002_rpc_functions.sql](/Users/miyoshishouhei/Documents/dev/limu-cafe-app/supabase/migrations/002_rpc_functions.sql)
+   - [supabase/migrations/003_cashbox_management.sql](/Users/miyoshishouhei/Documents/dev/limu-cafe-app/supabase/migrations/003_cashbox_management.sql)
+   - [supabase/migrations/004_cashbox_backfill.sql](/Users/miyoshishouhei/Documents/dev/limu-cafe-app/supabase/migrations/004_cashbox_backfill.sql)
+4. `npm install` を実行する
+5. `npm run dev` で起動する
+6. `/admin/cashbox` を開き、金庫管理が見えることを確認する
+
+注意:
+
+- 金庫管理はコードを pull しただけでは使えません。`003` と `004` の SQL 実行が必須です
+- `004_cashbox_backfill.sql` は現システム内の過去の現金履歴を復元します
+- 旧システムから持ってくる初期残高は `/admin/cashbox` の「手動調整」から入れます
+
+#### 13. Vercel を確認する
 
 見る場所:
 
@@ -567,7 +600,7 @@ Slack アプリを再インストールしたり Webhook を作り直した場�
 
 ローカルの `~/.config/limu-cafe/env` と同じ値が入っているか確認します。
 
-#### 13. 引き継ぎ完了の目安
+#### 14. 引き継ぎ完了の目安
 
 - ローカルで起動できる
 - Slack ログインできる
