@@ -140,6 +140,99 @@ Vercel ダッシュボード → **Settings → Environment Variables** で、�
 
 ---
 
+## Git運用ルール
+
+このプロジェクトでは、以下のブランチ運用を基本ルールにします。
+
+- `main`: 本番用
+- `dev`: 開発内容を集約するブランチ
+- `feature/*`: 機能追加
+- `fix/*`: バグ修正
+- `docs/*`: README や手順書など文章修正
+
+### 基本の考え方
+
+- `main` には、動作確認が終わった内容だけを入れます
+- 普段の作業は `dev` から分岐して進めます
+- 直接 `main` で作業しません
+- 大きな変更は、できるだけ `dev` に直接コミットせず、作業ブランチを切ります
+
+### 作業の流れ
+
+1. `dev` を最新にする
+2. 作業内容に応じたブランチを作る
+3. そのブランチで修正する
+4. 修正後に `dev` に戻す
+5. `dev` で動作確認する
+6. 問題なければ `main` に反映する
+
+### ブランチ名の例
+
+- `feature/add-admin-notification`
+- `feature/improve-order-flow`
+- `fix/login-callback`
+- `fix/admin-orders-refresh`
+- `docs/update-handoff-guide`
+
+### 例: バグ修正の始め方
+
+```bash
+git switch dev
+git pull
+git switch -c fix/admin-orders-refresh
+```
+
+### 例: README 修正の始め方
+
+```bash
+git switch dev
+git pull
+git switch -c docs/update-readme
+```
+
+### Vercel との対応
+
+- `main` → 本番デプロイ
+- `dev` → 開発確認用
+- `feature/*` / `fix/*` / `docs/*` → 必要に応じて Preview
+
+---
+
+## 日常運用メモ
+
+### 普段の起動方法
+
+```bash
+cd /path/to/limu-cafe-app
+set -a
+source ~/.config/limu-cafe/env
+set +a
+npm run dev
+```
+
+### よく使う確認項目
+
+- ユーザー側の商品一覧が見えるか
+- 管理者画面にログインできるか
+- 商品追加が管理画面とユーザー画面の両方に反映されるか
+- 注文 / 要望 / チャージ申請が Supabase に入り、管理画面にも反映されるか
+- Slack 通知が `#limu-admin` と `#limu-orders` に届くか
+
+### 変更後に見ておくと安心な画面
+
+- `/`
+- `/mypage`
+- `/request`
+- `/charge`
+- `/admin`
+- `/admin/items`
+- `/admin/orders`
+- `/admin/charge`
+- `/admin/stock`
+- `/admin/requests`
+
+---
+
 ## 年次引き継ぎ手順
 
 この章は「新しい担当者が、ほぼゼロからでも運用を引き継げる」ことを目的にしています。
@@ -151,6 +244,7 @@ Vercel ダッシュボード → **Settings → Environment Variables** で、�
 - 管理者画面のログインは `ADMIN_PASSWORD` です
 - 本番環境の設定は Vercel / Supabase / Slack に分かれています
 - 通知が来ない場合、原因は Slack Webhook URL の期限切れ・差し替わりが多いです
+- Git の基本運用は `main` / `dev` / `feature/*` / `fix/*` / `docs/*` です
 
 ### 引き継ぎの全体像
 
@@ -199,18 +293,24 @@ npm run dev
 - Organization Settings → Members
 - 新担当者を追加
 - 必要なら Owner に変更
+- SQL Editor と Table Editor が使えることを確認
+- Authentication → Providers が見られることを確認
 
 `Vercel`
 - Team Settings → Members
 - 新担当者を追加
+- Project Settings → Environment Variables が編集できることを確認
 
 `Slack`
 - Slack API Dashboard → Your Apps → LIMU喫茶bot
 - Collaborators に新担当者を追加
+- Incoming Webhooks が見られることを確認
+- OAuth & Permissions が見られることを確認
 
 `GitHub`
 - Repository Settings → Collaborators
 - 新担当者を追加
+- `dev` ブランチに push できることを確認
 
 ### 手順5. Slack Webhook を必ず確認する
 
@@ -238,6 +338,29 @@ npm run dev
 
 RLS やポリシー周りで不具合があった場合は、別途 SQL Editor で修正 SQL を実行することがあります。
 
+### 手順7. どのサービスで何を管理しているかを把握する
+
+`Supabase`
+- データベース本体
+- Slack ログイン用の認証設定
+- users / items / orders などのデータ確認
+
+`Slack App`
+- Bot Token
+- Incoming Webhooks
+- DM 通知
+- チャンネル通知
+
+`Vercel`
+- 本番デプロイ
+- 本番環境変数
+- Cron 実行
+
+`GitHub`
+- ソースコード
+- ブランチ運用
+- 変更履歴の管理
+
 ### 引き継ぎ後の確認チェックリスト
 
 以下を上から順番に確認してください。
@@ -263,6 +386,24 @@ RLS やポリシー周りで不具合があった場合は、別途 SQL Editor �
 3. Slack Webhook URL が古くなっていないか
 4. `~/.config/limu-cafe/env` と Vercel の環境変数が一致しているか
 5. ブラウザをリロードしたか、必要なら再ログインしたか
+6. どの画面で、何を押したときに起きたかを言語化できるか
+
+### よくある実際のトラブル
+
+`Slack 通知が届かない`
+- Webhook URL が古い
+- Slack アプリを再インストールして URL が変わった
+- `npm run dev` を再起動していない
+
+`Supabase にはデータがあるのに画面に出ない`
+- 再取得や再描画が足りていない
+- 管理画面側の一覧クエリが失敗している
+- ブラウザが古い状態を表示している
+
+`ログインできない`
+- Supabase の Slack Provider 設定ミス
+- Redirect URL の設定ミス
+- 環境変数が読み込まれていない
 
 ### 別のPCに移すための完全チェックリスト
 
