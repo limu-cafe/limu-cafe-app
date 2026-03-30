@@ -264,6 +264,159 @@ RLS やポリシー周りで不具合があった場合は、別途 SQL Editor �
 4. `~/.config/limu-cafe/env` と Vercel の環境変数が一致しているか
 5. ブラウザをリロードしたか、必要なら再ログインしたか
 
+### 別のPCに移すための完全チェックリスト
+
+この手順を上から順番に進めれば、新しいPCでもほぼ同じ状態で開発やデバッグを続けられます。
+
+#### 事前に用意するもの
+
+- GitHub のリポジトリURL
+- 旧PCの `~/.config/limu-cafe/env`
+- Supabase に入れるアカウント
+- Slack App を見られる権限
+- Vercel を見られる権限
+
+#### 1. Node.js を確認する
+
+```bash
+node -v
+npm -v
+```
+
+入っていなければ Node.js の LTS 版をインストールします。
+
+#### 2. リポジトリをクローンする
+
+```bash
+cd ~/Documents/dev
+git clone <リポジトリURL>
+cd limu-cafe-app
+npm install
+```
+
+#### 3. 外部 env ファイルを作る
+
+```bash
+mkdir -p ~/.config/limu-cafe
+touch ~/.config/limu-cafe/env
+```
+
+#### 4. env を移す
+
+旧PCの `~/.config/limu-cafe/env` の中身を、新PCの同じ場所にコピーします。
+
+場所:
+
+```bash
+~/.config/limu-cafe/env
+```
+
+キーの一覧は [`.env.example`](/Users/miyoshishouhei/Documents/dev/limu-cafe-app/.env.example) を参照してください。
+
+#### 5. 開発サーバーを起動する
+
+```bash
+cd /path/to/limu-cafe-app
+set -a
+source ~/.config/limu-cafe/env
+set +a
+npm run dev
+```
+
+ブラウザで `http://localhost:3000` を開きます。
+
+#### 6. Slack ログインを試す
+
+- `/login` を開く
+- Slack でログインする
+- 商品一覧が見えるか確認する
+
+#### 7. 管理画面に入る
+
+- `/admin/login` を開く
+- `ADMIN_PASSWORD` を入力する
+- 管理画面が開くか確認する
+
+#### 8. 最低限の動作確認をする
+
+以下を順番に確認します。
+
+- `/` で商品一覧が見える
+- `/request` で要望送信できる
+- `/charge` で現金チャージ申請できる
+- 注文できる
+- `/admin/orders` に注文が出る
+- `/admin/charge` にチャージ申請が出る
+- `/admin/requests` に要望が出る
+- `/admin/stock` で在庫追加が反映される
+
+#### 9. Slack通知を確認する
+
+見る場所:
+
+- `#limu-orders`
+- `#limu-admin`
+
+確認内容:
+
+- 注文通知が `#limu-orders` に届く
+- 要望・チャージ申請・現金注文確認待ちが `#limu-admin` に届く
+
+#### 10. 通知が来ないとき
+
+Slack アプリを再インストールしたり Webhook を作り直した場合、Webhook URL が変わることがあります。
+
+確認する場所:
+
+- Slack API Dashboard
+- 対象アプリ
+- **Incoming Webhooks**
+
+確認する値:
+
+- `#limu-orders` 用 URL
+- `#limu-admin` 用 URL
+
+変わっていた場合:
+
+1. `~/.config/limu-cafe/env` を更新
+2. Vercel の Environment Variables も更新
+3. `npm run dev` を再起動
+
+#### 11. Supabase を確認する
+
+見る場所:
+
+- Table Editor
+- SQL Editor
+
+確認したいテーブル:
+
+- `users`
+- `items`
+- `orders`
+- `charge_requests`
+- `item_requests`
+- `stock_history`
+
+#### 12. Vercel を確認する
+
+見る場所:
+
+- Project Settings
+- Environment Variables
+
+ローカルの `~/.config/limu-cafe/env` と同じ値が入っているか確認します。
+
+#### 13. 引き継ぎ完了の目安
+
+- ローカルで起動できる
+- Slack ログインできる
+- 管理画面に入れる
+- 商品・注文・要望・チャージの流れを確認できる
+- Slack通知が届く
+- GitHub / Supabase / Slack / Vercel に入れる
+
 ---
 
 ## ディレクトリ構成
