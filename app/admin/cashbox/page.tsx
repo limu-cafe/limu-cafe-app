@@ -11,6 +11,8 @@ export default async function CashboxPage() {
     { data: balanceRows },
     { data: entries },
     { data: counts },
+    { data: backfillRuns },
+    { count: manualEntryCount },
   ] = await Promise.all([
     supabase
       .from('cashbox_entries')
@@ -25,10 +27,20 @@ export default async function CashboxPage() {
       .select('*, counted_by_user:users!cashbox_counts_counted_by_fkey(name)')
       .order('counted_at', { ascending: false })
       .limit(20),
+    supabase
+      .from('cashbox_backfill_runs')
+      .select('*')
+      .order('ran_at', { ascending: false })
+      .limit(1),
+    supabase
+      .from('cashbox_entries')
+      .select('*', { count: 'exact', head: true })
+      .in('entry_type', ['manual_in', 'manual_out']),
   ]);
 
   const expectedAmount = calculateCashboxBalance((balanceRows ?? []) as { amount: number; direction: 'in' | 'out' }[]);
   const latestCount = counts?.[0] ?? null;
+  const latestBackfillRun = backfillRuns?.[0] ?? null;
 
   return (
     <CashboxClient
@@ -36,6 +48,8 @@ export default async function CashboxPage() {
       latestCount={latestCount}
       entries={entries ?? []}
       counts={counts ?? []}
+      latestBackfillRun={latestBackfillRun}
+      hasLegacyBaseline={Boolean((manualEntryCount ?? 0) > 0)}
     />
   );
 }

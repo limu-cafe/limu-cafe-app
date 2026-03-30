@@ -35,6 +35,7 @@ npm install
    - `supabase/migrations/001_initial_schema.sql`
    - `supabase/migrations/002_rpc_functions.sql`
    - `supabase/migrations/003_cashbox_management.sql`
+   - `supabase/migrations/004_cashbox_backfill.sql`
 3. **Project Settings → API** から以下をコピー：
    - `Project URL` → `NEXT_PUBLIC_SUPABASE_URL`
    - `anon public` キー → `NEXT_PUBLIC_SUPABASE_ANON_KEY`
@@ -231,6 +232,22 @@ npm run dev
 - `/admin/charge`
 - `/admin/stock`
 - `/admin/requests`
+- `/admin/cashbox`
+
+### 金庫管理の導入手順
+
+金庫管理を導入するときは、以下の順番で進めます。
+
+1. `supabase/migrations/003_cashbox_management.sql` を実行して金庫管理テーブルを作成する
+2. `supabase/migrations/004_cashbox_backfill.sql` を **1回実行** して、現システムに残っている過去の現金履歴を復元する
+3. `/admin/cashbox` を開いて、バックフィル済みの案内が出ていることを確認する
+4. 以前のシステムから引き継ぐ金庫残高がある場合は、「手動調整」から初期値を1件入力する
+
+補足:
+
+- `004_cashbox_backfill.sql` は再実行しても、`order_id` / `charge_request_id` / `settlement_id` の重複を避ける設計です
+- バックフィル対象は「現システムDBに残っている現金注文・現金チャージ承認・現金精算」のみです
+- 旧システム分は自動では入らないため、初期値として `manual_in` / `manual_out` で入力してください
 
 ---
 

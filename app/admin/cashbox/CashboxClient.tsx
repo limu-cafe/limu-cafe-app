@@ -28,16 +28,29 @@ type Count = {
   counted_by_user?: { name?: string | null } | null;
 };
 
+type BackfillRun = {
+  id: string;
+  inserted_orders: number;
+  inserted_charges: number;
+  inserted_settlements: number;
+  note: string | null;
+  ran_at: string;
+};
+
 export default function CashboxClient({
   expectedAmount,
   latestCount,
   entries,
   counts,
+  latestBackfillRun,
+  hasLegacyBaseline,
 }: {
   expectedAmount: number;
   latestCount: Count | null;
   entries: Entry[];
   counts: Count[];
+  latestBackfillRun: BackfillRun | null;
+  hasLegacyBaseline: boolean;
 }) {
   const router = useRouter();
   const [adjustmentAmount, setAdjustmentAmount] = useState<number | ''>('');
@@ -119,8 +132,41 @@ export default function CashboxClient({
       <div>
         <h1 className="font-display font-bold text-2xl text-white">金庫管理</h1>
         <p className="text-gray-400 text-sm mt-1">
-          計算上の金額と実際の金庫内の現金を照らし合わせて管理します
+          現システムの現金履歴と手動調整を合算した理論残高を、実際の金庫内現金と照らし合わせて管理します
         </p>
+      </div>
+
+      <div className="grid gap-3">
+        {latestBackfillRun ? (
+          <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-5 py-4 text-sm text-emerald-100">
+            <p className="font-medium">現システム内の過去現金履歴はバックフィル済みです</p>
+            <p className="mt-1 text-emerald-200/80">
+              {format(new Date(latestBackfillRun.ran_at), 'yyyy/M/d HH:mm', { locale: ja })} 実行
+              ・ 注文 {latestBackfillRun.inserted_orders}件
+              ・ チャージ {latestBackfillRun.inserted_charges}件
+              ・ 精算 {latestBackfillRun.inserted_settlements}件
+            </p>
+          </div>
+        ) : (
+          <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-5 py-4 text-sm text-amber-100">
+            <p className="font-medium">まだ現システム分のバックフィルが実行されていません</p>
+            <p className="mt-1 text-amber-200/80">
+              <code className="rounded bg-black/20 px-1.5 py-0.5 text-xs">
+                supabase/migrations/004_cashbox_backfill.sql
+              </code>{' '}
+              を SQL Editor で1回実行してください。
+            </p>
+          </div>
+        )}
+
+        {!hasLegacyBaseline && (
+          <div className="rounded-2xl border border-sky-500/20 bg-sky-500/10 px-5 py-4 text-sm text-sky-100">
+            <p className="font-medium">旧システム分の初期残高はまだ入力されていません</p>
+            <p className="mt-1 text-sky-200/80">
+              旧システムから引き継ぐ現金がある場合は、下の「手動調整」から1件の初期値として入力してください。
+            </p>
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
