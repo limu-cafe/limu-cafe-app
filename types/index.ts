@@ -146,6 +146,42 @@ export interface PriceWatch {
   updated_at: string;
 }
 
+export interface FavoriteItem {
+  id: string;
+  user_id: string;
+  item_id: string;
+  created_at: string;
+}
+
+export interface LegacyUser {
+  id: string;
+  source: string;
+  legacy_user_key: string;
+  name: string;
+  email?: string;
+  legacy_balance: number;
+  favorite_item_names?: string[];
+  notes?: string;
+  matched_user_id?: string | null;
+  transferred_at?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LegacyTransferRequest {
+  id: string;
+  user_id: string;
+  legacy_name?: string | null;
+  note?: string | null;
+  status: 'pending' | 'completed' | 'rejected';
+  matched_legacy_user_id?: string | null;
+  reviewed_by?: string | null;
+  reviewed_at?: string | null;
+  rejection_reason?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 // カート（クライアントサイドのみ）
 export interface CartItem {
   item: Item;

@@ -1,11 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { CheckCircle, XCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { ja } from 'date-fns/locale';
 import toast from 'react-hot-toast';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 const STATUS_COLOR: Record<string, string> = {
   pending: 'bg-amber-500/20 text-amber-400',
@@ -19,7 +19,14 @@ const STATUS_LABEL: Record<string, string> = {
 
 export default function ChargeClient({ requests }: { requests: any[] }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [loading, setLoading] = useState<string | null>(null);
+  const [pendingOnly, setPendingOnly] = useState(searchParams.get('pending') === '1');
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+
+  const pending = useMemo(() => requests.filter(r => r.status === 'pending'), [requests]);
+  const done = useMemo(() => requests.filter(r => r.status !== 'pending'), [requests]);
+  const visibleDone = pendingOnly ? [] : done;
 
   const handleAction = async (id: string, action: 'approve' | 'reject') => {
     setLoading(id + action);
@@ -32,8 +39,41 @@ export default function ChargeClient({ requests }: { requests: any[] }) {
     finally { setLoading(null); }
   };
 
-  const pending = requests.filter(r => r.status === 'pending');
-  const done = requests.filter(r => r.status !== 'pending');
+  const handleToggleSelection = (id: string) => {
+    setSelectedIds((current) =>
+      current.includes(id) ? current.filter((value) => value !== id) : [...current, id]
+    );
+  };
+
+  const handleToggleAllPending = () => {
+    setSelectedIds((current) =>
+      current.length === pending.length ? [] : pending.map((request) => request.id)
+    );
+  };
+
+  const handleBatchAction = async (action: 'approve' | 'reject') => {
+    if (selectedIds.length === 0) {
+      toast.error('対象を選択してください');
+      return;
+    }
+
+    setLoading(`batch-${action}`);
+    try {
+      for (const id of selectedIds) {
+        const res = await fetch(`/api/admin/charge/${id}/${action}`, { method: 'POST' });
+        if (!res.ok) {
+          throw new Error((await res.json()).error ?? '一括処理に失敗しました');
+        }
+      }
+      toast.success(`${selectedIds.length}件を${action === 'approve' ? '承認' : '却下'}しました`);
+      setSelectedIds([]);
+      router.refresh();
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setLoading(null);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -44,12 +84,59 @@ export default function ChargeClient({ requests }: { requests: any[] }) {
         </p>
       </div>
 
+      <label className="inline-flex items-center gap-2 text-sm text-gray-300">
+        <input
+          type="checkbox"
+          checked={pendingOnly}
+          onChange={(e) => setPendingOnly(e.target.checked)}
+          className="rounded border-gray-700 bg-gray-900 text-white"
+        />
+        未対応だけ表示
+      </label>
+
+      {pending.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-gray-800 bg-gray-900 px-4 py-3">
+          <label className="inline-flex items-center gap-2 text-sm text-gray-300">
+            <input
+              type="checkbox"
+              checked={pending.length > 0 && selectedIds.length === pending.length}
+              onChange={handleToggleAllPending}
+              className="rounded border-gray-700 bg-gray-900 text-white"
+            />
+            すべて選択
+          </label>
+          <span className="text-sm text-gray-400">選択中: {selectedIds.length}件</span>
+          <div className="ml-auto flex gap-2">
+            <button
+              onClick={() => handleBatchAction('reject')}
+              disabled={!!loading || selectedIds.length === 0}
+              className="rounded-lg bg-red-500/20 px-3 py-2 text-sm font-medium text-red-300 disabled:opacity-50"
+            >
+              一括却下
+            </button>
+            <button
+              onClick={() => handleBatchAction('approve')}
+              disabled={!!loading || selectedIds.length === 0}
+              className="rounded-lg bg-emerald-500/20 px-3 py-2 text-sm font-medium text-emerald-300 disabled:opacity-50"
+            >
+              一括承認
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* 承認待ち */}
       {pending.length > 0 && (
         <div className="space-y-3">
           <h2 className="text-sm font-medium text-gray-400 uppercase tracking-wider">承認待ち</h2>
           {pending.map((req) => (
             <div key={req.id} className="bg-gray-900 border border-amber-500/30 rounded-2xl p-5 flex items-center gap-4">
+              <input
+                type="checkbox"
+                checked={selectedIds.includes(req.id)}
+                onChange={() => handleToggleSelection(req.id)}
+                className="rounded border-gray-700 bg-gray-900 text-white"
+              />
               {req.user?.avatar_url ? (
                 <img src={req.user.avatar_url} className="w-10 h-10 rounded-full flex-shrink-0" alt="" />
               ) : (
@@ -100,7 +187,7 @@ export default function ChargeClient({ requests }: { requests: any[] }) {
       )}
 
       {/* 処理済み */}
-      {done.length > 0 && (
+      {visibleDone.length > 0 && (
         <div className="space-y-2">
           <h2 className="text-sm font-medium text-gray-400 uppercase tracking-wider">処理済み</h2>
           <div className="bg-gray-900 rounded-2xl border border-gray-800 overflow-hidden">
@@ -113,7 +200,7 @@ export default function ChargeClient({ requests }: { requests: any[] }) {
                 </tr>
               </thead>
               <tbody>
-                {done.map((req) => (
+                {visibleDone.map((req) => (
                   <tr key={req.id} className="border-b border-gray-800/50">
                     <td className="px-4 py-3 text-gray-300">{req.user?.name}</td>
                     <td className="px-4 py-3 font-mono text-white">¥{req.amount.toLocaleString()}</td>
@@ -134,7 +221,7 @@ export default function ChargeClient({ requests }: { requests: any[] }) {
         </div>
       )}
 
-      {requests.length === 0 && (
+      {pending.length === 0 && visibleDone.length === 0 && (
         <div className="text-center py-16 text-gray-500">
           <p className="text-4xl mb-3">✓</p>
           <p>チャージ申請はありません</p>

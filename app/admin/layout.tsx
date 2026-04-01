@@ -12,6 +12,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     { count: pendingCharges },
     { count: pendingUsers },
     { count: pendingRequests },
+    { count: pendingLegacyTransfers },
     { data: lowStockItems },
   ] = await Promise.all([
     supabase
@@ -33,6 +34,10 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       .select('*', { count: 'exact', head: true })
       .eq('status', 'pending'),
     supabase
+      .from('legacy_transfer_requests')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'pending'),
+    supabase
       .from('items')
       .select('id')
       .eq('is_available', true)
@@ -45,6 +50,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     charge: pendingCharges ?? 0,
     users: pendingUsers ?? 0,
     requests: pendingRequests ?? 0,
+    legacy: pendingLegacyTransfers ?? 0,
   };
 
   return (

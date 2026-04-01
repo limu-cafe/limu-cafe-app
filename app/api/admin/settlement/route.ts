@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
 import { createAdminClient, createClient } from '@/lib/supabase/server';
 import { insertCashboxEntry } from '@/lib/cashbox';
+import { logAdminAction } from '@/lib/admin-audit';
 
 export async function POST(request: Request) {
   const sessionClient = await createClient();
@@ -43,10 +44,26 @@ export async function POST(request: Request) {
     });
   }
 
+  await logAdminAction(supabase, {
+    actor_id: user?.id ?? null,
+    action_type: 'settlement_completed',
+    target_type: 'settlement',
+    target_id: settlement.id,
+    summary: `${amount.toLocaleString()}円の精算を完了しました`,
+    metadata: {
+      user_id,
+      method,
+      amount,
+      period_start,
+      period_end,
+    },
+  });
+
   revalidatePath('/admin');
   revalidatePath('/admin/settlement');
   revalidatePath('/admin/users');
   revalidatePath('/admin/cashbox');
+  revalidatePath('/admin/audit');
 
   return NextResponse.json({ ok: true });
 }

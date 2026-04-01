@@ -2,18 +2,25 @@
 
 import { createClient } from '@/lib/supabase/client';
 import { useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import toast from 'react-hot-toast';
 
 export default function LoginPage() {
   const [loading, setLoading] = useState(false);
+  const searchParams = useSearchParams();
 
   const handleSlackLogin = async () => {
     setLoading(true);
     const supabase = createClient();
+    const next = searchParams.get('next');
+    const callbackUrl = new URL('/api/auth/callback', window.location.origin);
+    if (next?.startsWith('/')) {
+      callbackUrl.searchParams.set('next', next);
+    }
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'slack_oidc',
       options: {
-        redirectTo: `${window.location.origin}/api/auth/callback`,
+        redirectTo: callbackUrl.toString(),
         scopes: 'openid profile email',
       },
     });
@@ -59,6 +66,11 @@ export default function LoginPage() {
               </>
             )}
           </button>
+          <div className="border-t border-cream-200 pt-4 text-center text-sm">
+            <a href="/admin/login" className="text-espresso-500 hover:text-espresso-700 transition-colors">
+              管理者ログインはこちら
+            </a>
+          </div>
         </div>
       </div>
     </div>

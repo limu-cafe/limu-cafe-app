@@ -1,10 +1,44 @@
 import { NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
-import { createClient } from '@/lib/supabase/server';
+import { createAdminClient, createClient } from '@/lib/supabase/server';
 import { notifyCashOrderPending, notifyNewOrder, notifyLowStock } from '@/lib/slack';
+
+interface OrderItemInput {
+  item_id: string;
+  item_name: string;
+  item_price: number;
+  quantity: number;
+  subtotal: number;
+}
+
+async function rollbackOrder(
+  adminSupabase: ReturnType<typeof createAdminClient>,
+  orderId: string,
+  processedItems: Array<{ itemId: string; quantity: number }>
+) {
+  for (const processedItem of processedItems) {
+    const { data: currentItem } = await adminSupabase
+      .from('items')
+      .select('stock')
+      .eq('id', processedItem.itemId)
+      .single();
+
+    if (!currentItem) continue;
+
+    await adminSupabase
+      .from('items')
+      .update({ stock: currentItem.stock + processedItem.quantity })
+      .eq('id', processedItem.itemId);
+  }
+
+  await adminSupabase.from('stock_history').delete().eq('order_id', orderId);
+  await adminSupabase.from('order_items').delete().eq('order_id', orderId);
+  await adminSupabase.from('orders').delete().eq('id', orderId);
+}
 
 export async function POST(request: Request) {
   const supabase = await createClient();
+  const adminSupabase = createAdminClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -26,7 +60,7 @@ export async function POST(request: Request) {
   }
 
   // 在庫確認
-  for (const item of items) {
+  for (const item of items as OrderItemInput[]) {
     const { data: dbItem } = await supabase
       .from('items').select('stock, name').eq('id', item.item_id).single();
     if (!dbItem || dbItem.stock < item.quantity) {
@@ -39,7 +73,7 @@ export async function POST(request: Request) {
 
   // トランザクション的に処理
   // 1. 注文作成
-  const { data: order, error: orderError } = await supabase
+  const { data: order, error: orderError } = await adminSupabase
     .from('orders')
     .insert({
       user_id: user.id,
@@ -54,55 +88,93 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: '注文の作成に失敗しました' }, { status: 500 });
   }
 
-  // 2. 注文明細作成
-  await supabase.from('order_items').insert(
-    items.map((item: any) => ({ ...item, order_id: order.id }))
-  );
+  const processedItems: Array<{ itemId: string; quantity: number }> = [];
 
-  // 3. 在庫を減らす & 在庫履歴
-  for (const item of items) {
-    await supabase.rpc('decrement_stock', {
-      p_item_id: item.item_id,
-      p_quantity: item.quantity,
-    });
+  try {
+    // 2. 注文明細作成
+    const { error: orderItemsError } = await adminSupabase.from('order_items').insert(
+      (items as OrderItemInput[]).map((item) => ({ ...item, order_id: order.id }))
+    );
 
-    await supabase.from('stock_history').insert({
-      item_id: item.item_id,
-      change_amount: -item.quantity,
-      reason: 'purchase',
-      order_id: order.id,
-      created_by: user.id,
-    });
-
-    // 在庫アラートチェック
-    const { data: updatedItem } = await supabase
-      .from('items').select('stock, stock_alert_threshold, name').eq('id', item.item_id).single();
-    if (updatedItem && updatedItem.stock <= updatedItem.stock_alert_threshold) {
-      await notifyLowStock({
-        itemName: updatedItem.name,
-        currentStock: updatedItem.stock,
-        threshold: updatedItem.stock_alert_threshold,
-      });
+    if (orderItemsError) {
+      throw orderItemsError;
     }
-  }
 
-  // 4. 残高・後払い残高を更新
-  if (payment_method === 'balance') {
-    await supabase
-      .from('users')
-      .update({ balance: profile.balance - total_amount })
-      .eq('id', user.id);
-  } else if (payment_method === 'deferred') {
-    await supabase
-      .from('users')
-      .update({ deferred_balance: profile.deferred_balance + total_amount })
-      .eq('id', user.id);
+    // 3. 在庫を減らす & 在庫履歴
+    for (const item of items as OrderItemInput[]) {
+      const { error: decrementError } = await adminSupabase.rpc('decrement_stock', {
+        p_item_id: item.item_id,
+        p_quantity: item.quantity,
+      });
+
+      if (decrementError) {
+        throw decrementError;
+      }
+
+      processedItems.push({ itemId: item.item_id, quantity: item.quantity });
+
+      const { error: stockHistoryError } = await adminSupabase.from('stock_history').insert({
+        item_id: item.item_id,
+        change_amount: -item.quantity,
+        reason: 'purchase',
+        order_id: order.id,
+        created_by: user.id,
+      });
+
+      if (stockHistoryError) {
+        throw stockHistoryError;
+      }
+
+      // 在庫アラートチェック
+      const { data: updatedItem, error: updatedItemError } = await adminSupabase
+        .from('items')
+        .select('stock, stock_alert_threshold, name')
+        .eq('id', item.item_id)
+        .single();
+
+      if (updatedItemError) {
+        throw updatedItemError;
+      }
+
+      if (updatedItem.stock <= updatedItem.stock_alert_threshold) {
+        await notifyLowStock({
+          itemName: updatedItem.name,
+          currentStock: updatedItem.stock,
+          threshold: updatedItem.stock_alert_threshold,
+        });
+      }
+    }
+
+    // 4. 残高・後払い残高を更新
+    if (payment_method === 'balance') {
+      const { error: balanceUpdateError } = await adminSupabase
+        .from('users')
+        .update({ balance: profile.balance - total_amount })
+        .eq('id', user.id);
+
+      if (balanceUpdateError) {
+        throw balanceUpdateError;
+      }
+    } else if (payment_method === 'deferred') {
+      const { error: deferredUpdateError } = await adminSupabase
+        .from('users')
+        .update({ deferred_balance: profile.deferred_balance + total_amount })
+        .eq('id', user.id);
+
+      if (deferredUpdateError) {
+        throw deferredUpdateError;
+      }
+    }
+  } catch (error) {
+    await rollbackOrder(adminSupabase, order.id, processedItems);
+    console.error('[orders] failed to finalize order', error);
+    return NextResponse.json({ error: '注文処理に失敗しました' }, { status: 500 });
   }
 
   // 5. Slack通知
   await notifyNewOrder({
     userName: profile.name,
-    items: items.map((i: any) => ({
+    items: (items as OrderItemInput[]).map((i) => ({
       name: i.item_name,
       quantity: i.quantity,
       price: i.item_price,
@@ -115,7 +187,7 @@ export async function POST(request: Request) {
     await notifyCashOrderPending({
       userName: profile.name,
       total: total_amount,
-      items: items.map((item: any) => ({
+      items: (items as OrderItemInput[]).map((item) => ({
         name: item.item_name,
         quantity: item.quantity,
       })),

@@ -5,7 +5,7 @@ import { format } from 'date-fns';
 import { ja } from 'date-fns/locale';
 import { CheckCircle, ChevronDown, ChevronUp } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 const METHOD_LABEL: Record<string, string> = {
   balance: '残高', deferred: '後払い', cash: '現金', stripe: 'クレカ',
@@ -22,8 +22,11 @@ const STATUS_COLOR: Record<string, string> = {
 
 export default function OrdersClient({ orders }: { orders: any[] }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [expanded, setExpanded] = useState<string | null>(null);
-  const [filter, setFilter] = useState<string>('all');
+  const [filter, setFilter] = useState<string>(
+    searchParams.get('pending') === '1' ? 'cash_pending' : 'all'
+  );
   const [loading, setLoading] = useState<string | null>(null);
 
   const filtered = orders.filter(o => {

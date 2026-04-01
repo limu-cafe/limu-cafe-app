@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Plus, Archive } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { format } from 'date-fns';
 import { ja } from 'date-fns/locale';
 import type { Item } from '@/types';
@@ -12,8 +12,10 @@ interface Props { items: Item[]; history: any[]; }
 
 export default function StockClient({ items, history }: Props) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [quantities, setQuantities] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState<string | null>(null);
+  const [pendingOnly, setPendingOnly] = useState(searchParams.get('pending') === '1');
 
   const handleRestock = async (item: Item) => {
     const qty = Number(quantities[item.id]);
@@ -39,12 +41,26 @@ export default function StockClient({ items, history }: Props) {
     return 'text-green-400';
   };
 
+  const visibleItems = pendingOnly
+    ? items.filter((item) => item.stock <= item.stock_alert_threshold)
+    : items;
+
   return (
     <div className="space-y-6">
       <div>
         <h1 className="font-display font-bold text-2xl text-white">在庫入力</h1>
         <p className="text-gray-400 text-sm mt-1">入荷時に追加する個数を入力してください</p>
       </div>
+
+      <label className="inline-flex items-center gap-2 text-sm text-gray-300">
+        <input
+          type="checkbox"
+          checked={pendingOnly}
+          onChange={(e) => setPendingOnly(e.target.checked)}
+          className="rounded border-gray-700 bg-gray-900 text-white"
+        />
+        要対応の在庫だけ表示
+      </label>
 
       {/* 在庫一覧 */}
       <div className="bg-gray-900 rounded-2xl border border-gray-800 overflow-hidden">
@@ -57,7 +73,7 @@ export default function StockClient({ items, history }: Props) {
             </tr>
           </thead>
           <tbody>
-            {items.map((item) => (
+            {visibleItems.map((item) => (
               <tr key={item.id} className="border-b border-gray-800/50 hover:bg-gray-800/30">
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-2">
@@ -102,6 +118,9 @@ export default function StockClient({ items, history }: Props) {
             ))}
           </tbody>
         </table>
+        {visibleItems.length === 0 && (
+          <div className="py-8 text-center text-sm text-gray-500">該当する商品はありません</div>
+        )}
       </div>
 
       {/* 入荷履歴 */}

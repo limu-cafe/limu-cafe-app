@@ -35,7 +35,10 @@ npm install
    - `supabase/migrations/001_initial_schema.sql`
    - `supabase/migrations/002_rpc_functions.sql`
    - `supabase/migrations/003_cashbox_management.sql`
-   - `supabase/migrations/004_cashbox_backfill.sql`
+   - `supabase/migrations/005_favorites.sql`
+   - `supabase/migrations/006_legacy_transfer.sql`
+   - `supabase/migrations/007_admin_audit_logs.sql`
+   - `supabase/migrations/004_cashbox_backfill.sql` は、現システムの過去現金履歴を復元したいときだけ後から実行
 3. **Project Settings → API** から以下をコピー：
    - `Project URL` → `NEXT_PUBLIC_SUPABASE_URL`
    - `anon public` キー → `NEXT_PUBLIC_SUPABASE_ANON_KEY`
@@ -95,10 +98,12 @@ npm install
 NEXT_PUBLIC_SUPABASE_URL=...
 NEXT_PUBLIC_SUPABASE_ANON_KEY=...
 SUPABASE_SERVICE_ROLE_KEY=...
+APP_BASE_URL=...
 SLACK_WEBHOOK_ORDERS=...
 SLACK_WEBHOOK_ADMIN=...
 SLACK_BOT_TOKEN=...
 ADMIN_PASSWORD=...
+ALLOWED_SLACK_WORKSPACE_ID=...
 CRON_SECRET=...
 KEEPA_API_KEY=...
 ```
@@ -139,6 +144,21 @@ npx vercel
 ```
 
 Vercel ダッシュボード → **Settings → Environment Variables** で、外部 env ファイルと同じ値を登録。
+
+### 8. PWA の使い方
+
+このアプリはスマホやPCで「ホーム画面に追加」して使えるようにしています。
+
+- iPhone / iPad:
+  - Safari で開く
+  - 共有ボタン
+  - `ホーム画面に追加`
+- Android:
+  - Chrome で開く
+  - メニュー
+  - `ホーム画面に追加` または `アプリをインストール`
+
+研究室内で日常的に使う場合は、この使い方がいちばん楽です。
 
 ---
 
@@ -234,6 +254,34 @@ npm run dev
 - `/admin/requests`
 - `/admin/cashbox`
 
+### デバッグ中の DB 運用おすすめ方針
+
+デバッグをまだ続ける予定なら、いちばん安全なのは次のどちらかです。
+
+1. **おすすめ:** Supabase を `開発用` と `運用開始用` で分ける
+2. 1つの Supabase を使い続けるなら、運用開始前に初期化して正式データを入れ直す
+
+おすすめ理由:
+
+- デバッグ中の注文やチャージ申請が本番データに混ざらない
+- 何度でもやり直せる
+- 旧データ移行を落ち着いて検証できる
+
+もし 1つの Supabase を使い続ける場合は、運用開始直前に以下を行ってください。
+
+1. 旧システムデータの JSON を保存しておく
+2. [prelaunch_reset_preserve_master.sql](/Users/miyoshishouhei/Documents/dev/limu-cafe-app/supabase/manual/prelaunch_reset_preserve_master.sql) を実行する
+3. 必要なら Supabase Authentication のデバッグ用ユーザーを手動削除する
+4. `001` `002` `003` `005` `006` の migration 状態を確認する
+5. `legacy:import` を実行する
+6. その後に実際のユーザーで引き継ぎ申請と承認を行う
+
+補足:
+
+- [prelaunch_reset_preserve_master.sql](/Users/miyoshishouhei/Documents/dev/limu-cafe-app/supabase/manual/prelaunch_reset_preserve_master.sql) は `items` と `categories` を残します
+- 商品マスタまで作り直したい場合は、この SQL をそのまま使わず、先に方針を決めてください
+- `tmp/legacy-export.json` は Git に含まれないようにしています
+
 ### 金庫管理の導入手順
 
 金庫管理を導入するときは、以下の順番で進めます。
@@ -242,12 +290,275 @@ npm run dev
 2. `supabase/migrations/004_cashbox_backfill.sql` を **1回実行** して、現システムに残っている過去の現金履歴を復元する
 3. `/admin/cashbox` を開いて、バックフィル済みの案内が出ていることを確認する
 4. 以前のシステムから引き継ぐ金庫残高がある場合は、「手動調整」から初期値を1件入力する
+5. `supabase/migrations/005_favorites.sql` を実行して、お気に入り機能を有効にする
+6. 旧システム移行も使う場合は `supabase/migrations/006_legacy_transfer.sql` を実行して、旧データ保管と引き継ぎ申請のテーブルを作る
+7. `supabase/migrations/007_admin_audit_logs.sql` を実行して、管理者の承認・精算・調整ログを記録できるようにする
 
 補足:
 
 - `004_cashbox_backfill.sql` は再実行しても、`order_id` / `charge_request_id` / `settlement_id` の重複を避ける設計です
 - バックフィル対象は「現システムDBに残っている現金注文・現金チャージ承認・現金精算」のみです
 - 旧システム分は自動では入らないため、初期値として `manual_in` / `manual_out` で入力してください
+- `APP_BASE_URL` を設定すると、Slack 通知から管理画面やマイページへ直接飛べます
+
+### 旧システムデータ移行の考え方
+
+- 旧システムの生データは、まず `legacy_users` と `legacy_purchase_history` に保存します
+- ユーザー本人はマイページから「旧データ引き継ぎ申請」を出します
+- 管理者は `/admin/legacy` で Slack ユーザーと旧データを対応付けて承認します
+- 承認時に、旧残高は現在の `users.balance` / `users.deferred_balance` に反映されます
+- 旧お気に入りは、商品名が一致するものだけ現在の `favorite_items` に引き継がれます
+- 旧購入履歴は、いったん参照用として `legacy_purchase_history` に保持します
+
+おすすめ手順:
+
+1. 先に新DBを初期化する
+2. `001` `002` `003` `005` `006` を実行する
+3. 旧システムデータを `legacy_users` / `legacy_purchase_history` に投入する
+4. Slack ログイン済みユーザーから引き継ぎ申請を出してもらう
+5. 管理者が `/admin/legacy` で照合して承認する
+6. 旧データ移植方針が固まるまで `004_cashbox_backfill.sql` は実行しない
+
+### 旧システム移行の実作業手順
+
+この章は、「旧システムの Firestore データを、新システムの旧データ保管テーブルへ移す」ための手順です。
+一度に全部やらず、順番に進めてください。
+
+#### 前提
+
+- 旧システムのリポジトリがローカルにある
+  例: `/Users/miyoshishouhei/Documents/dev/cafeorder-vuetify`
+- 新システムのリポジトリがローカルにある
+  例: `/Users/miyoshishouhei/Documents/dev/limu-cafe-app`
+- 新システム側の env が読み込める
+- 旧システムの `firebase/emulator_export/` が手元にある
+
+#### 1. 旧システム側で必要なものを入れる
+
+旧システムの Firestore export はそのままでは読みにくいため、Firebase Emulator に読み込ませて JSON に変換します。
+
+必要なもの:
+
+- Node.js
+- Java
+- Firebase CLI
+
+Firebase CLI がまだ無い場合:
+
+```bash
+npm install -g firebase-tools
+```
+
+Java が入っていない場合は、Mac ならまず `java -version` を実行して確認してください。
+エラーになる場合は Java をインストールします。
+
+#### 2. 旧システムの依存関係を入れる
+
+別ターミナルを開いて、旧システムのフォルダで実行します。
+
+```bash
+cd /Users/miyoshishouhei/Documents/dev/cafeorder-vuetify
+yarn install
+```
+
+#### 3. 旧システムの Emulator を起動する
+
+同じ旧システム側ターミナルで次を実行します。
+
+```bash
+cd /Users/miyoshishouhei/Documents/dev/cafeorder-vuetify
+sh start_emulator.sh
+```
+
+このコマンドは、`firebase/emulator_export/` のデータを読み込んで Emulator を起動します。
+起動中はこのターミナルを閉じないでください。
+
+起動確認:
+
+- Firestore Emulator: `http://127.0.0.1:8080`
+- Emulator UI: `http://127.0.0.1:4000`
+
+#### 4. 新システム側で旧データを JSON に変換する
+
+新しく別ターミナルを開いて、新システム側で次を実行します。
+
+```bash
+cd /Users/miyoshishouhei/Documents/dev/limu-cafe-app
+mkdir -p tmp
+npm run legacy:extract -- \
+  --old-repo /Users/miyoshishouhei/Documents/dev/cafeorder-vuetify \
+  --out /Users/miyoshishouhei/Documents/dev/limu-cafe-app/tmp/legacy-export.json
+```
+
+このコマンドで次の情報を抽出します。
+
+- 旧ユーザー一覧
+- 旧残高
+- 旧お気に入り
+- 旧購入履歴
+- `set` 履歴
+
+出力先:
+
+`/Users/miyoshishouhei/Documents/dev/limu-cafe-app/tmp/legacy-export.json`
+
+#### 5. 抽出できた JSON を軽く確認する
+
+まず件数を確認します。
+
+```bash
+cd /Users/miyoshishouhei/Documents/dev/limu-cafe-app
+node -e "const data=require('./tmp/legacy-export.json'); console.log(data.counts)"
+```
+
+必要なら先頭だけ見ます。
+
+```bash
+cd /Users/miyoshishouhei/Documents/dev/limu-cafe-app
+node -e "const data=require('./tmp/legacy-export.json'); console.log(data.legacyUsers.slice(0,3)); console.log(data.purchaseHistory.slice(0,5));"
+```
+
+ここで見るポイント:
+
+- `legacyUsers` が空ではないか
+- `name` と `legacy_balance` が入っているか
+- `favorite_item_names` が入っていそうか
+- `purchaseHistory` が空ではないか
+
+#### 5.5 実際の Firebase 本番データを使う場合
+
+GitHub 内の `firebase/emulator_export/` がテストデータだった場合は、こちらを使います。
+
+1. Firebase コンソールで `limu-caffe-terminal` のサービスアカウント鍵を作成する
+2. JSON を安全な場所に置く
+   例:
+
+```bash
+/Users/miyoshishouhei/.config/limu-cafe/limu-caffe-terminal-firebase-adminsdk-p7zoq-2746e20ce5.json
+```
+
+3. 新システム側で以下を実行する
+
+```bash
+cd /Users/miyoshishouhei/Documents/dev/limu-cafe-app
+mkdir -p tmp
+npm run legacy:extract:prod -- \
+  --credentials /Users/miyoshishouhei/.config/limu-cafe/limu-caffe-terminal-firebase-adminsdk-p7zoq-2746e20ce5.json \
+  --out /Users/miyoshishouhei/Documents/dev/limu-cafe-app/tmp/legacy-export-prod.json
+```
+
+4. 件数確認
+
+```bash
+cd /Users/miyoshishouhei/Documents/dev/limu-cafe-app
+node -e "const data=require('./tmp/legacy-export-prod.json'); console.log(data.counts)"
+```
+
+5. 新システムへ投入するときは、`legacy-export.json` ではなく `legacy-export-prod.json` を使う
+
+```bash
+cd /Users/miyoshishouhei/Documents/dev/limu-cafe-app
+set -a
+source ~/.config/limu-cafe/env
+set +a
+npm run legacy:import -- --file /Users/miyoshishouhei/Documents/dev/limu-cafe-app/tmp/legacy-export-prod.json
+```
+
+おすすめ:
+
+- 実際の移行では、Emulator 版ではなく **本番 Firestore から書き出した `legacy-export-prod.json`** を使ってください
+- `tmp/` は Git に含まれないので、そのまま置いて大丈夫です
+
+#### 6. 新システム側の Supabase を初期化して migration を入れる
+
+本番運用前に初期化する前提なら、ここで新DBを空にしてから進めます。
+
+いま使っている Supabase をそのまま使う場合は、先に
+[prelaunch_reset_preserve_master.sql](/Users/miyoshishouhei/Documents/dev/limu-cafe-app/supabase/manual/prelaunch_reset_preserve_master.sql)
+を実行してください。
+
+入れる migration:
+
+1. `001_initial_schema.sql`
+2. `002_rpc_functions.sql`
+3. `003_cashbox_management.sql`
+4. `005_favorites.sql`
+5. `006_legacy_transfer.sql`
+6. `007_admin_audit_logs.sql`
+
+この段階では **`004_cashbox_backfill.sql` をまだ実行しません**。
+
+#### 7. 新システム側で env を読み込む
+
+```bash
+cd /Users/miyoshishouhei/Documents/dev/limu-cafe-app
+set -a
+source ~/.config/limu-cafe/env
+set +a
+```
+
+#### 8. 旧データを新システムに投入する
+
+同じ新システム側ターミナルで次を実行します。
+
+```bash
+cd /Users/miyoshishouhei/Documents/dev/limu-cafe-app
+npm run legacy:import -- --file /Users/miyoshishouhei/Documents/dev/limu-cafe-app/tmp/legacy-export.json
+```
+
+この処理で、次のテーブルにデータが入ります。
+
+- `legacy_users`
+- `legacy_purchase_history`
+
+#### 9. Supabase で投入確認をする
+
+SQL Editor で以下を確認します。
+
+```sql
+select id, legacy_user_key, name, email, legacy_balance, transferred_at
+from public.legacy_users
+order by name;
+```
+
+```sql
+select legacy_user_id, item_name, quantity, subtotal, purchased_at
+from public.legacy_purchase_history
+order by purchased_at desc nulls last
+limit 50;
+```
+
+#### 10. Web アプリで引き継ぎフローを確認する
+
+確認順:
+
+1. ユーザーでログイン
+2. `/mypage` を開く
+3. 「旧システムデータ引き継ぎ」カードから申請する
+4. 管理者で `/admin/legacy` を開く
+5. 旧ユーザーを選んで承認する
+6. 承認後にユーザー残高とお気に入りが反映されるか確認する
+
+#### 11. その後に考えること
+
+- 旧システムの `set` 履歴をどう扱うか
+- 金庫管理の初期値をどう入れるか
+- 必要ならその時点で `004_cashbox_backfill.sql` を実行するか
+
+#### よくある詰まりポイント
+
+- `legacy:extract` が失敗する
+  - 旧システム Emulator が起動しているか確認する
+  - `http://127.0.0.1:8080` にアクセスできるか確認する
+  - Java と Firebase CLI が入っているか確認する
+
+- `legacy:import` が失敗する
+  - `NEXT_PUBLIC_SUPABASE_URL` と `SUPABASE_SERVICE_ROLE_KEY` を読み込んでいるか確認する
+  - `006_legacy_transfer.sql` を実行済みか確認する
+
+- お気に入りが引き継がれない
+  - 旧システムと新システムで商品名が一致しているか確認する
+  - `005_favorites.sql` を実行済みか確認する
 
 ---
 
@@ -355,6 +666,9 @@ npm run dev
 2. [supabase/migrations/002_rpc_functions.sql](/Users/miyoshishouhei/Documents/dev/limu-cafe-app/supabase/migrations/002_rpc_functions.sql)
 3. [supabase/migrations/003_cashbox_management.sql](/Users/miyoshishouhei/Documents/dev/limu-cafe-app/supabase/migrations/003_cashbox_management.sql)
 4. [supabase/migrations/004_cashbox_backfill.sql](/Users/miyoshishouhei/Documents/dev/limu-cafe-app/supabase/migrations/004_cashbox_backfill.sql)
+5. [supabase/migrations/005_favorites.sql](/Users/miyoshishouhei/Documents/dev/limu-cafe-app/supabase/migrations/005_favorites.sql)
+6. [supabase/migrations/006_legacy_transfer.sql](/Users/miyoshishouhei/Documents/dev/limu-cafe-app/supabase/migrations/006_legacy_transfer.sql)
+7. [supabase/migrations/007_admin_audit_logs.sql](/Users/miyoshishouhei/Documents/dev/limu-cafe-app/supabase/migrations/007_admin_audit_logs.sql)
 
 RLS やポリシー周りで不具合があった場合は、別途 SQL Editor で修正 SQL を実行することがあります。
 
@@ -581,6 +895,9 @@ Slack アプリを再インストールしたり Webhook を作り直した場�
    - [supabase/migrations/002_rpc_functions.sql](/Users/miyoshishouhei/Documents/dev/limu-cafe-app/supabase/migrations/002_rpc_functions.sql)
    - [supabase/migrations/003_cashbox_management.sql](/Users/miyoshishouhei/Documents/dev/limu-cafe-app/supabase/migrations/003_cashbox_management.sql)
    - [supabase/migrations/004_cashbox_backfill.sql](/Users/miyoshishouhei/Documents/dev/limu-cafe-app/supabase/migrations/004_cashbox_backfill.sql)
+   - [supabase/migrations/005_favorites.sql](/Users/miyoshishouhei/Documents/dev/limu-cafe-app/supabase/migrations/005_favorites.sql)
+   - [supabase/migrations/006_legacy_transfer.sql](/Users/miyoshishouhei/Documents/dev/limu-cafe-app/supabase/migrations/006_legacy_transfer.sql)
+   - [supabase/migrations/007_admin_audit_logs.sql](/Users/miyoshishouhei/Documents/dev/limu-cafe-app/supabase/migrations/007_admin_audit_logs.sql)
 4. `npm install` を実行する
 5. `npm run dev` で起動する
 6. `/admin/cashbox` を開き、金庫管理が見えることを確認する

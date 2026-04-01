@@ -5,17 +5,19 @@ import { Wallet, Clock, ShoppingBag, ChevronRight } from 'lucide-react';
 import Link from 'next/link';
 import { format } from 'date-fns';
 import { ja } from 'date-fns/locale';
+import ReorderButton from '@/components/user/ReorderButton';
+import LegacyTransferRequestCard from './LegacyTransferRequestCard';
 
 export default async function MyPage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect('/login');
 
-  const [{ data: profile }, { data: orders }, { data: chargeRequests }] = await Promise.all([
+  const [{ data: profile }, { data: orders }, { data: chargeRequests }, { data: favorites }, { data: legacyTransferRequests }] = await Promise.all([
     supabase.from('users').select('*').eq('id', user.id).single(),
     supabase
       .from('orders')
-      .select('*, order_items(*, item:items(name))')
+      .select('*, order_items(*, item:items(*, category:categories(*)))')
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
       .limit(10),
@@ -25,6 +27,17 @@ export default async function MyPage() {
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
       .limit(5),
+    supabase
+      .from('favorite_items')
+      .select('item:items(id, name, price, image_url, stock, is_available, stock_alert_threshold, category:categories(*))')
+      .eq('user_id', user.id)
+      .limit(6),
+    supabase
+      .from('legacy_transfer_requests')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(1),
   ]);
 
   const paymentMethodLabel: Record<string, string> = {
@@ -125,7 +138,8 @@ export default async function MyPage() {
                   <div className="text-sm text-espresso-600">
                     {order.order_items?.map((oi: any) => oi.item_name).join('、')}
                   </div>
-                  <div className="flex justify-end">
+                  <div className="flex items-center justify-between">
+                    <ReorderButton orderItems={order.order_items ?? []} />
                     <span className="font-display font-bold text-espresso">
                       ¥{order.total_amount.toLocaleString()}
                     </span>
@@ -135,6 +149,37 @@ export default async function MyPage() {
             </div>
           )}
         </div>
+
+        {favorites && favorites.length > 0 && (
+          <div className="card space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="font-medium text-espresso">お気に入り商品</h2>
+              <Link
+                href="/"
+                className="inline-flex items-center gap-1 text-xs text-espresso-400 transition-colors hover:text-espresso-600"
+              >
+                商品一覧へ <ChevronRight size={12} />
+              </Link>
+            </div>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              {favorites.map((favorite: any) => (
+                <div key={favorite.item.id} className="rounded-xl border border-cream-200 p-3">
+                  <p className="font-medium text-espresso">{favorite.item.name}</p>
+                  <p className="mt-1 text-sm text-espresso-400">
+                    ¥{favorite.item.price.toLocaleString()}
+                  </p>
+                  <p className="mt-2 text-xs text-espresso-400">
+                    {favorite.item.is_available && favorite.item.stock > 0
+                      ? `在庫 ${favorite.item.stock}個`
+                      : '現在は購入不可'}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <LegacyTransferRequestCard latestRequest={legacyTransferRequests?.[0] ?? null} />
 
         {/* チャージ申請履歴 */}
         {chargeRequests && chargeRequests.length > 0 && (

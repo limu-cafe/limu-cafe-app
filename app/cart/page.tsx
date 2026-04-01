@@ -7,7 +7,18 @@ import Link from 'next/link';
 import Image from 'next/image';
 
 export default function CartPage() {
-  const { items, removeItem, updateQuantity, total, clearCart } = useCartStore();
+  const { items, removeItem, updateQuantity, total, clearCart, hasHydrated } = useCartStore();
+
+  if (!hasHydrated) {
+    return (
+      <UserLayout>
+        <div className="text-center py-24 animate-fade-in">
+          <div className="text-6xl mb-4">🛒</div>
+          <p className="text-espresso-400">カートを読み込んでいます...</p>
+        </div>
+      </UserLayout>
+    );
+  }
 
   if (items.length === 0) {
     return (
@@ -60,6 +71,11 @@ export default function CartPage() {
                 <p className="text-sm text-espresso-400">
                   ¥{item.price.toLocaleString()} × {quantity}
                 </p>
+                {item.stock <= item.stock_alert_threshold && (
+                  <p className={`mt-1 text-xs ${item.stock === 0 ? 'text-red-600' : 'text-amber-600'}`}>
+                    {item.stock === 0 ? '在庫切れです。購入前に確認してください。' : `残り${item.stock}個です`}
+                  </p>
+                )}
               </div>
 
               {/* 数量コントロール */}

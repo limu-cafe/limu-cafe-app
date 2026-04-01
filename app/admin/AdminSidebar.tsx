@@ -4,11 +4,11 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   LayoutDashboard, Package, Archive, ShoppingBag,
-  Wallet, BarChart3, Users, MessageSquare, Search, LogOut, Banknote
+  Wallet, BarChart3, Users, MessageSquare, Search, LogOut, Banknote, RefreshCw, ClipboardList
 } from 'lucide-react';
 import { clearAdminSession } from './AdminAuthGuard';
 
-type NotificationKey = 'stock' | 'orders' | 'charge' | 'users' | 'requests';
+type NotificationKey = 'stock' | 'orders' | 'charge' | 'users' | 'requests' | 'legacy';
 
 type SidebarNotifications = Record<NotificationKey, number>;
 
@@ -22,6 +22,8 @@ const navItems = [
   { href: '/admin/cashbox', label: '金庫管理', icon: Banknote },
   { href: '/admin/users', label: 'ユーザー管理', icon: Users, notificationKey: 'users' as NotificationKey },
   { href: '/admin/requests', label: '商品要望', icon: MessageSquare, notificationKey: 'requests' as NotificationKey },
+  { href: '/admin/legacy', label: '旧データ移行', icon: RefreshCw, notificationKey: 'legacy' as NotificationKey },
+  { href: '/admin/audit', label: '監査ログ', icon: ClipboardList },
   { href: '/admin/price-watch', label: '価格監視', icon: Search, badge: '開発中' },
 ];
 
@@ -56,10 +58,12 @@ export default function AdminSidebar({
         {navItems.map(({ href, label, icon: Icon, badge, notificationKey }) => {
           const isActive = pathname === href;
           const notificationCount = notificationKey ? notifications[notificationKey] : 0;
+          const destination =
+            notificationKey && notificationCount > 0 ? `${href}?pending=1` : href;
           return (
             <Link
               key={href}
-              href={href}
+              href={destination}
               className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${
                 isActive
                   ? 'bg-white/10 text-white'

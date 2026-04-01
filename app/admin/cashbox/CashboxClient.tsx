@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { format } from 'date-fns';
 import { ja } from 'date-fns/locale';
-import { ArrowDownLeft, ArrowUpRight, Calculator, Scale, Wallet } from 'lucide-react';
+import { ArrowDownLeft, ArrowUpRight, Calculator, CircleDollarSign, Scale, Wallet } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { cashboxEntryLabels } from '@/lib/cashbox';
 
@@ -39,6 +39,11 @@ type BackfillRun = {
 
 export default function CashboxClient({
   expectedAmount,
+  projectedAmount,
+  pendingCashOrderAmount,
+  pendingCashOrdersCount,
+  deferredReceivableAmount,
+  pendingCashChargeAmount,
   latestCount,
   entries,
   counts,
@@ -46,6 +51,11 @@ export default function CashboxClient({
   hasLegacyBaseline,
 }: {
   expectedAmount: number;
+  projectedAmount: number;
+  pendingCashOrderAmount: number;
+  pendingCashOrdersCount: number;
+  deferredReceivableAmount: number;
+  pendingCashChargeAmount: number;
   latestCount: Count | null;
   entries: Entry[];
   counts: Count[];
@@ -132,7 +142,7 @@ export default function CashboxClient({
       <div>
         <h1 className="font-display font-bold text-2xl text-white">金庫管理</h1>
         <p className="text-gray-400 text-sm mt-1">
-          現システムの現金履歴と手動調整を合算した理論残高を、実際の金庫内現金と照らし合わせて管理します
+          現在の金庫見込みと、未回収売上まで含めた最終着地見込み、実際に数えた金額を並べて管理します
         </p>
       </div>
 
@@ -169,14 +179,30 @@ export default function CashboxClient({
         )}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="bg-gray-900 rounded-2xl border border-gray-800 p-5">
           <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center mb-3">
             <Calculator size={20} className="text-emerald-400" />
           </div>
-          <p className="text-gray-400 text-xs mb-1">計算上の金庫残高</p>
+          <p className="text-gray-400 text-xs mb-1">現在金庫にある見込み</p>
           <p className="font-display font-bold text-2xl text-emerald-400">
             ¥{expectedAmount.toLocaleString()}
+          </p>
+          <p className="mt-2 text-xs text-gray-500">
+            現金注文受領・現金チャージ承認・現金精算・手動調整の合計です
+          </p>
+        </div>
+
+        <div className="bg-gray-900 rounded-2xl border border-gray-800 p-5">
+          <div className="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center mb-3">
+            <CircleDollarSign size={20} className="text-purple-400" />
+          </div>
+          <p className="text-gray-400 text-xs mb-1">すべて精算した場合の着地見込み</p>
+          <p className="font-display font-bold text-2xl text-purple-400">
+            ¥{projectedAmount.toLocaleString()}
+          </p>
+          <p className="mt-2 text-xs text-gray-500">
+            現在見込み + 未回収の現金注文 + 後払い残高
           </p>
         </div>
 
@@ -197,6 +223,38 @@ export default function CashboxClient({
           <p className="text-gray-400 text-xs mb-1">最新差額</p>
           <p className={`font-display font-bold text-2xl ${latestDifference === 0 ? 'text-green-400' : latestDifference > 0 ? 'text-sky-400' : 'text-red-400'}`}>
             {latestDifference > 0 ? '+' : ''}¥{latestDifference.toLocaleString()}
+          </p>
+        </div>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-3">
+        <div className="rounded-2xl border border-gray-800 bg-gray-900 p-5">
+          <p className="text-xs text-gray-400">未回収の現金注文</p>
+          <p className="mt-1 font-display text-2xl font-bold text-amber-400">
+            ¥{pendingCashOrderAmount.toLocaleString()}
+          </p>
+          <p className="mt-2 text-xs text-gray-500">
+            確認待ち {pendingCashOrdersCount}件
+          </p>
+        </div>
+
+        <div className="rounded-2xl border border-gray-800 bg-gray-900 p-5">
+          <p className="text-xs text-gray-400">未回収の後払い残高</p>
+          <p className="mt-1 font-display text-2xl font-bold text-sky-400">
+            ¥{deferredReceivableAmount.toLocaleString()}
+          </p>
+          <p className="mt-2 text-xs text-gray-500">
+            今後現金精算される見込みの金額です
+          </p>
+        </div>
+
+        <div className="rounded-2xl border border-gray-800 bg-gray-900 p-5">
+          <p className="text-xs text-gray-400">保留中の現金チャージ申請</p>
+          <p className="mt-1 font-display text-2xl font-bold text-gray-200">
+            ¥{pendingCashChargeAmount.toLocaleString()}
+          </p>
+          <p className="mt-2 text-xs text-gray-500">
+            承認前なので現在金庫見込みには含めていません
           </p>
         </div>
       </div>

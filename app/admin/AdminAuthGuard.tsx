@@ -5,6 +5,13 @@ import { usePathname, useRouter } from 'next/navigation';
 
 const SESSION_KEY = 'limu_admin_auth';
 const SESSION_DURATION = 8 * 60 * 60 * 1000; // 8時間
+const COOKIE_MAX_AGE = 8 * 60 * 60;
+
+function getCookieExpiry() {
+  if (typeof document === 'undefined') return null;
+  const match = document.cookie.match(/(?:^|; )limu_admin_auth=([^;]+)/);
+  return match?.[1] ? Number(decodeURIComponent(match[1])) : null;
+}
 
 export default function AdminAuthGuard({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -31,6 +38,13 @@ export default function AdminAuthGuard({ children }: { children: React.ReactNode
           return;
         }
       }
+
+      const cookieExpiry = getCookieExpiry();
+      if (cookieExpiry && Date.now() < cookieExpiry) {
+        setAuthed(true);
+        setChecked(true);
+        return;
+      }
     } catch {}
 
     router.replace('/admin/login');
@@ -52,12 +66,15 @@ export default function AdminAuthGuard({ children }: { children: React.ReactNode
 
 // 外部から呼び出すユーティリティ
 export function setAdminSession() {
+  const expiry = Date.now() + SESSION_DURATION;
   sessionStorage.setItem(
     SESSION_KEY,
-    JSON.stringify({ expiry: Date.now() + SESSION_DURATION })
+    JSON.stringify({ expiry })
   );
+  document.cookie = `${SESSION_KEY}=${expiry}; path=/; max-age=${COOKIE_MAX_AGE}; samesite=lax`;
 }
 
 export function clearAdminSession() {
   sessionStorage.removeItem(SESSION_KEY);
+  document.cookie = `${SESSION_KEY}=; path=/; max-age=0; samesite=lax`;
 }

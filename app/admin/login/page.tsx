@@ -1,15 +1,40 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Lock } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { setAdminSession } from '../AdminAuthGuard';
+import { createClient } from '@/lib/supabase/client';
 
 export default function AdminLoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+
+  const next = searchParams.get('next');
+  const nextPath = next && next.startsWith('/admin') ? next : '/admin';
+
+  const handleSlackLogin = async () => {
+    setLoading(true);
+    const supabase = createClient();
+    const callbackUrl = new URL('/api/auth/callback', window.location.origin);
+    callbackUrl.searchParams.set('next', nextPath);
+
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'slack_oidc',
+      options: {
+        redirectTo: callbackUrl.toString(),
+        scopes: 'openid profile email',
+      },
+    });
+
+    if (error) {
+      toast.error('Slackログインに失敗しました');
+      setLoading(false);
+    }
+  };
 
   const handleLogin = async () => {
     if (!password) return;
@@ -23,9 +48,14 @@ export default function AdminLoginPage() {
       if (res.ok) {
         setAdminSession();
         toast.success('ログインしました');
-        router.push('/admin');
+        router.push(nextPath);
       } else {
-        toast.error('パスワードが違います');
+        const error = await res.json().catch(() => null);
+        toast.error(
+          error?.error === 'Slack login required'
+            ? '先にSlackでログインしてください'
+            : 'パスワードが違います'
+        );
       }
     } finally {
       setLoading(false);
@@ -40,10 +70,18 @@ export default function AdminLoginPage() {
           <h1 className="font-display font-bold text-2xl text-white">
             LIMU喫茶 管理者
           </h1>
-          <p className="text-gray-400 text-sm mt-1">管理者パスワードを入力してください</p>
+          <p className="text-gray-400 text-sm mt-1">Slack認証後に管理者パスワードを入力してください</p>
         </div>
 
         <div className="bg-gray-900 rounded-2xl border border-gray-800 p-6 space-y-4">
+          <button
+            onClick={handleSlackLogin}
+            disabled={loading}
+            className="w-full rounded-lg border border-gray-700 bg-[#4A154B] px-4 py-3 text-sm font-medium text-white hover:bg-[#3a0f3b] transition-colors disabled:opacity-60"
+          >
+            Slackでログイン
+          </button>
+
           <div className="relative">
             <Lock size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
             <input

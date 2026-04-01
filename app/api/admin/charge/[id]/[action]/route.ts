@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
 import { createAdminClient, createClient } from '@/lib/supabase/server';
 import { insertCashboxEntry } from '@/lib/cashbox';
+import { logAdminAction } from '@/lib/admin-audit';
 
 export async function POST(
   _request: Request,
@@ -56,10 +57,24 @@ export async function POST(
     }
   }
 
+  await logAdminAction(supabase, {
+    actor_id: user?.id ?? null,
+    action_type: action === 'approve' ? 'charge_approved' : 'charge_rejected',
+    target_type: 'charge_request',
+    target_id: req.id,
+    summary: `${req.user_id} の ${req.amount.toLocaleString()}円チャージ申請を${action === 'approve' ? '承認' : '却下'}しました`,
+    metadata: {
+      method: req.method,
+      amount: req.amount,
+      user_id: req.user_id,
+    },
+  });
+
   revalidatePath('/admin');
   revalidatePath('/admin/charge');
   revalidatePath('/admin/users');
   revalidatePath('/admin/cashbox');
+  revalidatePath('/admin/audit');
   revalidatePath('/mypage');
 
   return NextResponse.json({ ok: true });

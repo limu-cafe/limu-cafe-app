@@ -13,6 +13,7 @@ export default function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
   const cartCount = useCartStore((s) => s.count());
+  const hasHydrated = useCartStore((s) => s.hasHydrated);
   const [user, setUser] = useState<UserType | null>(null);
 
   useEffect(() => {
@@ -88,7 +89,7 @@ export default function Navbar() {
             className="relative p-2 rounded-lg hover:bg-cream-100 transition-colors"
           >
             <ShoppingCart size={22} className="text-espresso" />
-            {cartCount > 0 && (
+            {hasHydrated && cartCount > 0 && (
               <span className="absolute -top-1 -right-1 w-5 h-5 bg-matcha text-white text-xs font-bold rounded-full flex items-center justify-center animate-scale-in">
                 {cartCount > 9 ? '9+' : cartCount}
               </span>
@@ -134,7 +135,7 @@ export default function Navbar() {
         >
           <ShoppingCart size={20} />
           カート
-          {cartCount > 0 && (
+          {hasHydrated && cartCount > 0 && (
             <span className="absolute top-1 left-1/2 translate-x-1 w-4 h-4 bg-matcha text-white text-xs font-bold rounded-full flex items-center justify-center">
               {cartCount > 9 ? '9+' : cartCount}
             </span>
