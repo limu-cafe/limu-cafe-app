@@ -40,9 +40,26 @@ export default function CartPage() {
 
   return (
     <UserLayout>
-      <div className="animate-fade-in max-w-2xl mx-auto">
-        <div className="flex items-center justify-between mb-6">
-          <h1 className="font-display font-bold text-3xl text-espresso">カート</h1>
+      <div className="mx-auto max-w-3xl animate-fade-in space-y-6">
+        <div className="hero-card px-5 py-5 sm:px-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <div className="section-kicker">
+                <ShoppingBag size={12} />
+                Cart
+              </div>
+              <h1 className="mt-3 font-display text-4xl font-bold text-espresso">カート</h1>
+              <p className="mt-1 text-sm text-espresso-500">
+                数量を調整して、そのままスムーズに購入へ進めます。
+              </p>
+            </div>
+            <div className="soft-panel bg-white/75 text-sm text-espresso-500">
+              合計 <span className="ml-2 font-display text-2xl font-bold text-espresso">¥{total().toLocaleString()}</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between">
           <button
             onClick={clearCart}
             className="text-sm text-red-500 hover:text-red-700 flex items-center gap-1 transition-colors"
@@ -53,7 +70,7 @@ export default function CartPage() {
         </div>
 
         {/* カートアイテム */}
-        <div className="space-y-3 mb-6">
+        <div className="space-y-3">
           {items.map(({ item, quantity }) => (
             <div key={item.id} className="card flex items-center gap-4 py-4">
               {/* 画像 */}
@@ -113,7 +130,7 @@ export default function CartPage() {
         </div>
 
         {/* 合計・購入へ */}
-        <div className="card bg-espresso text-cream-50 space-y-4">
+        <div className="rounded-[28px] bg-gradient-to-br from-espresso to-espresso-600 p-6 text-cream-50 shadow-[0_24px_60px_-32px_rgba(44,26,14,0.55)] space-y-4">
           <div className="flex justify-between items-center text-cream-200">
             <span>小計</span>
             <span className="font-mono">¥{total().toLocaleString()}</span>

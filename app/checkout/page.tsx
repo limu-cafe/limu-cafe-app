@@ -119,8 +119,24 @@ export default function CheckoutPage() {
 
   return (
     <UserLayout>
-      <div className="max-w-lg mx-auto animate-fade-in space-y-6">
-        <h1 className="font-display font-bold text-3xl text-espresso">購入確認</h1>
+      <div className="mx-auto max-w-2xl animate-fade-in space-y-6">
+        <section className="hero-card px-5 py-6 sm:px-7">
+          <div className="space-y-4">
+            <div className="section-kicker">Checkout</div>
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <h1 className="font-display text-4xl font-bold text-espresso">購入確認</h1>
+                <p className="mt-1 text-sm text-espresso-500">
+                  合計と支払い方法を確認して、そのまま注文を確定します。
+                </p>
+              </div>
+              <div className="soft-panel bg-white/75">
+                <p className="text-[11px] uppercase tracking-[0.2em] text-espresso-400">Order total</p>
+                <p className="mt-2 font-display text-3xl font-bold text-espresso">¥{orderTotal.toLocaleString()}</p>
+              </div>
+            </div>
+          </div>
+        </section>
 
         {/* 注文内容 */}
         <div className="card space-y-3">

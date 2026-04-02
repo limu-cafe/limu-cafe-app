@@ -1,19 +1,22 @@
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=Noto+Sans+JP:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap');
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
+  --cream-25: #FFFDF9;
   --cream-50: #FDFAF5;
   --cream-100: #F7F0E0;
   --cream-200: #EDE0C4;
+  --cream-300: #DDCDB2;
   --espresso: #2C1A0E;
+  --espresso-700: #1D120A;
   --espresso-600: #5C3D1E;
   --espresso-400: #9B6B42;
   --matcha: #4A7C59;
   --matcha-light: #6B9E7A;
+  --matcha-dark: #2D5940;
   --amber-cafe: #D4872A;
+  --berry-cafe: #9C5140;
 }
 
 @layer base {
@@ -22,7 +25,10 @@
   }
 
   body {
-    background-color: var(--cream-50);
+    background:
+      radial-gradient(circle at top left, rgba(212, 135, 42, 0.14), transparent 22rem),
+      radial-gradient(circle at top right, rgba(74, 124, 89, 0.12), transparent 26rem),
+      linear-gradient(180deg, var(--cream-25) 0%, var(--cream-50) 48%, #f4ebdc 100%);
     color: var(--espresso);
     font-family: var(--font-noto), 'Noto Sans JP', sans-serif;
     font-weight: 400;
@@ -38,7 +44,7 @@
 @layer components {
   /* ボタン共通 */
   .btn-primary {
-    @apply bg-espresso text-cream-50 px-6 py-3 rounded-lg font-medium
+    @apply bg-espresso text-cream-50 px-6 py-3 rounded-2xl font-medium
            hover:bg-espresso-600 active:scale-95
            transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed;
   }
@@ -50,7 +56,7 @@
   }
 
   .btn-matcha {
-    @apply bg-matcha text-white px-6 py-3 rounded-lg font-medium
+    @apply bg-matcha text-white px-6 py-3 rounded-2xl font-medium
            hover:bg-matcha-dark active:scale-95
            transition-all duration-200;
   }
@@ -63,17 +69,36 @@
 
   /* カード */
   .card {
-    @apply bg-white rounded-2xl shadow-sm border border-cream-200 p-6;
+    @apply p-6;
+    border-radius: 28px;
+    border: 1px solid rgba(237, 224, 196, 0.9);
+    background: rgba(255, 255, 255, 0.92);
+    box-shadow: 0 16px 40px -34px rgba(44, 26, 14, 0.2);
   }
 
   .card-hover {
     @apply card hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 cursor-pointer;
   }
 
+  .glass-card {
+    border-radius: 28px;
+    border: 1px solid rgba(237, 224, 196, 0.9);
+    background: rgba(255, 255, 255, 0.8);
+    box-shadow: 0 16px 36px -32px rgba(44, 26, 14, 0.18);
+  }
+
+  .hero-card {
+    @apply relative overflow-hidden;
+    border-radius: 32px;
+    border: 1px solid rgba(237, 224, 196, 0.95);
+    background: linear-gradient(180deg, #fffdf9 0%, #f7f0e0 100%);
+    box-shadow: 0 24px 60px -40px rgba(44, 26, 14, 0.22);
+  }
+
   /* 入力フォーム */
   .input {
-    @apply w-full border border-cream-200 rounded-lg px-4 py-3 bg-white
-           focus:outline-none focus:ring-2 focus:ring-espresso-400 focus:border-transparent
+    @apply w-full border border-cream-200 rounded-2xl px-4 py-3 bg-white/90
+           focus:outline-none focus:ring-2 focus:ring-espresso-400/60 focus:border-transparent
            placeholder:text-espresso-400/50
            transition-all duration-200;
   }
@@ -122,11 +147,40 @@
   .table tr:hover td {
     @apply bg-cream-50;
   }
+
+  .section-kicker {
+    @apply inline-flex items-center gap-2 rounded-full border border-cream-200 bg-white px-3 py-1 text-[11px] font-semibold tracking-[0.18em] text-espresso-400;
+  }
+
+  .chip-filter {
+    @apply inline-flex items-center gap-2 rounded-full border border-cream-200 bg-white px-4 py-2 text-sm font-medium text-espresso transition-all duration-200 hover:border-espresso-400 hover:bg-white;
+  }
+
+  .chip-filter-active {
+    @apply border-transparent bg-espresso text-cream-50;
+  }
+
+  .soft-panel {
+    @apply p-4;
+    border-radius: 24px;
+    border: 1px solid rgba(237, 224, 196, 0.9);
+    background: rgba(255, 255, 255, 0.92);
+    box-shadow: 0 14px 32px -28px rgba(44, 26, 14, 0.18);
+  }
 }
 
 /* テクスチャ背景 */
 .texture-bg {
   background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%239B6B42' fill-opacity='0.03'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+}
+
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
 }
 
 /* アニメーション遅延 */

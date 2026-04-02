@@ -19,23 +19,39 @@ export default function OrderCompletePage() {
   return (
     <UserLayout>
       <div className="mx-auto max-w-2xl animate-fade-in space-y-6">
-        <div className="card space-y-4 text-center">
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-matcha/15 text-matcha-dark">
-            <CheckCircle2 size={36} />
-          </div>
-          <div className="space-y-2">
-            <h1 className="font-display text-3xl font-bold text-espresso">購入が完了しました</h1>
-            <p className="text-sm text-espresso-500">
-              {payment ? `${paymentLabels[payment] ?? payment}で注文を受け付けました。` : '注文を受け付けました。'}
-            </p>
-            {orderId && <p className="text-xs text-espresso-400">注文番号: {orderId}</p>}
+        <div className="hero-card px-6 py-8 text-center">
+          <div className="relative z-10 space-y-4">
+            <div className="mx-auto flex h-[4.5rem] w-[4.5rem] items-center justify-center rounded-full bg-matcha/15 text-matcha-dark">
+              <CheckCircle2 size={40} />
+            </div>
+            <div className="space-y-2">
+              <h1 className="font-display text-4xl font-bold text-espresso">購入が完了しました</h1>
+              <p className="text-sm text-espresso-500">
+                {payment ? `${paymentLabels[payment] ?? payment}で注文を受け付けました。` : '注文を受け付けました。'}
+              </p>
+              {orderId && <p className="text-xs text-espresso-400">注文番号: {orderId}</p>}
+            </div>
+            <div className="mx-auto grid max-w-xl gap-3 sm:grid-cols-3">
+              <div className="soft-panel">
+                <p className="text-[11px] tracking-[0.14em] text-espresso-400">状態</p>
+                <p className="mt-2 font-semibold text-espresso">受付済み</p>
+              </div>
+              <div className="soft-panel">
+                <p className="text-[11px] tracking-[0.14em] text-espresso-400">支払い方法</p>
+                <p className="mt-2 font-semibold text-espresso">{paymentLabels[payment] ?? '未設定'}</p>
+              </div>
+              <div className="soft-panel">
+                <p className="text-[11px] tracking-[0.14em] text-espresso-400">次の操作</p>
+                <p className="mt-2 font-semibold text-espresso">続けて購入できます</p>
+              </div>
+            </div>
           </div>
         </div>
 
         <div className="grid gap-4 sm:grid-cols-3">
           <Link
             href="/cart"
-            className="card flex min-h-[140px] flex-col justify-between transition-transform duration-200 hover:-translate-y-1 hover:shadow-lg"
+            className="card flex min-h-[160px] flex-col justify-between transition-transform duration-200 hover:-translate-y-1.5 hover:shadow-lg"
           >
             <ShoppingBag className="text-espresso" size={28} />
             <div>
@@ -46,7 +62,7 @@ export default function OrderCompletePage() {
 
           <Link
             href="/mypage"
-            className="card flex min-h-[140px] flex-col justify-between transition-transform duration-200 hover:-translate-y-1 hover:shadow-lg"
+            className="card flex min-h-[160px] flex-col justify-between transition-transform duration-200 hover:-translate-y-1.5 hover:shadow-lg"
           >
             <UserCircle2 className="text-espresso" size={28} />
             <div>
@@ -57,7 +73,7 @@ export default function OrderCompletePage() {
 
           <Link
             href="/"
-            className="card flex min-h-[140px] flex-col justify-between bg-espresso text-cream-50 transition-transform duration-200 hover:-translate-y-1 hover:shadow-lg"
+            className="flex min-h-[160px] flex-col justify-between rounded-[28px] bg-espresso p-6 text-cream-50 transition-transform duration-200 hover:-translate-y-1.5 hover:shadow-lg"
           >
             <ArrowRight className="text-cream-50" size={28} />
             <div>

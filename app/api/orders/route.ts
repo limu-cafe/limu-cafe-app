@@ -36,6 +36,39 @@ async function rollbackOrder(
   await adminSupabase.from('orders').delete().eq('id', orderId);
 }
 
+async function notifyOrderSideEffects(params: {
+  userName: string;
+  items: OrderItemInput[];
+  totalAmount: number;
+  paymentMethod: string;
+}) {
+  try {
+    await notifyNewOrder({
+      userName: params.userName,
+      items: params.items.map((i) => ({
+        name: i.item_name,
+        quantity: i.quantity,
+        price: i.item_price,
+      })),
+      total: params.totalAmount,
+      paymentMethod: params.paymentMethod,
+    });
+
+    if (params.paymentMethod === 'cash') {
+      await notifyCashOrderPending({
+        userName: params.userName,
+        total: params.totalAmount,
+        items: params.items.map((item) => ({
+          name: item.item_name,
+          quantity: item.quantity,
+        })),
+      });
+    }
+  } catch (error) {
+    console.error('[orders] notification failed', error);
+  }
+}
+
 export async function POST(request: Request) {
   const supabase = await createClient();
   const adminSupabase = createAdminClient();
@@ -147,19 +180,25 @@ export async function POST(request: Request) {
 
     // 4. 残高・後払い残高を更新
     if (payment_method === 'balance') {
-      const { error: balanceUpdateError } = await adminSupabase
-        .from('users')
-        .update({ balance: profile.balance - total_amount })
-        .eq('id', user.id);
+      const { error: balanceUpdateError } = await adminSupabase.rpc(
+        'decrement_user_balance_if_available',
+        {
+          p_user_id: user.id,
+          p_amount: total_amount,
+        }
+      );
 
       if (balanceUpdateError) {
         throw balanceUpdateError;
       }
     } else if (payment_method === 'deferred') {
-      const { error: deferredUpdateError } = await adminSupabase
-        .from('users')
-        .update({ deferred_balance: profile.deferred_balance + total_amount })
-        .eq('id', user.id);
+      const { error: deferredUpdateError } = await adminSupabase.rpc(
+        'increment_user_deferred_balance',
+        {
+          p_user_id: user.id,
+          p_amount: total_amount,
+        }
+      );
 
       if (deferredUpdateError) {
         throw deferredUpdateError;
@@ -171,28 +210,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: '注文処理に失敗しました' }, { status: 500 });
   }
 
-  // 5. Slack通知
-  await notifyNewOrder({
+  // 注文自体は成立させ、通知失敗ではロールバックしない
+  await notifyOrderSideEffects({
     userName: profile.name,
-    items: (items as OrderItemInput[]).map((i) => ({
-      name: i.item_name,
-      quantity: i.quantity,
-      price: i.item_price,
-    })),
-    total: total_amount,
+    items: items as OrderItemInput[],
+    totalAmount: total_amount,
     paymentMethod: payment_method,
   });
-
-  if (payment_method === 'cash') {
-    await notifyCashOrderPending({
-      userName: profile.name,
-      total: total_amount,
-      items: (items as OrderItemInput[]).map((item) => ({
-        name: item.item_name,
-        quantity: item.quantity,
-      })),
-    });
-  }
 
   revalidatePath('/mypage');
   revalidatePath('/');

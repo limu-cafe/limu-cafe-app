@@ -43,23 +43,30 @@ export default function Navbar() {
   ];
 
   return (
-    <nav className="sticky top-0 z-50 bg-white/90 backdrop-blur-sm border-b border-cream-200">
-      <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
+    <nav className="sticky top-0 z-50 border-b border-cream-200 bg-white/90 backdrop-blur-xl">
+      <div className="mx-auto flex h-20 max-w-6xl items-center justify-between gap-4 px-4">
         {/* ロゴ */}
-        <Link href="/" className="flex items-center gap-2 group">
-          <span className="text-2xl">☕</span>
-          <span className="font-display font-bold text-xl text-espresso group-hover:text-espresso-600 transition-colors">
-            LIMU<span className="text-matcha">喫茶</span>
-          </span>
+        <Link href="/" className="group flex min-w-0 items-center gap-3">
+          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-espresso text-xl text-cream-50">
+            ☕
+          </div>
+          <div className="min-w-0">
+            <p className="font-display text-xl font-bold text-espresso transition-colors group-hover:text-espresso-600">
+              LIMU<span className="text-matcha">喫茶</span>
+            </p>
+            <p className="text-[11px] font-medium tracking-[0.16em] text-espresso-400">
+              研究室向け購買アプリ
+            </p>
+          </div>
         </Link>
 
         {/* ナビゲーション */}
-        <div className="hidden md:flex items-center gap-1">
+        <div className="hidden items-center gap-1 rounded-full border border-cream-200 bg-white p-1 md:flex">
           {navItems.map(({ href, label, icon: Icon }) => (
             <Link
               key={href}
               href={href}
-              className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+              className={`flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium transition-all duration-200 ${
                 pathname === href
                   ? 'bg-espresso text-cream-50'
                   : 'text-espresso-600 hover:bg-cream-100'
@@ -75,9 +82,9 @@ export default function Navbar() {
         <div className="flex items-center gap-2">
           {/* 残高表示 */}
           {user && (
-            <div className="hidden sm:flex items-center gap-1 bg-cream-100 px-3 py-1.5 rounded-full text-sm">
-              <span className="text-espresso-400 text-xs">残高</span>
-              <span className="font-medium text-espresso font-mono">
+            <div className="hidden rounded-full border border-cream-200 bg-white px-4 py-2 sm:flex sm:flex-col sm:items-end sm:gap-0">
+              <span className="text-[11px] tracking-[0.16em] text-espresso-400">残高</span>
+              <span className="font-mono text-sm font-semibold text-espresso">
                 ¥{user.balance.toLocaleString()}
               </span>
             </div>
@@ -86,11 +93,11 @@ export default function Navbar() {
           {/* カート */}
           <Link
             href="/cart"
-            className="relative p-2 rounded-lg hover:bg-cream-100 transition-colors"
+            className="relative rounded-2xl border border-cream-200 bg-white p-2.5 transition-all duration-200 hover:bg-cream-50"
           >
             <ShoppingCart size={22} className="text-espresso" />
             {hasHydrated && cartCount > 0 && (
-              <span className="absolute -top-1 -right-1 w-5 h-5 bg-matcha text-white text-xs font-bold rounded-full flex items-center justify-center animate-scale-in">
+              <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-matcha text-xs font-bold text-white animate-scale-in">
                 {cartCount > 9 ? '9+' : cartCount}
               </span>
             )}
@@ -100,13 +107,13 @@ export default function Navbar() {
           {user ? (
             <button
               onClick={handleLogout}
-              className="p-2 rounded-lg hover:bg-cream-100 transition-colors text-espresso-400 hover:text-espresso"
+              className="rounded-2xl border border-cream-200 bg-white p-2.5 text-espresso-400 transition-all duration-200 hover:bg-cream-50 hover:text-espresso"
               title="ログアウト"
             >
               <LogOut size={20} />
             </button>
           ) : (
-            <Link href="/login" className="btn-primary text-sm py-2 px-4">
+            <Link href="/login" className="btn-primary px-4 py-2 text-sm">
               ログイン
             </Link>
           )}
@@ -114,7 +121,7 @@ export default function Navbar() {
       </div>
 
       {/* モバイルボトムナビ */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-cream-200 flex z-50">
+      <div className="fixed bottom-0 left-0 right-0 z-50 flex border-t border-cream-200 bg-white/95 backdrop-blur-xl md:hidden">
         {navItems.map(({ href, label, icon: Icon }) => (
           <Link
             key={href}

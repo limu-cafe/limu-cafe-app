@@ -28,7 +28,7 @@ export async function GET(request: Request) {
   }
 
   const targets = (users as ReminderUser[])
-    .filter((u) => u.slack_user_id)
+    .filter((u: ReminderUser) => Boolean(u.slack_user_id))
     .map((u) => ({
       slackUserId: u.slack_user_id!,
       name: u.name,
