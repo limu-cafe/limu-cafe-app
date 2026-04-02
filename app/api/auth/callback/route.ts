@@ -4,11 +4,25 @@ import type { CookieOptions } from '@supabase/ssr';
 import { createAdminClient } from '@/lib/supabase/server';
 import { cookies } from 'next/headers';
 
+function getWorkspaceId(user: any) {
+  return (
+    user?.user_metadata?.team_id ??
+    user?.user_metadata?.team?.id ??
+    user?.user_metadata?.workspace_id ??
+    user?.app_metadata?.team_id ??
+    user?.app_metadata?.team?.id ??
+    user?.identities?.find((identity: any) => identity?.identity_data?.team_id)?.identity_data?.team_id ??
+    user?.identities?.find((identity: any) => identity?.identity_data?.team?.id)?.identity_data?.team?.id ??
+    null
+  );
+}
+
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get('code');
   const next = searchParams.get('next');
   const redirectPath = next && next.startsWith('/') ? next : '/';
+  const allowedWorkspaceId = process.env.ALLOWED_SLACK_WORKSPACE_ID?.trim() || null;
 
   if (!code) {
     return NextResponse.redirect(`${origin}/login?error=no_code`);
@@ -38,6 +52,13 @@ export async function GET(request: Request) {
   const { data, error } = await supabase.auth.exchangeCodeForSession(code);
 
   if (!error && data.user) {
+    const workspaceId = getWorkspaceId(data.user);
+
+    if (allowedWorkspaceId && workspaceId !== allowedWorkspaceId) {
+      await supabase.auth.signOut();
+      return NextResponse.redirect(`${origin}/login?error=workspace_not_allowed`);
+    }
+
     const adminClient = createAdminClient();
     const { data: existing } = await adminClient
       .from('users').select('id').eq('id', data.user.id).single();
@@ -47,7 +68,7 @@ export async function GET(request: Request) {
       await adminClient.from('users').insert({
         id: data.user.id,
         slack_user_id: m?.provider_id ?? null,
-        slack_workspace_id: m?.team_id ?? null,
+        slack_workspace_id: workspaceId,
         name: m?.full_name ?? m?.name ?? data.user.email ?? '名無し',
         avatar_url: m?.avatar_url ?? null,
         email: data.user.email,

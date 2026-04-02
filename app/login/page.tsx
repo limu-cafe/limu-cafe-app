@@ -1,18 +1,49 @@
 'use client';
 
 import { createClient } from '@/lib/supabase/client';
-import { Suspense, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { Suspense, useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import toast from 'react-hot-toast';
 
 function LoginContent() {
+  const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const [checkingSession, setCheckingSession] = useState(true);
   const searchParams = useSearchParams();
+  const error = searchParams.get('error');
+  const next = searchParams.get('next');
+
+  useEffect(() => {
+    const supabase = createClient();
+
+    supabase.auth.getUser().then(({ data }) => {
+      if (data.user) {
+        const nextPath = next && next.startsWith('/') ? next : '/';
+        router.replace(nextPath);
+        return;
+      }
+      setCheckingSession(false);
+    });
+  }, [next, router]);
+
+  const errorMessage =
+    error === 'workspace_not_allowed'
+      ? 'このSlackワークスペースからのログインは許可されていません。研究室のワークスペースでログインしてください。'
+      : error === 'auth_failed'
+      ? 'ログイン処理に失敗しました。もう一度お試しください。'
+      : error === 'oauth_failed'
+      ? 'Slackログインの開始に失敗しました。設定を確認してください。'
+      : error === 'no_code'
+      ? '認証コードを取得できませんでした。もう一度ログインしてください。'
+      : null;
+
+  if (checkingSession) {
+    return <div className="min-h-screen texture-bg" />;
+  }
 
   const handleSlackLogin = async () => {
     setLoading(true);
     const supabase = createClient();
-    const next = searchParams.get('next');
     const callbackUrl = new URL('/api/auth/callback', window.location.origin);
     if (next?.startsWith('/')) {
       callbackUrl.searchParams.set('next', next);
@@ -47,6 +78,11 @@ function LoginContent() {
               LIMUのSlackワークスペースのメンバーはすぐに利用できます
             </p>
           </div>
+          {errorMessage && (
+            <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {errorMessage}
+            </div>
+          )}
           <button
             onClick={handleSlackLogin}
             disabled={loading}
