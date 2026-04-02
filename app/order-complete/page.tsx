@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import UserLayout from '@/components/layout/UserLayout';
 import { ArrowRight, CheckCircle2, ShoppingBag, UserCircle2 } from 'lucide-react';
@@ -11,7 +12,7 @@ const paymentLabels: Record<string, string> = {
   cash: '現金払い',
 };
 
-export default function OrderCompletePage() {
+function OrderCompleteContent() {
   const searchParams = useSearchParams();
   const payment = searchParams.get('payment') ?? '';
   const orderId = searchParams.get('order') ?? '';
@@ -84,5 +85,13 @@ export default function OrderCompletePage() {
         </div>
       </div>
     </UserLayout>
+  );
+}
+
+export default function OrderCompletePage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen texture-bg" />}>
+      <OrderCompleteContent />
+    </Suspense>
   );
 }
