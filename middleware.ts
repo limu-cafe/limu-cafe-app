@@ -17,37 +17,9 @@ function isAdminProtectedPath(pathname: string) {
 }
 
 export async function middleware(request: NextRequest) {
-  let response = NextResponse.next({
-    request: {
-      headers: request.headers,
-    },
-  });
-
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        get(name: string) {
-          return request.cookies.get(name)?.value;
-        },
-        set(name: string, value: string, options: CookieOptions) {
-          response.cookies.set({ name, value, ...options });
-        },
-        remove(name: string, options: CookieOptions) {
-          response.cookies.set({ name, value: '', ...options, maxAge: 0 });
-        },
-      },
-    }
-  );
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
   const { pathname, search } = request.nextUrl;
 
-  if (!user && isUserProtectedPath(pathname)) {
+  const redirectToLogin = () => {
     const loginUrl = request.nextUrl.clone();
     loginUrl.pathname = LOGIN_PATH;
     loginUrl.search = '';
@@ -55,25 +27,85 @@ export async function middleware(request: NextRequest) {
       loginUrl.searchParams.set('next', `${pathname}${search}`);
     }
     return NextResponse.redirect(loginUrl);
-  }
+  };
 
-  if (!user && isAdminProtectedPath(pathname)) {
+  const redirectToAdminLogin = () => {
     const adminLoginUrl = request.nextUrl.clone();
     adminLoginUrl.pathname = ADMIN_LOGIN_PATH;
     adminLoginUrl.search = '';
     adminLoginUrl.searchParams.set('next', `${pathname}${search}`);
     return NextResponse.redirect(adminLoginUrl);
+  };
+
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    if (isAdminProtectedPath(pathname)) {
+      return redirectToAdminLogin();
+    }
+    if (isUserProtectedPath(pathname)) {
+      return redirectToLogin();
+    }
+    return NextResponse.next();
+  }
+
+  let response = NextResponse.next({
+    request: {
+      headers: request.headers,
+    },
+  });
+
+  let user = null;
+
+  try {
+    const supabase = createServerClient(
+      supabaseUrl,
+      supabaseAnonKey,
+      {
+        cookies: {
+          get(name: string) {
+            return request.cookies.get(name)?.value;
+          },
+          set(name: string, value: string, options: CookieOptions) {
+            response.cookies.set({ name, value, ...options });
+          },
+          remove(name: string, options: CookieOptions) {
+            response.cookies.set({ name, value: '', ...options, maxAge: 0 });
+          },
+        },
+      }
+    );
+
+    const {
+      data: { user: sessionUser },
+    } = await supabase.auth.getUser();
+
+    user = sessionUser;
+  } catch (error) {
+    console.error('middleware auth check failed', error);
+    if (isAdminProtectedPath(pathname)) {
+      return redirectToAdminLogin();
+    }
+    if (isUserProtectedPath(pathname)) {
+      return redirectToLogin();
+    }
+    return response;
+  }
+
+  if (!user && isUserProtectedPath(pathname)) {
+    return redirectToLogin();
+  }
+
+  if (!user && isAdminProtectedPath(pathname)) {
+    return redirectToAdminLogin();
   }
 
   if (user && isAdminProtectedPath(pathname)) {
     const adminCookie = request.cookies.get(ADMIN_COOKIE)?.value;
     const adminExpiry = adminCookie ? Number(adminCookie) : 0;
     if (!adminExpiry || Date.now() >= adminExpiry) {
-      const adminLoginUrl = request.nextUrl.clone();
-      adminLoginUrl.pathname = ADMIN_LOGIN_PATH;
-      adminLoginUrl.search = '';
-      adminLoginUrl.searchParams.set('next', `${pathname}${search}`);
-      return NextResponse.redirect(adminLoginUrl);
+      return redirectToAdminLogin();
     }
   }
 
