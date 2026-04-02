@@ -6,13 +6,30 @@ import { cookies } from 'next/headers';
 
 function getWorkspaceId(user: any) {
   return (
+    user?.user_metadata?.['https://slack.com/team_id'] ??
     user?.user_metadata?.team_id ??
     user?.user_metadata?.team?.id ??
     user?.user_metadata?.workspace_id ??
+    user?.app_metadata?.['https://slack.com/team_id'] ??
     user?.app_metadata?.team_id ??
     user?.app_metadata?.team?.id ??
+    user?.identities?.find((identity: any) => identity?.identity_data?.['https://slack.com/team_id'])
+      ?.identity_data?.['https://slack.com/team_id'] ??
     user?.identities?.find((identity: any) => identity?.identity_data?.team_id)?.identity_data?.team_id ??
     user?.identities?.find((identity: any) => identity?.identity_data?.team?.id)?.identity_data?.team?.id ??
+    null
+  );
+}
+
+function getSlackUserId(user: any) {
+  return (
+    user?.user_metadata?.['https://slack.com/user_id'] ??
+    user?.user_metadata?.provider_id ??
+    user?.app_metadata?.['https://slack.com/user_id'] ??
+    user?.identities?.find((identity: any) => identity?.identity_data?.['https://slack.com/user_id'])
+      ?.identity_data?.['https://slack.com/user_id'] ??
+    user?.identities?.find((identity: any) => identity?.identity_data?.provider_id)?.identity_data?.provider_id ??
+    user?.identities?.[0]?.id ??
     null
   );
 }
@@ -67,7 +84,7 @@ export async function GET(request: Request) {
       const m = data.user.user_metadata;
       await adminClient.from('users').insert({
         id: data.user.id,
-        slack_user_id: m?.provider_id ?? null,
+        slack_user_id: getSlackUserId(data.user),
         slack_workspace_id: workspaceId,
         name: m?.full_name ?? m?.name ?? data.user.email ?? '名無し',
         avatar_url: m?.avatar_url ?? null,
