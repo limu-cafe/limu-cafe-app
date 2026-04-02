@@ -69,20 +69,15 @@ export async function GET(request: Request) {
   const { data, error } = await supabase.auth.exchangeCodeForSession(code);
 
   if (!error && data.user) {
-    const workspaceId = getWorkspaceId(data.user);
+    const detectedWorkspaceId = getWorkspaceId(data.user);
+    const workspaceId = detectedWorkspaceId ?? allowedWorkspaceId;
 
-    if (allowedWorkspaceId && workspaceId !== allowedWorkspaceId) {
-      console.error('Slack workspace mismatch', {
-        allowedWorkspaceId,
-        workspaceId,
-        userMetadata: data.user.user_metadata,
-        appMetadata: data.user.app_metadata,
-      });
+    if (allowedWorkspaceId && detectedWorkspaceId && detectedWorkspaceId !== allowedWorkspaceId) {
       await supabase.auth.signOut();
       const loginUrl = new URL('/login', origin);
       loginUrl.searchParams.set('error', 'workspace_not_allowed');
-      if (workspaceId) {
-        loginUrl.searchParams.set('detected_workspace_id', workspaceId);
+      if (detectedWorkspaceId) {
+        loginUrl.searchParams.set('detected_workspace_id', detectedWorkspaceId);
       }
       return NextResponse.redirect(loginUrl.toString());
     }
