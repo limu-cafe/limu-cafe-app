@@ -12,6 +12,7 @@ function LoginContent() {
   const searchParams = useSearchParams();
   const error = searchParams.get('error');
   const next = searchParams.get('next');
+  const detectedWorkspaceId = searchParams.get('detected_workspace_id');
 
   useEffect(() => {
     const supabase = createClient();
@@ -80,7 +81,12 @@ function LoginContent() {
           </div>
           {errorMessage && (
             <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-              {errorMessage}
+              <div>{errorMessage}</div>
+              {detectedWorkspaceId && (
+                <div className="mt-2 font-mono text-xs text-red-600">
+                  検出された workspace ID: {detectedWorkspaceId}
+                </div>
+              )}
             </div>
           )}
           <button
