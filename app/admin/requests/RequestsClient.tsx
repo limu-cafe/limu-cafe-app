@@ -177,6 +177,15 @@ export default function RequestsClient({ requests }: { requests: any[] }) {
                 <p className="text-gray-300 text-sm bg-gray-800 rounded-lg px-3 py-2">{req.reason}</p>
               )}
 
+              <div className="flex flex-wrap gap-2 text-xs text-gray-400">
+                <span className="rounded-full bg-gray-800 px-2.5 py-1">
+                  賛成 {req.votes?.length ?? 0}
+                </span>
+                <span className="rounded-full bg-gray-800 px-2.5 py-1">
+                  コメント {req.comments?.length ?? 0}
+                </span>
+              </div>
+
               {/* 管理者コメント入力 */}
               {openNote === req.id && (
                 <textarea
@@ -231,7 +240,7 @@ export default function RequestsClient({ requests }: { requests: any[] }) {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-800">
-                  {['商品名', '申請者', '希望価格', 'ステータス', '日時'].map(h => (
+                  {['商品名', '申請者', '希望価格', 'ステータス', '日時', '反応'].map(h => (
                     <th key={h} className="px-4 py-3 text-left font-medium text-gray-400 text-xs">{h}</th>
                   ))}
                 </tr>
@@ -251,6 +260,9 @@ export default function RequestsClient({ requests }: { requests: any[] }) {
                     </td>
                     <td className="px-4 py-3 text-gray-500 text-xs">
                       {format(new Date(req.created_at), 'M/d', { locale: ja })}
+                    </td>
+                    <td className="px-4 py-3 text-gray-500 text-xs">
+                      賛成 {req.votes?.length ?? 0} / コメント {req.comments?.length ?? 0}
                     </td>
                   </tr>
                 ))}

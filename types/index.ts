@@ -4,6 +4,8 @@ export type PaymentStatus = 'pending' | 'completed' | 'cancelled' | 'refunded';
 export type ChargeMethod = 'cash' | 'stripe';
 export type ChargeStatus = 'pending' | 'approved' | 'rejected' | 'cancelled';
 export type ItemRequestStatus = 'pending' | 'approved' | 'rejected';
+export type ItemRequestVoteType = 'up';
+export type ItemRequestCommentSource = 'app' | 'slack';
 export type SettlementStatus = 'pending' | 'completed';
 export type StockReason = 'restock' | 'purchase' | 'adjustment' | 'discard';
 export type Platform = 'amazon' | 'rakuten' | 'yahoo' | 'other';
@@ -122,6 +124,24 @@ export interface ItemRequest {
   reviewed_at?: string;
   created_at: string;
   updated_at: string;
+}
+
+export interface ItemRequestVote {
+  id: string;
+  request_id: string;
+  user_id: string;
+  vote_type: ItemRequestVoteType;
+  created_at: string;
+}
+
+export interface ItemRequestComment {
+  id: string;
+  request_id: string;
+  user_id: string;
+  user?: Pick<User, 'id' | 'name' | 'avatar_url'>;
+  body: string;
+  source: ItemRequestCommentSource;
+  created_at: string;
 }
 
 export interface StockHistory {
