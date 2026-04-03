@@ -90,12 +90,15 @@ export default function Navbar() {
 
           {/* 残高表示 */}
           {user && (
-            <div className="hidden rounded-full border border-cream-200 bg-white px-4 py-2 sm:flex sm:flex-col sm:items-end sm:gap-0">
+            <Link
+              href="/charge"
+              className="hidden rounded-xl border border-cream-200 bg-white px-4 py-2 transition-all duration-200 hover:bg-cream-50 sm:flex sm:flex-col sm:items-end sm:gap-0"
+            >
               <span className="text-[11px] tracking-[0.16em] text-espresso-400">残高</span>
               <span className="font-mono text-sm font-semibold text-espresso">
                 ¥{user.balance.toLocaleString()}
               </span>
-            </div>
+            </Link>
           )}
 
           {/* カート */}

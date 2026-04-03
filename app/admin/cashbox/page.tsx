@@ -17,6 +17,8 @@ export default async function CashboxPage() {
     { data: pendingCashOrders },
     { data: usersWithDeferred },
     { data: pendingCashCharges },
+    { data: purchaseRunsThisMonth },
+    { data: unreimbursedPurchaseRuns },
   ] = await Promise.all([
     supabase
       .from('cashbox_entries')
@@ -60,6 +62,16 @@ export default async function CashboxPage() {
       .select('amount')
       .eq('method', 'cash')
       .eq('status', 'pending'),
+    supabase
+      .from('purchase_runs')
+      .select('total_amount, payment_source')
+      .gte('created_at', new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString()),
+    supabase
+      .from('purchase_runs')
+      .select('id, total_amount, vendor, note, created_at, created_by_user:users!purchase_runs_created_by_fkey(name), purchase_run_items(item_name, quantity)')
+      .eq('reimbursement_status', 'pending_reimbursement')
+      .order('created_at', { ascending: false })
+      .limit(10),
   ]);
 
   const expectedAmount = calculateCashboxBalance((balanceRows ?? []) as { amount: number; direction: 'in' | 'out' }[]);
@@ -77,7 +89,21 @@ export default async function CashboxPage() {
     (sum: number, request: { amount: number }) => sum + request.amount,
     0
   );
-  const projectedAmount = expectedAmount + pendingCashOrderAmount + deferredReceivableAmount;
+  const unreimbursedAdvanceAmount = (unreimbursedPurchaseRuns ?? []).reduce(
+    (sum: number, purchaseRun: { total_amount: number }) => sum + purchaseRun.total_amount,
+    0
+  );
+  const monthlyPurchaseAmount = (purchaseRunsThisMonth ?? []).reduce(
+    (sum: number, purchaseRun: { total_amount: number }) => sum + purchaseRun.total_amount,
+    0
+  );
+  const monthlyCashboxPurchaseAmount = (purchaseRunsThisMonth ?? []).reduce(
+    (sum: number, purchaseRun: { total_amount: number; payment_source: string }) =>
+      purchaseRun.payment_source === 'cashbox' ? sum + purchaseRun.total_amount : sum,
+    0
+  );
+  const projectedAmount =
+    expectedAmount + pendingCashOrderAmount + deferredReceivableAmount - unreimbursedAdvanceAmount;
 
   return (
     <CashboxClient
@@ -87,6 +113,10 @@ export default async function CashboxPage() {
       pendingCashOrdersCount={pendingCashOrdersCount ?? 0}
       deferredReceivableAmount={deferredReceivableAmount}
       pendingCashChargeAmount={pendingCashChargeAmount}
+      unreimbursedAdvanceAmount={unreimbursedAdvanceAmount}
+      monthlyPurchaseAmount={monthlyPurchaseAmount}
+      monthlyCashboxPurchaseAmount={monthlyCashboxPurchaseAmount}
+      unreimbursedPurchaseRuns={unreimbursedPurchaseRuns ?? []}
       latestCount={latestCount}
       entries={entries ?? []}
       counts={counts ?? []}

@@ -13,15 +13,19 @@ interface Props {
   categories: Category[];
   initialFavoriteItemIds: string[];
   frequentItemIds: string[];
+  popularItemIds: string[];
+  newArrivalItemIds: string[];
 }
 
-type BrowseMode = 'all' | 'favorites' | 'frequent' | 'low-stock';
+type BrowseMode = 'all' | 'favorites' | 'frequent' | 'low-stock' | 'popular' | 'new-arrivals';
 
 export default function ItemListClient({
   items,
   categories,
   initialFavoriteItemIds,
   frequentItemIds,
+  popularItemIds,
+  newArrivalItemIds,
 }: Props) {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [query, setQuery] = useState('');
@@ -47,9 +51,27 @@ export default function ItemListClient({
       ),
     [items]
   );
+  const popularItems = useMemo(
+    () =>
+      popularItemIds
+        .map((itemId) => items.find((item) => item.id === itemId))
+        .filter((item): item is Item => Boolean(item)),
+    [items, popularItemIds]
+  );
+  const newArrivalItems = useMemo(
+    () =>
+      newArrivalItemIds
+        .map((itemId) => items.find((item) => item.id === itemId))
+        .filter((item): item is Item => Boolean(item)),
+    [items, newArrivalItemIds]
+  );
 
   const baseItems = useMemo(() => {
     switch (browseMode) {
+      case 'popular':
+        return popularItems;
+      case 'new-arrivals':
+        return newArrivalItems;
       case 'favorites':
         return favoriteItems;
       case 'frequent':
@@ -59,7 +81,7 @@ export default function ItemListClient({
       default:
         return items;
     }
-  }, [browseMode, favoriteItems, frequentItems, items, lowStockItems]);
+  }, [browseMode, favoriteItems, frequentItems, items, lowStockItems, newArrivalItems, popularItems]);
 
   const filtered = useMemo(
     () =>
@@ -98,11 +120,27 @@ export default function ItemListClient({
   const activeCategoryName = categories.find((category) => category.id === selectedCategory)?.name;
   const quickBrowseOptions = [
     { id: 'all' as const, label: 'すべて', count: items.length },
+    { id: 'popular' as const, label: '人気', count: popularItems.length },
+    { id: 'new-arrivals' as const, label: '新入荷', count: newArrivalItems.length },
     { id: 'favorites' as const, label: 'お気に入り', count: favoriteItems.length },
     { id: 'frequent' as const, label: 'よく買う', count: frequentItems.length },
     { id: 'low-stock' as const, label: '残りわずか', count: lowStockItems.length },
   ];
   const quickSections = [
+    {
+      id: 'popular',
+      title: '人気の商品',
+      subtitle: '最近よく選ばれています',
+      icon: Flame,
+      items: popularItems.slice(0, 2),
+    },
+    {
+      id: 'new-arrivals',
+      title: '新入荷',
+      subtitle: '新しく追加されました',
+      icon: Sparkles,
+      items: newArrivalItems.slice(0, 2),
+    },
     {
       id: 'frequent',
       title: 'よく買う商品',

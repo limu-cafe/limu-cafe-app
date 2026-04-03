@@ -7,6 +7,9 @@ export type ItemRequestStatus = 'pending' | 'approved' | 'rejected';
 export type SettlementStatus = 'pending' | 'completed';
 export type StockReason = 'restock' | 'purchase' | 'adjustment' | 'discard';
 export type Platform = 'amazon' | 'rakuten' | 'yahoo' | 'other';
+export type ItemShowcaseOverride = 'auto' | 'show' | 'hide';
+export type PurchasePaymentSource = 'cashbox' | 'personal_advance';
+export type PurchaseReimbursementStatus = 'not_needed' | 'pending_reimbursement' | 'reimbursed';
 
 export interface User {
   id: string;
@@ -43,6 +46,8 @@ export interface Item {
   stock: number;
   stock_alert_threshold: number;
   is_available: boolean;
+  popular_override: ItemShowcaseOverride;
+  new_arrival_override: ItemShowcaseOverride;
   created_at: string;
   updated_at: string;
 }
@@ -151,6 +156,32 @@ export interface FavoriteItem {
   user_id: string;
   item_id: string;
   created_at: string;
+}
+
+export interface PurchaseRunItem {
+  id: string;
+  purchase_run_id: string;
+  item_id: string;
+  item_name: string;
+  quantity: number;
+  unit_price: number;
+  subtotal: number;
+  created_at: string;
+}
+
+export interface PurchaseRun {
+  id: string;
+  total_amount: number;
+  payment_source: PurchasePaymentSource;
+  reimbursement_status: PurchaseReimbursementStatus;
+  vendor?: string | null;
+  note?: string | null;
+  purchased_by?: string | null;
+  reimbursed_by?: string | null;
+  reimbursed_at?: string | null;
+  created_by?: string | null;
+  created_at: string;
+  items?: PurchaseRunItem[];
 }
 
 export interface LegacyUser {

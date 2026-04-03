@@ -37,6 +37,16 @@ type BackfillRun = {
   ran_at: string;
 };
 
+type PendingPurchaseRun = {
+  id: string;
+  total_amount: number;
+  vendor: string | null;
+  note: string | null;
+  created_at: string;
+  created_by_user?: { name?: string | null } | null;
+  purchase_run_items?: Array<{ item_name: string; quantity: number }>;
+};
+
 export default function CashboxClient({
   expectedAmount,
   projectedAmount,
@@ -44,6 +54,10 @@ export default function CashboxClient({
   pendingCashOrdersCount,
   deferredReceivableAmount,
   pendingCashChargeAmount,
+  unreimbursedAdvanceAmount,
+  monthlyPurchaseAmount,
+  monthlyCashboxPurchaseAmount,
+  unreimbursedPurchaseRuns,
   latestCount,
   entries,
   counts,
@@ -56,6 +70,10 @@ export default function CashboxClient({
   pendingCashOrdersCount: number;
   deferredReceivableAmount: number;
   pendingCashChargeAmount: number;
+  unreimbursedAdvanceAmount: number;
+  monthlyPurchaseAmount: number;
+  monthlyCashboxPurchaseAmount: number;
+  unreimbursedPurchaseRuns: PendingPurchaseRun[];
   latestCount: Count | null;
   entries: Entry[];
   counts: Count[];
@@ -68,7 +86,7 @@ export default function CashboxClient({
   const [adjustmentDirection, setAdjustmentDirection] = useState<'in' | 'out'>('in');
   const [actualAmount, setActualAmount] = useState<number | ''>('');
   const [countNote, setCountNote] = useState('');
-  const [loading, setLoading] = useState<'adjustment' | 'count' | null>(null);
+  const [loading, setLoading] = useState<'adjustment' | 'count' | `reimburse:${string}` | null>(null);
 
   const latestDifference = latestCount?.difference_amount ?? 0;
 
@@ -129,6 +147,26 @@ export default function CashboxClient({
       toast.success('金庫確認を記録しました');
       setActualAmount('');
       setCountNote('');
+      router.refresh();
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  const handleReimburse = async (purchaseRunId: string) => {
+    setLoading(`reimburse:${purchaseRunId}`);
+    try {
+      const res = await fetch(`/api/admin/purchases/${purchaseRunId}/reimburse`, {
+        method: 'POST',
+      });
+
+      if (!res.ok) {
+        throw new Error((await res.json()).error);
+      }
+
+      toast.success('立替精算を記録しました');
       router.refresh();
     } catch (e: any) {
       toast.error(e.message);
@@ -202,7 +240,7 @@ export default function CashboxClient({
             ¥{projectedAmount.toLocaleString()}
           </p>
           <p className="mt-2 text-xs text-gray-500">
-            現在見込み + 未回収の現金注文 + 後払い残高
+            現在見込み + 未回収の現金注文 + 後払い残高 - 未精算の立替
           </p>
         </div>
 
@@ -257,6 +295,86 @@ export default function CashboxClient({
             承認前なので現在金庫見込みには含めていません
           </p>
         </div>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-3">
+        <div className="rounded-2xl border border-gray-800 bg-gray-900 p-5">
+          <p className="text-xs text-gray-400">未精算の立替総額</p>
+          <p className="mt-1 font-display text-2xl font-bold text-sky-400">
+            ¥{unreimbursedAdvanceAmount.toLocaleString()}
+          </p>
+          <p className="mt-2 text-xs text-gray-500">
+            後で金庫から返す必要がある金額です
+          </p>
+        </div>
+
+        <div className="rounded-2xl border border-gray-800 bg-gray-900 p-5">
+          <p className="text-xs text-gray-400">今月の仕入れ総額</p>
+          <p className="mt-1 font-display text-2xl font-bold text-white">
+            ¥{monthlyPurchaseAmount.toLocaleString()}
+          </p>
+          <p className="mt-2 text-xs text-gray-500">
+            金庫払いと個人立替を合計した仕入れ額です
+          </p>
+        </div>
+
+        <div className="rounded-2xl border border-gray-800 bg-gray-900 p-5">
+          <p className="text-xs text-gray-400">今月の金庫支出仕入れ額</p>
+          <p className="mt-1 font-display text-2xl font-bold text-red-300">
+            ¥{monthlyCashboxPurchaseAmount.toLocaleString()}
+          </p>
+          <p className="mt-2 text-xs text-gray-500">
+            金庫から直接支払った仕入れ分です
+          </p>
+        </div>
+      </div>
+
+      <div className="bg-gray-900 rounded-2xl border border-gray-800 overflow-hidden">
+        <div className="px-5 py-4 border-b border-gray-800">
+          <h2 className="font-medium text-white">未精算の立替</h2>
+        </div>
+        {unreimbursedPurchaseRuns.length === 0 ? (
+          <p className="px-5 py-8 text-sm text-gray-500 text-center">未精算の立替はありません</p>
+        ) : (
+          <div className="divide-y divide-gray-800">
+            {unreimbursedPurchaseRuns.map((purchaseRun) => (
+              <div key={purchaseRun.id} className="px-5 py-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-sm font-medium text-white">
+                      {purchaseRun.vendor || '購入先未入力'}
+                    </p>
+                    <span className="rounded-full bg-sky-500/10 px-2 py-0.5 text-[11px] font-medium text-sky-300">
+                      個人立替
+                    </span>
+                  </div>
+                  <p className="mt-1 text-sm text-gray-400">
+                    {(purchaseRun.purchase_run_items ?? [])
+                      .map((row) => `${row.item_name} ${row.quantity}個`)
+                      .join(' / ') || '明細なし'}
+                  </p>
+                  <p className="mt-2 text-xs text-gray-500">
+                    {format(new Date(purchaseRun.created_at), 'M/d HH:mm', { locale: ja })}
+                    {purchaseRun.created_by_user?.name ? ` ・ ${purchaseRun.created_by_user.name}` : ''}
+                    {purchaseRun.note ? ` ・ ${purchaseRun.note}` : ''}
+                  </p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <p className="font-mono text-sm font-bold text-sky-300">
+                    ¥{purchaseRun.total_amount.toLocaleString()}
+                  </p>
+                  <button
+                    onClick={() => handleReimburse(purchaseRun.id)}
+                    disabled={loading !== null}
+                    className="rounded-lg bg-white px-4 py-2 text-sm font-medium text-gray-950 transition-colors hover:bg-gray-100 disabled:opacity-50"
+                  >
+                    {loading === `reimburse:${purchaseRun.id}` ? '精算中...' : '金庫から精算'}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="grid xl:grid-cols-2 gap-6">

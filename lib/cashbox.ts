@@ -6,7 +6,9 @@ export type CashboxEntryType =
   | 'cash_charge'
   | 'cash_settlement'
   | 'manual_in'
-  | 'manual_out';
+  | 'manual_out'
+  | 'restock_cash_out'
+  | 'advance_reimbursement';
 
 type CashboxBalanceRow = {
   amount: number;
@@ -21,6 +23,7 @@ type InsertCashboxEntryInput = {
   order_id?: string | null;
   charge_request_id?: string | null;
   settlement_id?: string | null;
+  purchase_run_id?: string | null;
   created_by?: string | null;
 };
 
@@ -59,4 +62,6 @@ export const cashboxEntryLabels: Record<CashboxEntryType, string> = {
   cash_settlement: '現金精算',
   manual_in: '手動入金',
   manual_out: '手動出金',
+  restock_cash_out: '仕入れ支出',
+  advance_reimbursement: '立替精算',
 };
