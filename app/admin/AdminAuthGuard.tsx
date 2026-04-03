@@ -6,6 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 const SESSION_KEY = 'limu_admin_auth';
 const SESSION_DURATION = 8 * 60 * 60 * 1000; // 8時間
 const COOKIE_MAX_AGE = 8 * 60 * 60;
+const PUBLIC_ADMIN_PATHS = new Set(['/admin/login', '/admin/password']);
 
 function getCookieExpiry() {
   if (typeof document === 'undefined') return null;
@@ -20,8 +21,8 @@ export default function AdminAuthGuard({ children }: { children: React.ReactNode
   const [checked, setChecked] = useState(false);
 
   useEffect(() => {
-    // ログインページは除外
-    if (pathname === '/admin/login') {
+    // ログイン前に開ける画面は除外
+    if (PUBLIC_ADMIN_PATHS.has(pathname)) {
       setChecked(true);
       setAuthed(true);
       return;
@@ -59,7 +60,7 @@ export default function AdminAuthGuard({ children }: { children: React.ReactNode
     );
   }
 
-  if (!authed && pathname !== '/admin/login') return null;
+  if (!authed && !PUBLIC_ADMIN_PATHS.has(pathname)) return null;
 
   return <>{children}</>;
 }

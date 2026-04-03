@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ShoppingCart, User, Coffee, ClipboardList, LogOut } from 'lucide-react';
+import { ShoppingCart, User, Coffee, ClipboardList, LogOut, Shield } from 'lucide-react';
 import { useCartStore } from '@/lib/store/cart';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
@@ -80,6 +80,14 @@ export default function Navbar() {
 
         {/* 右側アクション */}
         <div className="flex items-center gap-2">
+          <Link
+            href="/admin/password"
+            className="hidden items-center gap-1.5 rounded-full border border-cream-200 bg-white px-3 py-2 text-sm font-medium text-espresso-500 transition-all duration-200 hover:bg-cream-50 hover:text-espresso sm:flex"
+          >
+            <Shield size={16} />
+            管理者
+          </Link>
+
           {/* 残高表示 */}
           {user && (
             <div className="hidden rounded-full border border-cream-200 bg-white px-4 py-2 sm:flex sm:flex-col sm:items-end sm:gap-0">
@@ -147,6 +155,13 @@ export default function Navbar() {
               {cartCount > 9 ? '9+' : cartCount}
             </span>
           )}
+        </Link>
+        <Link
+          href="/admin/password"
+          className="flex-1 flex flex-col items-center gap-0.5 py-2 text-xs font-medium text-espresso-400 transition-colors"
+        >
+          <Shield size={20} />
+          管理者
         </Link>
       </div>
     </nav>

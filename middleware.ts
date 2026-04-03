@@ -5,6 +5,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 const USER_PROTECTED_PATHS = ['/', '/mypage', '/request', '/charge', '/cart', '/checkout', '/pending', '/order-complete'];
 const ADMIN_PROTECTED_PREFIX = '/admin';
 const ADMIN_LOGIN_PATH = '/admin/login';
+const ADMIN_PASSWORD_PATH = '/admin/password';
 const LOGIN_PATH = '/login';
 const ADMIN_COOKIE = 'limu_admin_auth';
 
@@ -13,7 +14,7 @@ function isUserProtectedPath(pathname: string) {
 }
 
 function isAdminProtectedPath(pathname: string) {
-  return pathname.startsWith(ADMIN_PROTECTED_PREFIX) && pathname !== ADMIN_LOGIN_PATH;
+  return pathname.startsWith(ADMIN_PROTECTED_PREFIX) && pathname !== ADMIN_LOGIN_PATH && pathname !== ADMIN_PASSWORD_PATH;
 }
 
 export async function middleware(request: NextRequest) {
@@ -98,6 +99,10 @@ export async function middleware(request: NextRequest) {
   }
 
   if (!user && isAdminProtectedPath(pathname)) {
+    return redirectToAdminLogin();
+  }
+
+  if (!user && pathname === ADMIN_PASSWORD_PATH) {
     return redirectToAdminLogin();
   }
 
