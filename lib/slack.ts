@@ -121,7 +121,7 @@ function buildRequestBlocks(params: {
           },
           style: 'primary',
           action_id: 'request_vote',
-          value: JSON.stringify({ requestId: params.requestId }),
+          value: JSON.stringify({ requestId: params.requestId, itemName: params.itemName }),
         },
         {
           type: 'button',

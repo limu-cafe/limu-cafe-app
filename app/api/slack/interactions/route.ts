@@ -4,7 +4,7 @@ import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/server';
 import {
   openSlackRequestCommentModal,
-  sendSlackEphemeralMessage,
+  sendSlackDirectMessage,
 } from '@/lib/slack';
 
 function verifySlackSignature(rawBody: string, timestamp: string, signature: string) {
@@ -73,7 +73,6 @@ export async function POST(request: Request) {
   if (payload.type === 'block_actions') {
     const action = payload.actions?.[0];
     const slackUserId = payload.user?.id;
-    const channelId = payload.channel?.id;
 
     if (!action || !slackUserId) {
       return NextResponse.json({ ok: true });
@@ -81,18 +80,16 @@ export async function POST(request: Request) {
 
     const currentUser = await findUserBySlackId(slackUserId);
     if (!currentUser) {
-      if (channelId) {
-        await sendSlackEphemeralMessage({
-          channel: channelId,
-          user: slackUserId,
-          text: '先にアプリへ一度ログインして、Slack アカウントをひも付けてください。',
-        });
-      }
+      await sendSlackDirectMessage({
+        slackUserId,
+        text: '先にアプリへ一度ログインして、Slack アカウントをひも付けてください。',
+      });
       return NextResponse.json({ ok: true });
     }
 
     const value = action.value ? JSON.parse(action.value) : {};
     const requestId = value.requestId as string | undefined;
+    const itemName = (value.itemName as string | undefined) ?? 'この要望';
 
     if (!requestId) {
       return NextResponse.json({ ok: true });
@@ -108,26 +105,20 @@ export async function POST(request: Request) {
 
       if (existingVote) {
         await supabase.from('item_request_votes').delete().eq('id', existingVote.id);
-        if (channelId) {
-          await sendSlackEphemeralMessage({
-            channel: channelId,
-            user: slackUserId,
-            text: '賛成を取り消しました。',
-          });
-        }
+        await sendSlackDirectMessage({
+          slackUserId,
+          text: `要望「${itemName}」の賛成を取り消しました。`,
+        });
       } else {
         await supabase.from('item_request_votes').insert({
           request_id: requestId,
           user_id: currentUser.id,
           vote_type: 'up',
         });
-        if (channelId) {
-          await sendSlackEphemeralMessage({
-            channel: channelId,
-            user: slackUserId,
-            text: '賛成しました。アプリの要望ページにも反映されます。',
-          });
-        }
+        await sendSlackDirectMessage({
+          slackUserId,
+          text: `要望「${itemName}」に賛成しました。アプリの要望ページにも反映されます。`,
+        });
       }
 
       revalidatePath('/request');
