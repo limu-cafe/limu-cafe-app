@@ -41,6 +41,7 @@ export default function RequestBoardClient({
   const [loadingVoteId, setLoadingVoteId] = useState<string | null>(null);
   const [commentLoadingId, setCommentLoadingId] = useState<string | null>(null);
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
+  const [expandedRequestIds, setExpandedRequestIds] = useState<Record<string, boolean>>({});
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>(
     'all'
   );
@@ -110,6 +111,13 @@ export default function RequestBoardClient({
     rejected: requests.filter((request) => request.status === 'rejected').length,
   };
 
+  const getVisibleComments = (request: RequestRow) => {
+    if (expandedRequestIds[request.id] || request.comments.length <= 4) {
+      return request.comments;
+    }
+    return request.comments.slice(-4);
+  };
+
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap gap-2">
@@ -145,6 +153,9 @@ export default function RequestBoardClient({
         {visibleRequests.map((request) => {
           const statusMeta = statusConfig[request.status];
           const hasVoted = request.votes.some((vote) => vote.user_id === currentUserId);
+          const visibleComments = getVisibleComments(request);
+          const isCommentListCollapsed =
+            request.comments.length > 4 && !expandedRequestIds[request.id];
 
           return (
             <section
@@ -222,7 +233,7 @@ export default function RequestBoardClient({
                       まだコメントはありません。ツッコミや賛同を気軽に書いてください。
                     </div>
                   ) : (
-                    request.comments.map((comment) => {
+                    visibleComments.map((comment) => {
                       const isOwn = comment.user_id === currentUserId;
 
                       return (
@@ -253,6 +264,25 @@ export default function RequestBoardClient({
                     })
                   )}
                 </div>
+
+                {request.comments.length > 4 ? (
+                  <div className="flex justify-center">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setExpandedRequestIds((current) => ({
+                          ...current,
+                          [request.id]: !current[request.id],
+                        }))
+                      }
+                      className="text-xs font-medium text-espresso-500 hover:text-espresso"
+                    >
+                      {isCommentListCollapsed
+                        ? `以前のコメントを表示 (${request.comments.length - 4}件)`
+                        : 'コメント欄をたたむ'}
+                    </button>
+                  </div>
+                ) : null}
 
                 <div className="rounded-[24px] border border-cream-200 bg-cream-50 p-3">
                   <textarea
