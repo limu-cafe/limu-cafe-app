@@ -38,7 +38,12 @@ export default function RequestForm() {
 
   return (
     <div className="card space-y-4">
-      <h2 className="font-medium text-espresso">新しい要望を送る</h2>
+      <div className="space-y-1">
+        <h2 className="font-medium text-espresso">要望を投稿する</h2>
+        <p className="text-sm text-espresso-400">
+          欲しい商品や入れてほしい理由を共有できます。
+        </p>
+      </div>
 
       <div className="space-y-1">
         <label className="text-sm font-medium text-espresso-600">
@@ -70,7 +75,7 @@ export default function RequestForm() {
       <div className="space-y-1">
         <label className="text-sm font-medium text-espresso-600">理由・コメント（任意）</label>
         <textarea
-          placeholder="なぜ欲しいか、どんな場面で使うかなど"
+          placeholder="理由や補足があれば入力してください"
           value={form.reason}
           onChange={(e) => setForm({ ...form, reason: e.target.value })}
           rows={3}

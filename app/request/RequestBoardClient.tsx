@@ -120,28 +120,30 @@ export default function RequestBoardClient({
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap gap-2">
-        {[
-          ['all', 'すべて'],
-          ['pending', '検討中'],
-          ['approved', '採用'],
-          ['rejected', '却下'],
-        ].map(([value, label]) => (
-          <button
-            key={value}
-            type="button"
-            onClick={() =>
-              setStatusFilter(value as 'all' | 'pending' | 'approved' | 'rejected')
-            }
-            className={`rounded-full px-3 py-2 text-xs font-medium transition-colors ${
-              statusFilter === value
-                ? 'bg-espresso text-cream-50'
-                : 'bg-white text-espresso-500 ring-1 ring-cream-200 hover:bg-cream-50'
-            }`}
-          >
-            {label} {statusCounts[value as keyof typeof statusCounts]}
-          </button>
-        ))}
+      <div className="rounded-[24px] border border-cream-200 bg-white px-4 py-4 shadow-[0_18px_48px_-40px_rgba(44,26,14,0.28)]">
+        <div className="flex flex-wrap gap-2">
+          {[
+            ['all', 'すべて'],
+            ['pending', '検討中'],
+            ['approved', '採用'],
+            ['rejected', '却下'],
+          ].map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() =>
+                setStatusFilter(value as 'all' | 'pending' | 'approved' | 'rejected')
+              }
+              className={`rounded-full px-3 py-2 text-xs font-medium transition-colors ${
+                statusFilter === value
+                  ? 'bg-espresso text-cream-50'
+                  : 'bg-white text-espresso-500 ring-1 ring-cream-200 hover:bg-cream-50'
+              }`}
+            >
+              {label} {statusCounts[value as keyof typeof statusCounts]}
+            </button>
+          ))}
+        </div>
       </div>
 
       {visibleRequests.length === 0 ? (
@@ -294,7 +296,7 @@ export default function RequestBoardClient({
                         [request.id]: event.target.value,
                       }))
                     }
-                    placeholder="この要望へのツッコミや賛同を書いてください"
+                    placeholder="この要望へのコメントや補足を入力してください"
                     className="w-full resize-none border-0 bg-transparent px-2 py-2 text-sm leading-6 text-espresso placeholder:text-espresso-300 focus:outline-none"
                   />
                   <div className="mt-2 flex justify-end">

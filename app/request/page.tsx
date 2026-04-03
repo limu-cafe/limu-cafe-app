@@ -58,35 +58,47 @@ export default async function RequestPage() {
 
   return (
     <UserLayout>
-      <div className="mx-auto max-w-6xl space-y-8 animate-fade-in">
-        <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-          <div className="space-y-4">
-            <div>
-              <h1 className="font-display text-3xl font-bold text-espresso">商品の要望</h1>
-              <p className="mt-1 text-sm text-espresso-400">
-                欲しい商品を出して、みんなで賛成やコメントを集められます。
-              </p>
-            </div>
+      <div className="mx-auto max-w-7xl space-y-6 animate-fade-in">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <h1 className="font-display text-3xl font-bold text-espresso">商品の要望</h1>
+            <p className="mt-1 text-sm text-espresso-400">
+              欲しい商品を共有して、賛成やコメントを集められます。
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2 text-xs text-espresso-500">
+            <span className="rounded-full bg-white px-3 py-2 ring-1 ring-cream-200">
+              要望 {boardRequests.length}件
+            </span>
+            <span className="rounded-full bg-white px-3 py-2 ring-1 ring-cream-200">
+              検討中 {boardRequests.filter((request) => request.status === 'pending').length}件
+            </span>
+          </div>
+        </div>
+
+        <div className="grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
+          <aside className="space-y-4 xl:sticky xl:top-24 xl:self-start">
             <RequestForm />
+
             <div className="rounded-[28px] border border-cream-200 bg-white px-5 py-5 shadow-[0_18px_48px_-40px_rgba(44,26,14,0.28)]">
-              <h2 className="font-medium text-espresso">このページでできること</h2>
-              <div className="mt-3 space-y-3 text-sm leading-6 text-espresso-500">
-                <p>新しい要望を出せます。</p>
-                <p>他の人の要望にも賛成できます。</p>
-                <p>要望の下で、ツッコミや補足をチャットのように書けます。</p>
+              <h2 className="text-sm font-semibold text-espresso">使い方</h2>
+              <div className="mt-3 space-y-2 text-sm leading-6 text-espresso-500">
+                <p>商品名と理由を書いて要望を投稿できます。</p>
+                <p>他の要望に賛成したり、コメントで意見を追加できます。</p>
+                <p>採用された要望は購入候補として管理者に共有されます。</p>
               </div>
             </div>
-          </div>
+          </aside>
 
-          <div className="space-y-4">
-            <div>
-              <h2 className="font-display text-2xl font-bold text-espresso">みんなの要望</h2>
+          <section className="space-y-4">
+            <div className="rounded-[28px] border border-cream-200 bg-white px-5 py-5 shadow-[0_18px_48px_-40px_rgba(44,26,14,0.28)]">
+              <h2 className="font-medium text-espresso">みんなの要望</h2>
               <p className="mt-1 text-sm text-espresso-400">
-                検討中の要望が上に来ます。票が多いものほど見つけやすくしています。
+                検討中の要望が上に表示されます。賛成数が多いものほど見つけやすくしています。
               </p>
             </div>
             <RequestBoardClient requests={boardRequests} currentUserId={user.id} />
-          </div>
+          </section>
         </div>
       </div>
     </UserLayout>
