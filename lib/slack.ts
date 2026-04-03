@@ -69,6 +69,25 @@ export async function sendSlackDirectMessage(params: {
   });
 }
 
+export async function sendSlackDirectMessages(params: {
+  slackUserIds: string[];
+  text: string;
+  blocks?: any[];
+}) {
+  const uniqueSlackUserIds = Array.from(
+    new Set(params.slackUserIds.map((id) => id.trim()).filter(Boolean))
+  );
+
+  for (const slackUserId of uniqueSlackUserIds) {
+    await sendSlackDirectMessage({
+      slackUserId,
+      text: params.text,
+      blocks: params.blocks,
+    });
+    await new Promise((resolve) => setTimeout(resolve, 150));
+  }
+}
+
 function buildRequestBlocks(params: {
   requestId: string;
   userName: string;
@@ -201,6 +220,7 @@ export async function notifyNewItemRequest(params: {
   itemName: string;
   desiredPrice?: number | null;
   reason?: string | null;
+  slackUserIds?: string[];
 }) {
   await sendWebhook(WEBHOOK_ADMIN, {
     blocks: buildRequestBlocks(params).concat({
@@ -214,7 +234,13 @@ export async function notifyNewItemRequest(params: {
     }),
   });
 
-  if (REQUESTS_CHANNEL_ID) {
+  if (params.slackUserIds?.length) {
+    await sendSlackDirectMessages({
+      slackUserIds: params.slackUserIds,
+      text: `新しい商品要望: ${params.itemName}`,
+      blocks: buildRequestBlocks(params),
+    });
+  } else if (REQUESTS_CHANNEL_ID) {
     await callSlackApi('chat.postMessage', {
       channel: REQUESTS_CHANNEL_ID,
       text: `新しい商品要望: ${params.itemName}`,

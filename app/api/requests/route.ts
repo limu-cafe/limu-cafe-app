@@ -1,10 +1,15 @@
 import { NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
-import { createClient } from '@/lib/supabase/server';
+import { createAdminClient, createClient } from '@/lib/supabase/server';
 import { notifyNewItemRequest } from '@/lib/slack';
+
+type SlackRecipient = {
+  slack_user_id: string | null;
+};
 
 export async function POST(request: Request) {
   const supabase = await createClient();
+  const adminSupabase = createAdminClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -28,12 +33,21 @@ export async function POST(request: Request) {
     .eq('id', user.id)
     .single();
 
+  const { data: recipients } = await adminSupabase
+    .from('users')
+    .select('slack_user_id')
+    .eq('is_active', true)
+    .not('slack_user_id', 'is', null);
+
   await notifyNewItemRequest({
     requestId: data.id,
     userName: profile?.name ?? '不明',
     itemName: item_name,
     desiredPrice: desired_price,
     reason,
+    slackUserIds: (recipients ?? [])
+      .map((recipient: SlackRecipient) => recipient.slack_user_id)
+      .filter((value: string | null): value is string => Boolean(value)),
   });
 
   revalidatePath('/request');
