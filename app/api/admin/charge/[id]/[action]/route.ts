@@ -3,6 +3,7 @@ import { revalidatePath } from 'next/cache';
 import { createAdminClient, createClient } from '@/lib/supabase/server';
 import { insertCashboxEntry } from '@/lib/cashbox';
 import { logAdminAction } from '@/lib/admin-audit';
+import { notifyChargeReviewed } from '@/lib/slack';
 
 export async function POST(
   _request: Request,
@@ -76,6 +77,20 @@ export async function POST(
   revalidatePath('/admin/cashbox');
   revalidatePath('/admin/audit');
   revalidatePath('/mypage');
+
+  const { data: targetUserProfile } = await supabase
+    .from('users')
+    .select('slack_user_id')
+    .eq('id', req.user_id)
+    .single();
+
+  if (targetUserProfile?.slack_user_id) {
+    await notifyChargeReviewed({
+      slackUserId: targetUserProfile.slack_user_id,
+      amount: req.amount,
+      status: action === 'approve' ? 'approved' : 'rejected',
+    });
+  }
 
   return NextResponse.json({ ok: true });
 }

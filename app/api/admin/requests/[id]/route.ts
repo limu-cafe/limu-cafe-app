@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
 import { createAdminClient, createClient } from '@/lib/supabase/server';
-import { notifyRequestApproved } from '@/lib/slack';
+import { notifyRequestApproved, notifyRequestRejected } from '@/lib/slack';
 import { logAdminAction } from '@/lib/admin-audit';
 
 export async function PUT(
@@ -54,11 +54,19 @@ export async function PUT(
   revalidatePath('/admin/audit');
 
   // 採用された場合はSlack DMで通知
-  if (status === 'approved' && req.user?.slack_user_id) {
-    await notifyRequestApproved({
-      slackUserId: req.user.slack_user_id,
-      itemName: req.item_name,
-    });
+  if (req.user?.slack_user_id) {
+    if (status === 'approved') {
+      await notifyRequestApproved({
+        slackUserId: req.user.slack_user_id,
+        itemName: req.item_name,
+      });
+    } else if (status === 'rejected') {
+      await notifyRequestRejected({
+        slackUserId: req.user.slack_user_id,
+        itemName: req.item_name,
+        adminNote: admin_note || null,
+      });
+    }
   }
 
   return NextResponse.json({ ok: true });

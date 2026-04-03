@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/server';
 import { requireAdminSession } from '@/lib/admin-session';
 import { applyLegacyTransfer } from '@/lib/legacy-transfer';
 import { logAdminAction } from '@/lib/admin-audit';
+import { notifyLegacyTransferReviewed } from '@/lib/slack';
 
 export async function POST(
   request: Request,
@@ -24,7 +25,7 @@ export async function POST(
 
   const { data: transferRequest, error: requestError } = await supabase
     .from('legacy_transfer_requests')
-    .select('id, user_id, status')
+    .select('id, user_id, status, user:users!legacy_transfer_requests_user_id_fkey(slack_user_id)')
     .eq('id', id)
     .single();
 
@@ -72,6 +73,16 @@ export async function POST(
     revalidatePath('/admin');
     revalidatePath('/admin/legacy');
     revalidatePath('/admin/audit');
+
+    const requestUser = transferRequest.user as { slack_user_id?: string | null } | null;
+    if (requestUser?.slack_user_id) {
+      await notifyLegacyTransferReviewed({
+        slackUserId: requestUser.slack_user_id,
+        status: 'rejected',
+        reason: rejection_reason?.trim() || null,
+      });
+    }
+
     return NextResponse.json({ ok: true });
   }
 
@@ -110,6 +121,14 @@ export async function POST(
   revalidatePath('/admin/users');
   revalidatePath('/admin/legacy');
   revalidatePath('/admin/audit');
+
+  const requestUser = transferRequest.user as { slack_user_id?: string | null } | null;
+  if (requestUser?.slack_user_id) {
+    await notifyLegacyTransferReviewed({
+      slackUserId: requestUser.slack_user_id,
+      status: 'completed',
+    });
+  }
 
   return NextResponse.json({ ok: true });
 }

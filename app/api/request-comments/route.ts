@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
-import { createClient } from '@/lib/supabase/server';
+import { createAdminClient, createClient } from '@/lib/supabase/server';
+import { notifyRequestComment } from '@/lib/slack';
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -35,6 +36,30 @@ export async function POST(request: Request) {
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  const adminSupabase = createAdminClient();
+  const { data: requestRow } = await adminSupabase
+    .from('item_requests')
+    .select('item_name, user:users!item_requests_user_id_fkey(id, slack_user_id, name)')
+    .eq('id', request_id)
+    .single();
+
+  const owner = requestRow?.user as { id?: string; slack_user_id?: string | null; name?: string } | null;
+
+  if (owner?.slack_user_id && owner.id !== user.id) {
+    const { data: commenter } = await adminSupabase
+      .from('users')
+      .select('name')
+      .eq('id', user.id)
+      .single();
+
+    await notifyRequestComment({
+      slackUserId: owner.slack_user_id,
+      itemName: requestRow?.item_name ?? '要望',
+      commenterName: commenter?.name ?? '誰か',
+      commentBody: body.trim(),
+    });
   }
 
   revalidatePath('/request');

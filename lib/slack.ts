@@ -57,6 +57,18 @@ async function callSlackApi(method: string, payload: object) {
   }
 }
 
+export async function sendSlackDirectMessage(params: {
+  slackUserId: string;
+  text: string;
+  blocks?: any[];
+}) {
+  return callSlackApi('chat.postMessage', {
+    channel: params.slackUserId,
+    text: params.text,
+    blocks: params.blocks,
+  });
+}
+
 function buildRequestBlocks(params: {
   requestId: string;
   userName: string;
@@ -297,26 +309,70 @@ export async function notifyRequestApproved(params: {
   slackUserId: string;
   itemName: string;
 }) {
-  const botToken = process.env.SLACK_BOT_TOKEN;
-  if (!botToken) return;
+  await sendSlackDirectMessage({
+    slackUserId: params.slackUserId,
+    text:
+      `✅ 商品要望「${params.itemName}」が採用されました！近日中に購入できるようになります🎉\n` +
+      (APP_BASE_URL ? `${APP_BASE_URL}/request` : ''),
+  });
+}
 
-  try {
-    await fetch('https://slack.com/api/chat.postMessage', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${botToken}`,
-      },
-        body: JSON.stringify({
-          channel: params.slackUserId,
-          text:
-            `✅ 商品要望「${params.itemName}」が採用されました！近日中に購入できるようになります🎉\n` +
-            (APP_BASE_URL ? `${APP_BASE_URL}/` : ''),
-        }),
-      });
-  } catch (err) {
-    console.error('[Slack] Failed to send DM:', err);
-  }
+export async function notifyRequestRejected(params: {
+  slackUserId: string;
+  itemName: string;
+  adminNote?: string | null;
+}) {
+  await sendSlackDirectMessage({
+    slackUserId: params.slackUserId,
+    text:
+      `📝 商品要望「${params.itemName}」は今回は見送りになりました。` +
+      (params.adminNote ? `\n管理者メモ: ${params.adminNote}` : '') +
+      (APP_BASE_URL ? `\n${APP_BASE_URL}/request` : ''),
+  });
+}
+
+export async function notifyRequestComment(params: {
+  slackUserId: string;
+  itemName: string;
+  commenterName: string;
+  commentBody: string;
+}) {
+  await sendSlackDirectMessage({
+    slackUserId: params.slackUserId,
+    text:
+      `💬 要望「${params.itemName}」に ${params.commenterName} さんからコメントが付きました。\n` +
+      `${params.commentBody}\n` +
+      (APP_BASE_URL ? `${APP_BASE_URL}/request` : ''),
+  });
+}
+
+export async function notifyChargeReviewed(params: {
+  slackUserId: string;
+  amount: number;
+  status: 'approved' | 'rejected';
+}) {
+  const statusLabel = params.status === 'approved' ? '承認' : '却下';
+  await sendSlackDirectMessage({
+    slackUserId: params.slackUserId,
+    text:
+      `💴 チャージ申請（¥${params.amount.toLocaleString()}）が${statusLabel}されました。` +
+      (APP_BASE_URL ? `\n${APP_BASE_URL}/mypage` : ''),
+  });
+}
+
+export async function notifyLegacyTransferReviewed(params: {
+  slackUserId: string;
+  status: 'completed' | 'rejected';
+  reason?: string | null;
+}) {
+  await sendSlackDirectMessage({
+    slackUserId: params.slackUserId,
+    text:
+      (params.status === 'completed'
+        ? '📚 旧データの引き継ぎが完了しました。'
+        : `📚 旧データの引き継ぎ申請は却下されました。${params.reason ? `\n理由: ${params.reason}` : ''}`) +
+      (APP_BASE_URL ? `\n${APP_BASE_URL}/mypage` : ''),
+  });
 }
 
 export async function openSlackRequestCommentModal(params: {
@@ -388,30 +444,15 @@ export async function sendSlackEphemeralMessage(params: {
 export async function notifyMonthlySettlement(params: {
   users: { slackUserId: string; name: string; amount: number }[];
 }) {
-  const botToken = process.env.SLACK_BOT_TOKEN;
-  if (!botToken) return;
-
   for (const user of params.users) {
-    try {
-      await fetch('https://slack.com/api/chat.postMessage', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${botToken}`,
-        },
-        body: JSON.stringify({
-          channel: user.slackUserId,
-          text:
-            `📅 月次精算のお知らせ\n` +
-            `${user.name}さんの今月の後払い残高は ¥${user.amount.toLocaleString()} です。\n` +
-            `LIMU喫茶で精算をお願いします。\n` +
-            (APP_BASE_URL ? `${APP_BASE_URL}/mypage` : ''),
-        }),
-      });
-      // レート制限対策で少し待つ
-      await new Promise(r => setTimeout(r, 200));
-    } catch (err) {
-      console.error(`[Slack] Failed to send DM to ${user.name}:`, err);
-    }
+    await sendSlackDirectMessage({
+      slackUserId: user.slackUserId,
+      text:
+        `📅 月次精算のお知らせ\n` +
+        `${user.name}さんの今月の後払い残高は ¥${user.amount.toLocaleString()} です。\n` +
+        `LIMU喫茶で精算をお願いします。\n` +
+        (APP_BASE_URL ? `${APP_BASE_URL}/mypage` : ''),
+    });
+    await new Promise((r) => setTimeout(r, 200));
   }
 }
