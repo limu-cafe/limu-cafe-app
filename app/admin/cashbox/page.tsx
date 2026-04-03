@@ -16,7 +16,7 @@ export default async function CashboxPage() {
     { count: pendingCashOrdersCount },
     { data: pendingCashOrders },
     { data: usersWithDeferred },
-    { data: pendingCashCharges },
+    { data: reflectedChargesThisMonth },
     { data: purchaseRunsThisMonth },
     { data: unreimbursedPurchaseRuns },
   ] = await Promise.all([
@@ -60,8 +60,8 @@ export default async function CashboxPage() {
     supabase
       .from('charge_requests')
       .select('amount')
-      .eq('method', 'cash')
-      .eq('status', 'pending'),
+      .eq('status', 'approved')
+      .gte('created_at', new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString()),
     supabase
       .from('purchase_runs')
       .select('total_amount, payment_source')
@@ -85,7 +85,7 @@ export default async function CashboxPage() {
     (sum: number, user: { deferred_balance: number }) => sum + user.deferred_balance,
     0
   );
-  const pendingCashChargeAmount = (pendingCashCharges ?? []).reduce(
+  const pendingCashChargeAmount = (reflectedChargesThisMonth ?? []).reduce(
     (sum: number, request: { amount: number }) => sum + request.amount,
     0
   );

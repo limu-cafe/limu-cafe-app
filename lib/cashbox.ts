@@ -58,7 +58,7 @@ export async function insertCashboxEntry(
 
 export const cashboxEntryLabels: Record<CashboxEntryType, string> = {
   cash_order: '現金注文',
-  cash_charge: '現金チャージ承認',
+  cash_charge: '現金チャージ入金',
   cash_settlement: '現金精算',
   manual_in: '手動入金',
   manual_out: '手動出金',

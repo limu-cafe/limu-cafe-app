@@ -69,7 +69,6 @@ export default async function AdminDashboard() {
 
   const [
     { count: pendingCashOrders },
-    { count: pendingCharges },
     { count: pendingUsers },
     { count: pendingRequests },
     { count: pendingLegacyTransfers },
@@ -85,10 +84,6 @@ export default async function AdminDashboard() {
       .select('*', { count: 'exact', head: true })
       .eq('payment_method', 'cash')
       .eq('payment_status', 'pending'),
-    supabase
-      .from('charge_requests')
-      .select('*', { count: 'exact', head: true })
-      .eq('status', 'pending'),
     supabase
       .from('users')
       .select('*', { count: 'exact', head: true })
@@ -144,13 +139,6 @@ export default async function AdminDashboard() {
       count: pendingCashOrders ?? 0,
       href: '/admin/orders?pending=1',
       tone: 'amber',
-    },
-    {
-      title: 'チャージ承認',
-      description: '入金を確認して承認するだけで残高へ反映されます。',
-      count: pendingCharges ?? 0,
-      href: '/admin/charge?pending=1',
-      tone: 'blue',
     },
     {
       title: '要望の判断',

@@ -9,7 +9,6 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   const [
     { count: pendingOrders },
-    { count: pendingCharges },
     { count: pendingUsers },
     { count: pendingRequests },
     { count: pendingLegacyTransfers },
@@ -20,10 +19,6 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       .select('*', { count: 'exact', head: true })
       .eq('payment_method', 'cash')
       .eq('payment_status', 'pending'),
-    supabase
-      .from('charge_requests')
-      .select('*', { count: 'exact', head: true })
-      .eq('status', 'pending'),
     supabase
       .from('users')
       .select('*', { count: 'exact', head: true })
@@ -47,7 +42,6 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const notifications = {
     stock: lowStockItems?.length ?? 0,
     orders: pendingOrders ?? 0,
-    charge: pendingCharges ?? 0,
     users: pendingUsers ?? 0,
     requests: pendingRequests ?? 0,
     legacy: pendingLegacyTransfers ?? 0,

@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { clearAdminSession } from './AdminAuthGuard';
 
-type NotificationKey = 'stock' | 'orders' | 'charge' | 'users' | 'requests' | 'legacy';
+type NotificationKey = 'stock' | 'orders' | 'users' | 'requests' | 'legacy';
 
 type SidebarNotifications = Record<NotificationKey, number>;
 
@@ -17,7 +17,7 @@ const navItems = [
   { href: '/admin/items', label: '商品管理', icon: Package },
   { href: '/admin/stock', label: '在庫入力', icon: Archive, notificationKey: 'stock' as NotificationKey },
   { href: '/admin/orders', label: '注文一覧', icon: ShoppingBag, notificationKey: 'orders' as NotificationKey },
-  { href: '/admin/charge', label: 'チャージ承認', icon: Wallet, notificationKey: 'charge' as NotificationKey },
+  { href: '/admin/charge', label: 'チャージ記録', icon: Wallet },
   { href: '/admin/settlement', label: '精算管理', icon: BarChart3 },
   { href: '/admin/cashbox', label: '金庫管理', icon: Banknote },
   { href: '/admin/users', label: 'ユーザー管理', icon: Users, notificationKey: 'users' as NotificationKey },

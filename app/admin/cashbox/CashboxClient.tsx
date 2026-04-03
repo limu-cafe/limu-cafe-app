@@ -227,7 +227,7 @@ export default function CashboxClient({
             ¥{expectedAmount.toLocaleString()}
           </p>
           <p className="mt-2 text-xs text-gray-500">
-            現金注文受領・現金チャージ承認・現金精算・手動調整の合計です
+            現金注文受領・現金精算・手動調整の合計です
           </p>
         </div>
 
@@ -287,12 +287,12 @@ export default function CashboxClient({
         </div>
 
         <div className="rounded-2xl border border-gray-800 bg-gray-900 p-5">
-          <p className="text-xs text-gray-400">保留中の現金チャージ申請</p>
+          <p className="text-xs text-gray-400">今月反映したチャージ</p>
           <p className="mt-1 font-display text-2xl font-bold text-gray-200">
             ¥{pendingCashChargeAmount.toLocaleString()}
           </p>
           <p className="mt-2 text-xs text-gray-500">
-            承認前なので現在金庫見込みには含めていません
+            残高には反映済みで、回収は月次精算で行います
           </p>
         </div>
       </div>

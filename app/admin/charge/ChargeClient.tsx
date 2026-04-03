@@ -27,6 +27,10 @@ export default function ChargeClient({ requests }: { requests: any[] }) {
   const pending = useMemo(() => requests.filter(r => r.status === 'pending'), [requests]);
   const done = useMemo(() => requests.filter(r => r.status !== 'pending'), [requests]);
   const visibleDone = pendingOnly ? [] : done;
+  const totalApprovedAmount = useMemo(
+    () => requests.filter((r) => r.status === 'approved').reduce((sum, r) => sum + r.amount, 0),
+    [requests]
+  );
 
   const handleAction = async (id: string, action: 'approve' | 'reject') => {
     setLoading(id + action);
@@ -78,10 +82,31 @@ export default function ChargeClient({ requests }: { requests: any[] }) {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="font-display font-bold text-2xl text-white">チャージ承認</h1>
+        <h1 className="font-display font-bold text-2xl text-white">チャージ記録</h1>
         <p className="text-gray-400 text-sm mt-1">
-          承認待ち: <span className="text-amber-400 font-medium">{pending.length}件</span>
+          残高へ即時反映したチャージの履歴を確認できます。
         </p>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-3">
+        <div className="rounded-2xl border border-gray-800 bg-gray-900 px-5 py-4">
+          <p className="text-xs text-gray-400">反映済みチャージ件数</p>
+          <p className="mt-1 font-display text-2xl font-bold text-emerald-400">
+            {requests.filter((r) => r.status === 'approved').length}件
+          </p>
+        </div>
+        <div className="rounded-2xl border border-gray-800 bg-gray-900 px-5 py-4">
+          <p className="text-xs text-gray-400">反映済みチャージ総額</p>
+          <p className="mt-1 font-display text-2xl font-bold text-white">
+            ¥{totalApprovedAmount.toLocaleString()}
+          </p>
+        </div>
+        <div className="rounded-2xl border border-gray-800 bg-gray-900 px-5 py-4">
+          <p className="text-xs text-gray-400">旧方式の未処理データ</p>
+          <p className="mt-1 font-display text-2xl font-bold text-amber-400">
+            {pending.length}件
+          </p>
+        </div>
       </div>
 
       <label className="inline-flex items-center gap-2 text-sm text-gray-300">
@@ -91,7 +116,7 @@ export default function ChargeClient({ requests }: { requests: any[] }) {
           onChange={(e) => setPendingOnly(e.target.checked)}
           className="rounded border-gray-700 bg-gray-900 text-white"
         />
-        未対応だけ表示
+        旧方式の未処理だけ表示
       </label>
 
       {pending.length > 0 && (
@@ -128,7 +153,7 @@ export default function ChargeClient({ requests }: { requests: any[] }) {
       {/* 承認待ち */}
       {pending.length > 0 && (
         <div className="space-y-3">
-          <h2 className="text-sm font-medium text-gray-400 uppercase tracking-wider">承認待ち</h2>
+          <h2 className="text-sm font-medium text-gray-400 uppercase tracking-wider">旧方式の未処理チャージ</h2>
           {pending.map((req) => (
             <div key={req.id} className="bg-gray-900 border border-amber-500/30 rounded-2xl p-5 flex items-center gap-4">
               <input
@@ -189,7 +214,7 @@ export default function ChargeClient({ requests }: { requests: any[] }) {
       {/* 処理済み */}
       {visibleDone.length > 0 && (
         <div className="space-y-2">
-          <h2 className="text-sm font-medium text-gray-400 uppercase tracking-wider">処理済み</h2>
+          <h2 className="text-sm font-medium text-gray-400 uppercase tracking-wider">チャージ履歴</h2>
           <div className="bg-gray-900 rounded-2xl border border-gray-800 overflow-hidden">
             <table className="w-full text-sm">
               <thead>
@@ -207,7 +232,7 @@ export default function ChargeClient({ requests }: { requests: any[] }) {
                     <td className="px-4 py-3 text-gray-400">{req.method === 'cash' ? '現金' : 'クレカ'}</td>
                     <td className="px-4 py-3">
                       <span className={`px-2 py-0.5 rounded-full text-xs ${STATUS_COLOR[req.status]}`}>
-                        {STATUS_LABEL[req.status]}
+                        {req.status === 'approved' ? '反映済み' : STATUS_LABEL[req.status]}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-gray-500 text-xs">

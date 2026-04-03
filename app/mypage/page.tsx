@@ -203,7 +203,7 @@ export default async function MyPage() {
                       req.status === 'pending' ? 'bg-amber-100 text-amber-700' :
                       'bg-red-100 text-red-700'
                     }`}>
-                      {req.status === 'approved' ? '承認済み' : req.status === 'pending' ? '申請中' : '却下'}
+                      {req.status === 'approved' ? '反映済み' : req.status === 'pending' ? '未処理' : '却下'}
                     </span>
                     <span className="font-mono font-medium">+¥{req.amount.toLocaleString()}</span>
                   </div>
