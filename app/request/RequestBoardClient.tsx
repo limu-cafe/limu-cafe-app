@@ -149,6 +149,7 @@ export default function RequestBoardClient({
           return (
             <section
               key={request.id}
+              id={`request-${request.id}`}
               className="overflow-hidden rounded-[28px] border border-cream-200 bg-white shadow-[0_18px_48px_-40px_rgba(44,26,14,0.28)]"
             >
               <div className="space-y-4 border-b border-cream-100 px-5 py-5">

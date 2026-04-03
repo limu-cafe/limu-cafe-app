@@ -1,5 +1,6 @@
 const WEBHOOK_ORDERS = process.env.SLACK_WEBHOOK_ORDERS!;
 const WEBHOOK_ADMIN = process.env.SLACK_WEBHOOK_ADMIN!;
+const REQUESTS_CHANNEL_ID = process.env.SLACK_REQUESTS_CHANNEL_ID ?? '';
 const APP_BASE_URL =
   process.env.APP_BASE_URL ??
   process.env.NEXT_PUBLIC_APP_URL ??
@@ -25,6 +26,94 @@ async function sendWebhook(webhookUrl: string, payload: object) {
   } catch (err) {
     console.error('[Slack] Failed to send notification:', err);
   }
+}
+
+async function callSlackApi(method: string, payload: object) {
+  const botToken = process.env.SLACK_BOT_TOKEN;
+  if (!botToken) {
+    console.warn(`[Slack] Bot token not set, skipping ${method}`);
+    return null;
+  }
+
+  try {
+    const response = await fetch(`https://slack.com/api/${method}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${botToken}`,
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const data = await response.json();
+    if (!data.ok) {
+      console.error(`[Slack] ${method} failed:`, data);
+      return null;
+    }
+    return data;
+  } catch (error) {
+    console.error(`[Slack] ${method} failed:`, error);
+    return null;
+  }
+}
+
+function buildRequestBlocks(params: {
+  requestId: string;
+  userName: string;
+  itemName: string;
+  desiredPrice?: number | null;
+  reason?: string | null;
+}): any[] {
+  const detailPath = `/request#request-${params.requestId}`;
+
+  return [
+    {
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text:
+          `📝 *新しい商品要望*\n` +
+          `*投稿者:* ${params.userName}\n` +
+          `*商品名:* ${params.itemName}` +
+          (params.desiredPrice ? `\n*希望価格:* ¥${params.desiredPrice.toLocaleString()}` : '') +
+          (params.reason ? `\n*理由:* ${params.reason}` : ''),
+      },
+    },
+    {
+      type: 'actions',
+      elements: [
+        {
+          type: 'button',
+          text: {
+            type: 'plain_text',
+            text: '賛成する',
+          },
+          style: 'primary',
+          action_id: 'request_vote',
+          value: JSON.stringify({ requestId: params.requestId }),
+        },
+        {
+          type: 'button',
+          text: {
+            type: 'plain_text',
+            text: 'コメントする',
+          },
+          action_id: 'request_comment',
+          value: JSON.stringify({ requestId: params.requestId, itemName: params.itemName }),
+        },
+        {
+          type: 'button',
+          text: {
+            type: 'plain_text',
+            text: 'アプリで見る',
+          },
+          url: APP_BASE_URL ? `${APP_BASE_URL}${detailPath}` : undefined,
+          action_id: APP_BASE_URL ? undefined : 'request_open_app',
+          value: APP_BASE_URL ? undefined : JSON.stringify({ requestId: params.requestId }),
+        },
+      ].filter(Boolean),
+    },
+  ];
 }
 
 // 注文が入ったとき
@@ -95,28 +184,31 @@ export async function notifyCashChargeRequest(params: {
 
 // 商品要望が来たとき
 export async function notifyNewItemRequest(params: {
+  requestId: string;
   userName: string;
   itemName: string;
   desiredPrice?: number | null;
   reason?: string | null;
 }) {
   await sendWebhook(WEBHOOK_ADMIN, {
-    blocks: [
-      {
-        type: 'section',
-        text: {
+    blocks: buildRequestBlocks(params).concat({
+      type: 'context',
+      elements: [
+        {
           type: 'mrkdwn',
-          text:
-            `📝 *新しい商品要望が届きました*\n` +
-            `*申請者:* ${params.userName}\n` +
-            `*商品名:* ${params.itemName}` +
-            (params.desiredPrice ? `\n*希望価格:* ¥${params.desiredPrice.toLocaleString()}` : '') +
-            (params.reason ? `\n*理由:* ${params.reason}` : '') +
-            `\n\n${appLink('/admin/requests', '商品要望を開く')}`,
+          text: appLink('/admin/requests', '管理画面で要望を見る'),
         },
-      },
-    ],
+      ],
+    }),
   });
+
+  if (REQUESTS_CHANNEL_ID) {
+    await callSlackApi('chat.postMessage', {
+      channel: REQUESTS_CHANNEL_ID,
+      text: `新しい商品要望: ${params.itemName}`,
+      blocks: buildRequestBlocks(params),
+    });
+  }
 }
 
 // 現金注文の確認待ち
@@ -225,6 +317,71 @@ export async function notifyRequestApproved(params: {
   } catch (err) {
     console.error('[Slack] Failed to send DM:', err);
   }
+}
+
+export async function openSlackRequestCommentModal(params: {
+  triggerId: string;
+  requestId: string;
+  itemName: string;
+}) {
+  return callSlackApi('views.open', {
+    trigger_id: params.triggerId,
+    view: {
+      type: 'modal',
+      callback_id: 'request_comment_modal',
+      private_metadata: JSON.stringify({ requestId: params.requestId }),
+      title: {
+        type: 'plain_text',
+        text: '要望コメント',
+      },
+      submit: {
+        type: 'plain_text',
+        text: '送信',
+      },
+      close: {
+        type: 'plain_text',
+        text: '閉じる',
+      },
+      blocks: [
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `*${params.itemName}* へのコメントを入力してください。`,
+          },
+        },
+        {
+          type: 'input',
+          block_id: 'request_comment_block',
+          label: {
+            type: 'plain_text',
+            text: 'コメント',
+          },
+          element: {
+            type: 'plain_text_input',
+            action_id: 'request_comment_input',
+            multiline: true,
+            placeholder: {
+              type: 'plain_text',
+              text: '賛同や補足を書けます',
+            },
+          },
+        },
+      ],
+    },
+  });
+}
+
+export async function sendSlackEphemeralMessage(params: {
+  channel: string;
+  user: string;
+  text: string;
+}) {
+  return callSlackApi('chat.postEphemeral', {
+    channel: params.channel,
+    user: params.user,
+    text: params.text,
+  });
 }
 
 // 月次精算リマインド

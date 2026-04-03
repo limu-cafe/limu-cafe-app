@@ -29,6 +29,7 @@ export async function POST(request: Request) {
     .single();
 
   await notifyNewItemRequest({
+    requestId: data.id,
     userName: profile?.name ?? '不明',
     itemName: item_name,
     desiredPrice: desired_price,
