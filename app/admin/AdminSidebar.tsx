@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   LayoutDashboard, Package, Archive, ShoppingBag,
-  Wallet, BarChart3, Users, MessageSquare, Search, LogOut, Banknote, RefreshCw, ClipboardList
+  Wallet, BarChart3, Users, MessageSquare, Search, LogOut, Banknote, RefreshCw, ClipboardList, ArrowLeft
 } from 'lucide-react';
 import { clearAdminSession } from './AdminAuthGuard';
 
@@ -89,6 +89,13 @@ export default function AdminSidebar({
 
       {/* ログアウト */}
       <div className="p-3 border-t border-gray-800">
+        <Link
+          href="/"
+          className="mb-2 flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-gray-400 transition-all hover:bg-white/5 hover:text-gray-200"
+        >
+          <ArrowLeft size={17} />
+          ユーザー画面へ戻る
+        </Link>
         <button
           onClick={handleLogout}
           className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-400 hover:bg-white/5 hover:text-gray-200 transition-all"
