@@ -36,6 +36,7 @@ export async function POST(request: Request) {
     }
 
     revalidatePath('/request');
+    revalidatePath(`/request/${request_id}`);
     revalidatePath('/admin/requests');
     return NextResponse.json({ voted: false });
   }
@@ -51,6 +52,7 @@ export async function POST(request: Request) {
   }
 
   revalidatePath('/request');
+  revalidatePath(`/request/${request_id}`);
   revalidatePath('/admin/requests');
   return NextResponse.json({ voted: true });
 }

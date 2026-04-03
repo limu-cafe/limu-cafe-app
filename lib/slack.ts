@@ -95,7 +95,7 @@ function buildRequestBlocks(params: {
   desiredPrice?: number | null;
   reason?: string | null;
 }): any[] {
-  const detailPath = `/request#request-${params.requestId}`;
+  const detailPath = `/request/${params.requestId}`;
 
   return [
     {
@@ -334,18 +334,20 @@ export async function notifyPriceDrop(params: {
 export async function notifyRequestApproved(params: {
   slackUserId: string;
   itemName: string;
+  requestId?: string;
 }) {
   await sendSlackDirectMessage({
     slackUserId: params.slackUserId,
     text:
       `✅ 商品要望「${params.itemName}」が採用されました！近日中に購入できるようになります🎉\n` +
-      (APP_BASE_URL ? `${APP_BASE_URL}/request` : ''),
+      (APP_BASE_URL ? `${APP_BASE_URL}/request/${params.requestId ?? ''}` : ''),
   });
 }
 
 export async function notifyRequestRejected(params: {
   slackUserId: string;
   itemName: string;
+  requestId?: string;
   adminNote?: string | null;
 }) {
   await sendSlackDirectMessage({
@@ -353,7 +355,7 @@ export async function notifyRequestRejected(params: {
     text:
       `📝 商品要望「${params.itemName}」は今回は見送りになりました。` +
       (params.adminNote ? `\n管理者メモ: ${params.adminNote}` : '') +
-      (APP_BASE_URL ? `\n${APP_BASE_URL}/request` : ''),
+      (APP_BASE_URL ? `\n${APP_BASE_URL}/request/${params.requestId ?? ''}` : ''),
   });
 }
 
@@ -362,13 +364,14 @@ export async function notifyRequestComment(params: {
   itemName: string;
   commenterName: string;
   commentBody: string;
+  requestId?: string;
 }) {
   await sendSlackDirectMessage({
     slackUserId: params.slackUserId,
     text:
       `💬 要望「${params.itemName}」に ${params.commenterName} さんからコメントが付きました。\n` +
       `${params.commentBody}\n` +
-      (APP_BASE_URL ? `${APP_BASE_URL}/request` : ''),
+      (APP_BASE_URL ? `${APP_BASE_URL}/request/${params.requestId ?? ''}` : ''),
   });
 }
 

@@ -51,6 +51,7 @@ export async function POST(request: Request) {
   });
 
   revalidatePath('/request');
+  revalidatePath(`/request/${data.id}`);
   revalidatePath('/admin');
   revalidatePath('/admin/requests');
 

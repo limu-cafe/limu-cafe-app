@@ -1,0 +1,240 @@
+'use client';
+
+import Link from 'next/link';
+import { useState } from 'react';
+import { format } from 'date-fns';
+import { ja } from 'date-fns/locale';
+import { Heart, MessageCircle, Send } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import toast from 'react-hot-toast';
+import type { ItemRequestComment } from '@/types';
+
+type RequestUser = {
+  id: string;
+  name: string;
+  avatar_url?: string | null;
+};
+
+type RequestVote = {
+  user_id: string;
+};
+
+type RequestRow = {
+  id: string;
+  user_id: string;
+  item_name: string;
+  reason?: string | null;
+  desired_price?: number | null;
+  status: 'pending' | 'approved' | 'rejected';
+  admin_note?: string | null;
+  created_at: string;
+  updated_at: string;
+  user?: RequestUser;
+  votes: RequestVote[];
+  comments: (ItemRequestComment & { user?: RequestUser })[];
+};
+
+const statusConfig = {
+  pending: { label: '検討中', className: 'bg-amber-100 text-amber-700' },
+  approved: { label: '採用', className: 'bg-emerald-100 text-emerald-700' },
+  rejected: { label: '却下', className: 'bg-rose-100 text-rose-700' },
+};
+
+export default function RequestDetailClient({
+  requestItem,
+  currentUserId,
+}: {
+  requestItem: RequestRow;
+  currentUserId: string;
+}) {
+  const router = useRouter();
+  const [loadingVote, setLoadingVote] = useState(false);
+  const [loadingComment, setLoadingComment] = useState(false);
+  const [commentDraft, setCommentDraft] = useState('');
+
+  const hasVoted = requestItem.votes.some((vote) => vote.user_id === currentUserId);
+  const statusMeta = statusConfig[requestItem.status];
+
+  const handleVote = async () => {
+    setLoadingVote(true);
+    try {
+      const res = await fetch('/api/request-votes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ request_id: requestItem.id }),
+      });
+      if (!res.ok) {
+        throw new Error((await res.json()).error ?? '投票に失敗しました');
+      }
+      router.refresh();
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setLoadingVote(false);
+    }
+  };
+
+  const handleComment = async () => {
+    const body = commentDraft.trim();
+    if (!body) {
+      toast.error('コメントを入力してください');
+      return;
+    }
+
+    setLoadingComment(true);
+    try {
+      const res = await fetch('/api/request-comments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ request_id: requestItem.id, body }),
+      });
+      if (!res.ok) {
+        throw new Error((await res.json()).error ?? 'コメントの投稿に失敗しました');
+      }
+      setCommentDraft('');
+      router.refresh();
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setLoadingComment(false);
+    }
+  };
+
+  return (
+    <div className="space-y-5">
+      <Link
+        href="/request"
+        className="inline-flex items-center rounded-full bg-white px-3 py-2 text-sm text-espresso-500 ring-1 ring-cream-200 transition-colors hover:bg-cream-50"
+      >
+        要望一覧に戻る
+      </Link>
+
+      <section className="rounded-[28px] border border-cream-200 bg-white px-5 py-5 shadow-[0_18px_48px_-40px_rgba(44,26,14,0.28)]">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${statusMeta.className}`}>
+                {statusMeta.label}
+              </span>
+              {requestItem.user && (
+                <span className="text-xs text-espresso-400">{requestItem.user.name}</span>
+              )}
+              <span className="text-xs text-espresso-300">
+                {format(new Date(requestItem.created_at), 'M月d日 HH:mm', { locale: ja })}
+              </span>
+            </div>
+            <h1 className="font-display text-3xl font-bold text-espresso">
+              {requestItem.item_name}
+            </h1>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-espresso-500">
+              <p>
+                希望価格:{' '}
+                {requestItem.desired_price
+                  ? `¥${requestItem.desired_price.toLocaleString()}`
+                  : '指定なし'}
+              </p>
+              <p>賛成 {requestItem.votes.length}</p>
+              <p>コメント {requestItem.comments.length}件</p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleVote}
+            disabled={loadingVote}
+            className={`inline-flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-medium transition-colors ${
+              hasVoted
+                ? 'bg-rose-500 text-white hover:bg-rose-600'
+                : 'bg-cream-50 text-espresso ring-1 ring-cream-200 hover:bg-cream-100'
+            }`}
+          >
+            <Heart size={16} className={hasVoted ? 'fill-current' : ''} />
+            {hasVoted ? '賛成済み' : '賛成する'}
+          </button>
+        </div>
+
+        {requestItem.reason ? (
+          <div className="mt-5 rounded-[24px] border border-cream-100 bg-cream-50/70 px-4 py-4">
+            <p className="mb-2 text-xs font-medium tracking-[0.12em] text-espresso-400 uppercase">
+              理由・補足
+            </p>
+            <p className="whitespace-pre-wrap text-sm leading-7 text-espresso-600">
+              {requestItem.reason}
+            </p>
+          </div>
+        ) : null}
+
+        {requestItem.admin_note ? (
+          <div className="mt-4 rounded-[24px] border border-cream-100 bg-cream-50/70 px-4 py-4">
+            <p className="mb-2 text-xs font-medium tracking-[0.12em] text-espresso-400 uppercase">
+              管理者メモ
+            </p>
+            <p className="text-sm leading-7 text-espresso-600">{requestItem.admin_note}</p>
+          </div>
+        ) : null}
+      </section>
+
+      <section className="rounded-[28px] border border-cream-200 bg-white px-5 py-5 shadow-[0_18px_48px_-40px_rgba(44,26,14,0.28)]">
+        <div className="mb-4 flex items-center gap-2">
+          <MessageCircle size={16} className="text-espresso-400" />
+          <h2 className="text-base font-semibold text-espresso">コメント</h2>
+        </div>
+
+        <div className="space-y-3">
+          {requestItem.comments.length === 0 ? (
+            <div className="rounded-2xl bg-cream-50 px-4 py-4 text-sm text-espresso-400">
+              まだコメントはありません。
+            </div>
+          ) : (
+            requestItem.comments.map((comment) => {
+              const isOwn = comment.user_id === currentUserId;
+
+              return (
+                <div
+                  key={comment.id}
+                  className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}
+                >
+                  <div
+                    className={`max-w-[86%] rounded-[20px] px-3.5 py-3 text-sm shadow-[0_10px_30px_-28px_rgba(44,26,14,0.25)] ${
+                      isOwn ? 'bg-espresso text-cream-50' : 'bg-cream-50 text-espresso'
+                    }`}
+                  >
+                    <div className="mb-1 flex flex-wrap items-center gap-1.5 text-[11px] opacity-75">
+                      <span>{comment.user?.name ?? '不明なユーザー'}</span>
+                      <span>
+                        {format(new Date(comment.created_at), 'M/d HH:mm', { locale: ja })}
+                      </span>
+                      {comment.source === 'slack' ? <span>Slack</span> : null}
+                    </div>
+                    <p className="whitespace-pre-wrap leading-6">{comment.body}</p>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        <div className="mt-4 rounded-[24px] border border-cream-200 bg-cream-50 p-3">
+          <textarea
+            rows={3}
+            value={commentDraft}
+            onChange={(event) => setCommentDraft(event.target.value)}
+            placeholder="コメントを入力してください"
+            className="w-full resize-none border-0 bg-transparent px-2 py-2 text-sm leading-6 text-espresso placeholder:text-espresso-300 focus:outline-none"
+          />
+          <div className="mt-2 flex justify-end">
+            <button
+              type="button"
+              onClick={handleComment}
+              disabled={loadingComment}
+              className="inline-flex items-center gap-2 rounded-2xl bg-espresso px-4 py-2.5 text-sm font-medium text-cream-50 hover:bg-espresso-600 disabled:opacity-60"
+            >
+              <Send size={15} />
+              コメントする
+            </button>
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}

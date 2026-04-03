@@ -122,6 +122,7 @@ export async function POST(request: Request) {
       }
 
       revalidatePath('/request');
+      revalidatePath(`/request/${requestId}`);
       revalidatePath('/admin/requests');
       return NextResponse.json({ ok: true });
     }
@@ -181,6 +182,7 @@ export async function POST(request: Request) {
     });
 
     revalidatePath('/request');
+    revalidatePath(`/request/${requestId}`);
     revalidatePath('/admin/requests');
 
     return NextResponse.json({ response_action: 'clear' });

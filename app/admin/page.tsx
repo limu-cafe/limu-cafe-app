@@ -2,16 +2,12 @@ import Link from 'next/link';
 import { format, endOfMonth, startOfMonth } from 'date-fns';
 import { ja } from 'date-fns/locale';
 import {
-  AlertTriangle,
   ArrowRight,
   Banknote,
   CheckCircle2,
-  Clock3,
   PackagePlus,
   Receipt,
-  ShoppingBag,
   Sparkles,
-  UserCheck,
   Wallet,
 } from 'lucide-react';
 import { createAdminClient } from '@/lib/supabase/server';
@@ -73,7 +69,6 @@ export default async function AdminDashboard() {
     { count: pendingRequests },
     { count: pendingLegacyTransfers },
     { data: lowStockItems },
-    { data: recentOrders },
     { data: monthlyOrders },
     { data: cashboxEntries },
     { data: pendingAdvanceRuns },
@@ -103,13 +98,7 @@ export default async function AdminDashboard() {
       .eq('is_available', true)
       .filter('stock', 'lte', 'stock_alert_threshold')
       .order('stock', { ascending: true })
-      .limit(6),
-    supabase
-      .from('orders')
-      .select('id, total_amount, payment_method, created_at, user:users!orders_user_id_fkey(name), order_items(item_name, quantity)')
-      .eq('payment_status', 'completed')
-      .order('created_at', { ascending: false })
-      .limit(5),
+      .limit(4),
     supabase
       .from('orders')
       .select('total_amount')
@@ -124,7 +113,7 @@ export default async function AdminDashboard() {
       .select('id, total_amount, vendor, created_at, purchase_run_items(item_name, quantity)')
       .eq('reimbursement_status', 'pending_reimbursement')
       .order('created_at', { ascending: true })
-      .limit(5),
+      .limit(3),
     supabase
       .from('purchase_runs')
       .select('total_amount')
@@ -182,13 +171,6 @@ export default async function AdminDashboard() {
       (sum, run) => sum + run.total_amount,
       0
     );
-
-  const paymentMethodLabel: Record<string, string> = {
-    balance: '残高',
-    deferred: '後払い',
-    cash: '現金',
-    stripe: 'クレカ',
-  };
 
   return (
     <div className="space-y-6">
@@ -377,65 +359,42 @@ export default async function AdminDashboard() {
 
       <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
         <section className="rounded-2xl border border-gray-800 bg-gray-900 p-5">
-          <div className="mb-4 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <ShoppingBag size={18} className="text-violet-300" />
-              <h2 className="text-lg font-semibold text-white">最近の注文</h2>
-            </div>
-            <Link href="/admin/orders" className="text-sm text-gray-400 hover:text-white">
-              注文一覧へ
-            </Link>
-          </div>
-          {!recentOrders || recentOrders.length === 0 ? (
-            <p className="text-sm text-gray-500">最近の注文はありません。</p>
-          ) : (
-            <div className="space-y-3">
-              {recentOrders.map((order: any) => (
-                <div
-                  key={order.id}
-                  className="flex flex-col gap-2 rounded-xl border border-gray-800 bg-gray-950/70 p-4 sm:flex-row sm:items-center sm:justify-between"
-                >
-                  <div>
-                    <p className="text-sm font-medium text-white">{order.user?.name ?? '不明なユーザー'}</p>
-                    <p className="mt-1 text-sm text-gray-400">
-                      {(order.order_items ?? []).map((item: any) => item.item_name).join('、')}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-display text-lg font-bold text-white">
-                      ¥{order.total_amount.toLocaleString()}
-                    </p>
-                    <p className="text-xs text-gray-500">
-                      {paymentMethodLabel[order.payment_method] ?? order.payment_method}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
-
-        <section className="rounded-2xl border border-gray-800 bg-gray-900 p-5">
           <div className="mb-4 flex items-center gap-2">
             <Sparkles size={18} className="text-emerald-300" />
-            <h2 className="text-lg font-semibold text-white">この画面で分かること</h2>
+            <h2 className="text-lg font-semibold text-white">履歴を見る</h2>
           </div>
-          <div className="space-y-3 text-sm text-gray-300">
-            <InfoLine
-              icon={<Clock3 size={16} className="text-amber-300" />}
-              title="承認待ち"
-              description="未処理の件数だけを先に出して、押したらすぐ該当画面へ進めます。"
-            />
-            <InfoLine
-              icon={<AlertTriangle size={16} className="text-amber-300" />}
-              title="補充の優先度"
-              description="売り切れと要補充を自動で拾うので、買い出し対象を探し回らなくて済みます。"
-            />
-            <InfoLine
-              icon={<UserCheck size={16} className="text-sky-300" />}
-              title="精算の抜け漏れ"
-              description="未精算の立替額を常に見せるので、返金待ちを抱えたままになりにくいです。"
-            />
+          <div className="grid gap-3 sm:grid-cols-2">
+            {[
+              {
+                href: '/admin/orders',
+                title: '注文一覧',
+                description: '過去の注文や現金受け取り履歴を見る',
+              },
+              {
+                href: '/admin/charge',
+                title: 'チャージ記録',
+                description: '反映済みのチャージ履歴を見る',
+              },
+              {
+                href: '/admin/cashbox',
+                title: '金庫管理',
+                description: '現金出入りや精算の履歴を見る',
+              },
+              {
+                href: '/admin/audit',
+                title: '監査ログ',
+                description: '管理操作の履歴を見る',
+              },
+            ].map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className="rounded-xl border border-gray-800 bg-gray-950/70 p-4 transition-colors hover:bg-gray-900"
+              >
+                <p className="font-medium text-white">{item.title}</p>
+                <p className="mt-2 text-sm leading-6 text-gray-400">{item.description}</p>
+              </Link>
+            ))}
           </div>
         </section>
       </div>
@@ -462,26 +421,6 @@ function SummaryCard({
       <p className="text-xs text-gray-500">{label}</p>
       <p className="mt-1 font-display text-xl font-bold text-white">{value}</p>
       <p className="mt-1 text-xs text-gray-500">{hint}</p>
-    </div>
-  );
-}
-
-function InfoLine({
-  icon,
-  title,
-  description,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  description: string;
-}) {
-  return (
-    <div className="rounded-xl border border-gray-800 bg-gray-950/70 p-4">
-      <div className="mb-2 flex items-center gap-2">
-        {icon}
-        <p className="font-medium text-white">{title}</p>
-      </div>
-      <p className="leading-6 text-gray-400">{description}</p>
     </div>
   );
 }

@@ -59,10 +59,12 @@ export async function POST(request: Request) {
       itemName: requestRow?.item_name ?? '要望',
       commenterName: commenter?.name ?? '誰か',
       commentBody: body.trim(),
+      requestId: request_id,
     });
   }
 
   revalidatePath('/request');
+  revalidatePath(`/request/${request_id}`);
   revalidatePath('/admin/requests');
   return NextResponse.json(data);
 }

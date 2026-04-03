@@ -24,12 +24,14 @@ export default async function HomePage() {
     await Promise.all([
     supabase
       .from('items')
-      .select('*, category:categories(*)')
+      .select(
+        'id, name, description, price, category_id, image_url, stock, stock_alert_threshold, is_available, popular_override, new_arrival_override, created_at, updated_at, category:categories(id, name, icon, sort_order, created_at)'
+      )
       .eq('is_available', true)
       .order('created_at', { ascending: false }),
     supabase
       .from('categories')
-      .select('*')
+      .select('id, name, icon, sort_order, created_at')
       .order('sort_order'),
     supabase
       .from('favorite_items')
@@ -50,7 +52,10 @@ export default async function HomePage() {
       .limit(250),
   ]);
 
-  const itemList = (items ?? []) as Item[];
+  const itemList = ((items ?? []) as any[]).map((item) => ({
+    ...item,
+    category: Array.isArray(item.category) ? item.category[0] : item.category,
+  })) as Item[];
   const completedOrders = (recentCompletedOrders ?? []) as Array<{
     order_items?: Array<{ item_id: string }>;
   }>;

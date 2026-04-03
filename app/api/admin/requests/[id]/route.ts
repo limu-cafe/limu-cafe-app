@@ -52,6 +52,8 @@ export async function PUT(
 
   revalidatePath('/admin/requests');
   revalidatePath('/admin/audit');
+  revalidatePath('/request');
+  revalidatePath(`/request/${req.id}`);
 
   // 採用された場合はSlack DMで通知
   if (req.user?.slack_user_id) {
@@ -59,11 +61,13 @@ export async function PUT(
       await notifyRequestApproved({
         slackUserId: req.user.slack_user_id,
         itemName: req.item_name,
+        requestId: req.id,
       });
     } else if (status === 'rejected') {
       await notifyRequestRejected({
         slackUserId: req.user.slack_user_id,
         itemName: req.item_name,
+        requestId: req.id,
         adminNote: admin_note || null,
       });
     }

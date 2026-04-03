@@ -7,14 +7,19 @@ import { useCartStore } from '@/lib/store/cart';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
-import type { User as UserType } from '@/types';
+
+type NavbarUser = {
+  id: string;
+  name: string;
+  balance: number;
+};
 
 export default function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
   const cartCount = useCartStore((s) => s.count());
   const hasHydrated = useCartStore((s) => s.hasHydrated);
-  const [user, setUser] = useState<UserType | null>(null);
+  const [user, setUser] = useState<NavbarUser | null>(null);
 
   useEffect(() => {
     const supabase = createClient();
@@ -22,7 +27,7 @@ export default function Navbar() {
       if (data.user) {
         const { data: profile } = await supabase
           .from('users')
-          .select('*')
+          .select('id, name, balance')
           .eq('id', data.user.id)
           .single();
         setUser(profile);

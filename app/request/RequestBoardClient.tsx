@@ -1,12 +1,13 @@
 'use client';
 
+import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { format } from 'date-fns';
 import { ja } from 'date-fns/locale';
-import { Heart, MessageCircle, Send } from 'lucide-react';
+import { Heart, MessageCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
-import type { ItemRequest, ItemRequestComment } from '@/types';
+import type { ItemRequestComment } from '@/types';
 
 type RequestUser = {
   id: string;
@@ -18,7 +19,16 @@ type RequestVote = {
   user_id: string;
 };
 
-type RequestRow = ItemRequest & {
+type RequestRow = {
+  id: string;
+  user_id: string;
+  item_name: string;
+  reason?: string | null;
+  desired_price?: number | null;
+  status: 'pending' | 'approved' | 'rejected';
+  admin_note?: string | null;
+  created_at: string;
+  updated_at: string;
   user?: RequestUser;
   votes: RequestVote[];
   comments: (ItemRequestComment & { user?: RequestUser })[];
@@ -39,8 +49,6 @@ export default function RequestBoardClient({
 }) {
   const router = useRouter();
   const [loadingVoteId, setLoadingVoteId] = useState<string | null>(null);
-  const [commentLoadingId, setCommentLoadingId] = useState<string | null>(null);
-  const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>(
     'all'
   );
@@ -57,6 +65,10 @@ export default function RequestBoardClient({
         return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
       });
   }, [requests, statusFilter]);
+
+  const pendingRequests = visibleRequests.filter((request) => request.status === 'pending');
+  const approvedRequests = visibleRequests.filter((request) => request.status === 'approved');
+  const rejectedRequests = visibleRequests.filter((request) => request.status === 'rejected');
 
   const handleVote = async (requestId: string) => {
     setLoadingVoteId(requestId);
@@ -77,38 +89,50 @@ export default function RequestBoardClient({
     }
   };
 
-  const handleComment = async (requestId: string) => {
-    const body = commentDrafts[requestId]?.trim();
-    if (!body) {
-      toast.error('コメントを入力してください');
-      return;
-    }
-
-    setCommentLoadingId(requestId);
-    try {
-      const res = await fetch('/api/request-comments', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ request_id: requestId, body }),
-      });
-      if (!res.ok) {
-        throw new Error((await res.json()).error ?? 'コメントの投稿に失敗しました');
-      }
-      setCommentDrafts((current) => ({ ...current, [requestId]: '' }));
-      router.refresh();
-    } catch (error: any) {
-      toast.error(error.message);
-    } finally {
-      setCommentLoadingId(null);
-    }
-  };
-
   const statusCounts = {
     all: requests.length,
     pending: requests.filter((request) => request.status === 'pending').length,
     approved: requests.filter((request) => request.status === 'approved').length,
     rejected: requests.filter((request) => request.status === 'rejected').length,
   };
+
+  const renderCompactList = (
+    title: string,
+    rows: RequestRow[],
+    emptyLabel: string
+  ) => (
+    <section className="rounded-[24px] border border-cream-200 bg-white px-4 py-4 shadow-[0_18px_48px_-40px_rgba(44,26,14,0.28)]">
+      <div className="mb-3 flex items-center justify-between">
+        <h2 className="text-sm font-semibold text-espresso">{title}</h2>
+        <span className="text-xs text-espresso-400">{rows.length}件</span>
+      </div>
+      {rows.length === 0 ? (
+        <p className="text-sm text-espresso-400">{emptyLabel}</p>
+      ) : (
+        <div className="space-y-2.5">
+          {rows.map((request) => (
+            <Link
+              key={request.id}
+              href={`/request/${request.id}`}
+              className="flex items-center justify-between rounded-2xl border border-cream-100 bg-cream-50/70 px-3 py-3 transition-colors hover:bg-cream-100"
+            >
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium text-espresso">{request.item_name}</p>
+                <p className="mt-1 text-xs text-espresso-400">
+                  {request.user?.name ?? '不明'} ・ 賛成 {request.votes.length}
+                </p>
+              </div>
+              <span
+                className={`ml-3 shrink-0 rounded-full px-2.5 py-1 text-[11px] font-medium ${statusConfig[request.status].className}`}
+              >
+                {statusConfig[request.status].label}
+              </span>
+            </Link>
+          ))}
+        </div>
+      )}
+    </section>
+  );
 
   return (
     <div className="space-y-5">
@@ -138,33 +162,26 @@ export default function RequestBoardClient({
         </div>
       </div>
 
-      {visibleRequests.length === 0 ? (
-        <div className="rounded-[28px] border border-cream-200 bg-white px-5 py-10 text-center text-sm text-espresso-400 shadow-[0_18px_48px_-40px_rgba(44,26,14,0.28)]">
-          この条件に当てはまる要望はまだありません。
-        </div>
-      ) : (
-      <div className="space-y-4">
-        {visibleRequests.map((request) => {
-          const statusMeta = statusConfig[request.status];
-          const hasVoted = request.votes.some((vote) => vote.user_id === currentUserId);
+      {pendingRequests.length > 0 && (
+        <div className="space-y-4">
+          {pendingRequests.map((request) => {
+            const hasVoted = request.votes.some((vote) => vote.user_id === currentUserId);
+            const commentPreview = request.comments[0];
 
-          return (
-            <section
-              key={request.id}
-              id={`request-${request.id}`}
-              className="overflow-hidden rounded-[28px] border border-cream-200 bg-white shadow-[0_18px_48px_-40px_rgba(44,26,14,0.28)]"
-            >
-              <div className="space-y-4 border-b border-cream-100 px-5 py-5">
+            return (
+              <section
+                key={request.id}
+                id={`request-${request.id}`}
+                className="rounded-[28px] border border-cream-200 bg-white px-5 py-5 shadow-[0_18px_48px_-40px_rgba(44,26,14,0.28)]"
+              >
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${statusMeta.className}`}>
-                        {statusMeta.label}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${statusConfig.pending.className}`}>
+                        検討中
                       </span>
                       {request.user && (
-                        <span className="text-xs text-espresso-400">
-                          {request.user.name}
-                        </span>
+                        <span className="text-xs text-espresso-400">{request.user.name}</span>
                       )}
                       <span className="text-xs text-espresso-300">
                         {format(new Date(request.created_at), 'M月d日 HH:mm', { locale: ja })}
@@ -173,13 +190,18 @@ export default function RequestBoardClient({
                     <h2 className="font-display text-2xl font-bold text-espresso">
                       {request.item_name}
                     </h2>
-                    {request.desired_price ? (
-                      <p className="text-sm text-espresso-500">
-                        希望価格: ¥{request.desired_price.toLocaleString()}
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-espresso-500">
+                      <p>
+                        希望価格:{' '}
+                        {request.desired_price
+                          ? `¥${request.desired_price.toLocaleString()}`
+                          : '指定なし'}
                       </p>
-                    ) : null}
+                      <p>賛成 {request.votes.length}</p>
+                      <p>コメント {request.comments.length}件</p>
+                    </div>
                     {request.reason ? (
-                      <p className="max-w-3xl whitespace-pre-wrap text-sm leading-7 text-espresso-600">
+                      <p className="line-clamp-2 max-w-3xl whitespace-pre-wrap text-sm leading-7 text-espresso-600">
                         {request.reason}
                       </p>
                     ) : null}
@@ -189,103 +211,72 @@ export default function RequestBoardClient({
                     type="button"
                     onClick={() => handleVote(request.id)}
                     disabled={loadingVoteId === request.id}
-                    className={`inline-flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-medium transition-colors ${
+                    className={`inline-flex items-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-medium transition-colors ${
                       hasVoted
                         ? 'bg-rose-500 text-white hover:bg-rose-600'
                         : 'bg-cream-50 text-espresso ring-1 ring-cream-200 hover:bg-cream-100'
                     }`}
                   >
                     <Heart size={16} className={hasVoted ? 'fill-current' : ''} />
-                    賛成 {request.votes.length}
+                    賛成する
                   </button>
                 </div>
 
-                {request.admin_note ? (
-                  <div className="rounded-2xl bg-cream-50 px-4 py-3 text-sm text-espresso-600">
-                    <p className="mb-1 text-xs font-medium tracking-[0.12em] text-espresso-400 uppercase">
-                      管理者メモ
-                    </p>
-                    {request.admin_note}
-                  </div>
-                ) : null}
-              </div>
-
-              <div className="space-y-4 px-5 py-5">
-                <div className="flex items-center gap-2">
-                  <MessageCircle size={16} className="text-espresso-400" />
-                  <p className="text-sm font-medium text-espresso">
-                    コメント {request.comments.length}件
-                  </p>
-                </div>
-
-                <div className="max-h-[16rem] space-y-3 overflow-y-auto rounded-[24px] border border-cream-100 bg-cream-50/70 p-3">
-                  {request.comments.length === 0 ? (
-                    <div className="rounded-2xl bg-white px-4 py-4 text-sm text-espresso-400">
-                      まだコメントはありません。コメントや補足を気軽に書いてください。
+                <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_180px]">
+                  <div className="rounded-[22px] border border-cream-100 bg-cream-50/70 px-4 py-3">
+                    <div className="mb-2 flex items-center gap-2 text-sm font-medium text-espresso">
+                      <MessageCircle size={15} className="text-espresso-400" />
+                      コメント
                     </div>
-                  ) : (
-                    request.comments.map((comment) => {
-                      const isOwn = comment.user_id === currentUserId;
-
-                      return (
-                        <div
-                          key={comment.id}
-                          className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}
-                        >
-                          <div
-                            className={`max-w-[80%] rounded-[20px] px-3.5 py-3 text-sm shadow-[0_10px_30px_-28px_rgba(44,26,14,0.25)] ${
-                              isOwn
-                                ? 'bg-espresso text-cream-50'
-                                : 'bg-white text-espresso'
-                            }`}
-                          >
-                            <div className="mb-1 flex items-center gap-2 text-[11px] opacity-75">
-                              <span>{comment.user?.name ?? '不明なユーザー'}</span>
-                              <span>
-                                {format(new Date(comment.created_at), 'M/d HH:mm', {
-                                  locale: ja,
-                                })}
-                              </span>
-                              {comment.source === 'slack' ? <span>Slack</span> : null}
-                            </div>
-                            <p className="whitespace-pre-wrap leading-6">{comment.body}</p>
-                          </div>
+                    {commentPreview ? (
+                      <div className="rounded-2xl bg-white px-3 py-3 text-sm text-espresso">
+                        <div className="mb-1 flex flex-wrap items-center gap-1.5 text-[11px] text-espresso-400">
+                          <span>{commentPreview.user?.name ?? '不明なユーザー'}</span>
+                          <span>
+                            {format(new Date(commentPreview.created_at), 'M/d HH:mm', {
+                              locale: ja,
+                            })}
+                          </span>
+                          {commentPreview.source === 'slack' ? <span>Slack</span> : null}
                         </div>
-                      );
-                    })
-                  )}
-                </div>
+                        <p className="whitespace-pre-wrap leading-6">{commentPreview.body}</p>
+                      </div>
+                    ) : (
+                      <div className="rounded-2xl bg-white px-3 py-3 text-sm text-espresso-400">
+                        まだコメントはありません。
+                      </div>
+                    )}
+                  </div>
 
-                <div className="rounded-[24px] border border-cream-200 bg-cream-50 p-3">
-                  <textarea
-                    rows={2}
-                    value={commentDrafts[request.id] ?? ''}
-                    onChange={(event) =>
-                      setCommentDrafts((current) => ({
-                        ...current,
-                        [request.id]: event.target.value,
-                      }))
-                    }
-                    placeholder="この要望へのコメントや補足を入力してください"
-                    className="w-full resize-none border-0 bg-transparent px-2 py-2 text-sm leading-6 text-espresso placeholder:text-espresso-300 focus:outline-none"
-                  />
-                  <div className="mt-2 flex justify-end">
-                    <button
-                      type="button"
-                      onClick={() => handleComment(request.id)}
-                      disabled={commentLoadingId === request.id}
-                      className="inline-flex items-center gap-2 rounded-2xl bg-espresso px-4 py-2.5 text-sm font-medium text-cream-50 hover:bg-espresso-600 disabled:opacity-60"
+                  <div className="flex flex-col justify-between gap-3">
+                    <div className="rounded-[22px] border border-cream-100 bg-cream-50/70 px-4 py-3 text-sm text-espresso-500">
+                      詳しい理由や過去のコメントは詳細ページで確認できます。
+                    </div>
+                    <Link
+                      href={`/request/${request.id}`}
+                      className="inline-flex items-center justify-center rounded-2xl bg-espresso px-4 py-3 text-sm font-medium text-cream-50 transition-colors hover:bg-espresso-600"
                     >
-                      <Send size={15} />
-                      コメントする
-                    </button>
+                      詳細を見る
+                    </Link>
                   </div>
                 </div>
-              </div>
-            </section>
-          );
-        })}
-      </div>
+              </section>
+            );
+          })}
+        </div>
+      )}
+
+      {statusFilter !== 'pending' && (
+        <div className="grid gap-4 lg:grid-cols-2">
+          {renderCompactList('採用された要望', approvedRequests, '採用済みの要望はまだありません。')}
+          {renderCompactList('見送った要望', rejectedRequests, '却下済みの要望はまだありません。')}
+        </div>
+      )}
+
+      {visibleRequests.length === 0 && (
+        <div className="rounded-[28px] border border-cream-200 bg-white px-5 py-10 text-center text-sm text-espresso-400 shadow-[0_18px_48px_-40px_rgba(44,26,14,0.28)]">
+          この条件に当てはまる要望はまだありません。
+        </div>
       )}
     </div>
   );

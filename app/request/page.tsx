@@ -11,6 +11,21 @@ type RequestUser = {
   avatar_url?: string | null;
 };
 
+type RequestListRow = {
+  id: string;
+  user_id: string;
+  item_name: string;
+  reason?: string | null;
+  desired_price?: number | null;
+  status: 'pending' | 'approved' | 'rejected';
+  admin_note?: string | null;
+  created_at: string;
+  updated_at: string;
+  user?: RequestUser;
+  votes: Array<{ user_id: string }>;
+  comments: Array<ItemRequestComment & { user?: RequestUser }>;
+};
+
 export default async function RequestPage() {
   const supabase = await createClient();
   const {
@@ -19,42 +34,23 @@ export default async function RequestPage() {
 
   if (!user) redirect('/login');
 
-  const [{ data: requests }, { data: votes }, { data: comments }] = await Promise.all([
-    supabase
-      .from('item_requests')
-      .select('*, user:users!item_requests_user_id_fkey(id, name, avatar_url)')
-      .order('created_at', { ascending: false }),
-    supabase
-      .from('item_request_votes')
-      .select('request_id, user_id'),
-    supabase
-      .from('item_request_comments')
-      .select('*, user:users!item_request_comments_user_id_fkey(id, name, avatar_url)')
-      .order('created_at', { ascending: true }),
-  ]);
+  const { data: requests } = await supabase
+    .from('item_requests')
+    .select(
+      'id, user_id, item_name, reason, desired_price, status, admin_note, created_at, updated_at, user:users!item_requests_user_id_fkey(id, name, avatar_url), votes:item_request_votes(user_id), comments:item_request_comments(id, request_id, user_id, body, source, created_at, user:users!item_request_comments_user_id_fkey(id, name, avatar_url))'
+    )
+    .order('created_at', { ascending: false })
+    .order('created_at', { ascending: false, foreignTable: 'comments' })
+    .limit(1, { foreignTable: 'comments' });
 
-  const votesByRequest = new Map<string, Array<{ user_id: string }>>();
-  for (const vote of votes ?? []) {
-    const existing = votesByRequest.get(vote.request_id) ?? [];
-    existing.push({ user_id: vote.user_id });
-    votesByRequest.set(vote.request_id, existing);
-  }
-
-  const commentsByRequest = new Map<
-    string,
-    Array<ItemRequestComment & { user?: RequestUser }>
-  >();
-  for (const comment of (comments ?? []) as Array<ItemRequestComment & { user?: RequestUser }>) {
-    const existing = commentsByRequest.get(comment.request_id) ?? [];
-    existing.push(comment);
-    commentsByRequest.set(comment.request_id, existing);
-  }
-
-  const boardRequests = (requests ?? []).map((request: any) => ({
+  const boardRequests = ((requests ?? []) as any[]).map((request) => ({
     ...request,
-    votes: votesByRequest.get(request.id) ?? [],
-    comments: commentsByRequest.get(request.id) ?? [],
-  }));
+    user: Array.isArray(request.user) ? request.user[0] : request.user,
+    comments: (request.comments ?? []).map((comment: any) => ({
+      ...comment,
+      user: Array.isArray(comment.user) ? comment.user[0] : comment.user,
+    })),
+  })) as RequestListRow[];
 
   return (
     <UserLayout>
@@ -94,7 +90,7 @@ export default async function RequestPage() {
             <div className="rounded-[28px] border border-cream-200 bg-white px-5 py-5 shadow-[0_18px_48px_-40px_rgba(44,26,14,0.28)]">
               <h2 className="font-medium text-espresso">みんなの要望</h2>
               <p className="mt-1 text-sm text-espresso-400">
-                検討中の要望が上に表示されます。賛成数が多いものほど見つけやすくしています。
+                一覧では要点だけを表示しています。詳しい内容やコメントは詳細ページで確認できます。
               </p>
             </div>
             <RequestBoardClient requests={boardRequests} currentUserId={user.id} />
