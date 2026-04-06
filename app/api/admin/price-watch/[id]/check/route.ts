@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/server';
 import { notifyPriceDrop } from '@/lib/slack';
 
 // Amazonの価格をKeepa APIで取得する関数
@@ -37,7 +37,7 @@ export async function POST(
   _request: Request,
   { params }: { params: { id: string } }
 ) {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
 
   const { data: watch } = await supabase
     .from('price_watches')

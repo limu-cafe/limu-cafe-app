@@ -1,55 +1,69 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { revalidatePath } from 'next/cache';
+import { createAdminClient, createClient } from '@/lib/supabase/server';
+import { insertCashboxEntry } from '@/lib/cashbox';
+import { logAdminAction } from '@/lib/admin-audit';
 
 export async function POST(request: Request) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
+  const sessionClient = await createClient();
+  const { data: { user } } = await sessionClient.auth.getUser();
+  const supabase = createAdminClient();
   const { user_id, amount, method, period_start, period_end } = await request.json();
 
-  // 精算レコード作成
-  const { error: settlementError } = await supabase
-    .from('settlements')
-    .insert({
-      user_id,
-      amount,
-      method,
-      period_start,
-      period_end,
-      status: 'completed',
-      settled_by: user.id,
-      settled_at: new Date().toISOString(),
-    });
+  const { data: settlement, error: settlementError } = await supabase.from('settlements').insert({
+    user_id, amount, method, period_start, period_end,
+    status: 'completed',
+    settled_at: new Date().toISOString(),
+    settled_by: user?.id ?? null,
+  }).select('id').single();
 
-  if (settlementError) {
-    return NextResponse.json({ error: settlementError.message }, { status: 500 });
+  if (settlementError || !settlement) {
+    return NextResponse.json({ error: settlementError?.message ?? '精算に失敗しました' }, { status: 500 });
   }
 
-  // 残高払いの場合は残高から引く
   if (method === 'balance') {
     const { data: targetUser } = await supabase
       .from('users').select('balance').eq('id', user_id).single();
-    const newBalance = (targetUser?.balance ?? 0) - amount;
-    if (newBalance < 0) {
-      return NextResponse.json({ error: '残高が不足しています' }, { status: 400 });
-    }
-    await supabase.from('users').update({ balance: newBalance }).eq('id', user_id);
+    await supabase.from('users')
+      .update({ balance: (targetUser?.balance ?? 0) - amount })
+      .eq('id', user_id);
   }
 
-  // 後払い残高をリセット
-  await supabase
-    .from('users')
+  await supabase.from('users')
     .update({ deferred_balance: 0 })
     .eq('id', user_id);
 
-  // 対象期間の後払い注文を完了に更新
-  await supabase
-    .from('orders')
-    .update({ payment_status: 'completed' })
-    .eq('user_id', user_id)
-    .eq('payment_method', 'deferred')
-    .eq('payment_status', 'pending');
+  if (method === 'cash') {
+    await insertCashboxEntry(supabase, {
+      entry_type: 'cash_settlement',
+      direction: 'in',
+      amount,
+      note: '後払いの現金精算',
+      settlement_id: settlement.id,
+      created_by: user?.id ?? null,
+    });
+  }
+
+  await logAdminAction(supabase, {
+    actor_id: user?.id ?? null,
+    action_type: 'settlement_completed',
+    target_type: 'settlement',
+    target_id: settlement.id,
+    summary: `${amount.toLocaleString()}円の精算を完了しました`,
+    metadata: {
+      user_id,
+      method,
+      amount,
+      period_start,
+      period_end,
+    },
+  });
+
+  revalidatePath('/admin');
+  revalidatePath('/admin/settlement');
+  revalidatePath('/admin/users');
+  revalidatePath('/admin/cashbox');
+  revalidatePath('/admin/audit');
 
   return NextResponse.json({ ok: true });
 }

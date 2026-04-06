@@ -25,6 +25,16 @@ const jetbrains = JetBrains_Mono({
 export const metadata: Metadata = {
   title: 'LIMU喫茶',
   description: '研究室のオンライン購買',
+  manifest: '/manifest.webmanifest',
+  appleWebApp: {
+    capable: true,
+    title: 'LIMU喫茶',
+    statusBarStyle: 'default',
+  },
+};
+
+export const viewport = {
+  themeColor: '#2C1A0E',
 };
 
 export default function RootLayout({
@@ -37,7 +47,7 @@ export default function RootLayout({
       <body className="texture-bg min-h-screen">
         {children}
         <Toaster
-          position="top-right"
+          position="bottom-center"
           toastOptions={{
             style: {
               background: '#2C1A0E',

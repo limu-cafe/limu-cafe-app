@@ -1,8 +1,10 @@
-import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/server';
 import SettlementClient from './SettlementClient';
 
+export const dynamic = 'force-dynamic';
+
 export default async function AdminSettlementPage() {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
 
   // 後払い残高があるユーザー一覧
   const { data: users } = await supabase
@@ -14,7 +16,7 @@ export default async function AdminSettlementPage() {
   // 精算履歴
   const { data: history } = await supabase
     .from('settlements')
-    .select('*, user:users(name)')
+    .select('*, user:users!settlements_user_id_fkey(name)')
     .order('created_at', { ascending: false })
     .limit(30);
 

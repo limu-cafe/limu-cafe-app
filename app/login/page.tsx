@@ -1,24 +1,63 @@
 'use client';
 
 import { createClient } from '@/lib/supabase/client';
-import { useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import toast from 'react-hot-toast';
 
-export default function LoginPage() {
+function LoginContent() {
+  const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const [checkingSession, setCheckingSession] = useState(true);
+  const searchParams = useSearchParams();
+  const error = searchParams.get('error');
+  const next = searchParams.get('next');
+  const detectedWorkspaceId = searchParams.get('detected_workspace_id');
+
+  useEffect(() => {
+    const supabase = createClient();
+
+    supabase.auth.getUser().then(({ data }) => {
+      if (data.user) {
+        const nextPath = next && next.startsWith('/') ? next : '/';
+        router.replace(nextPath);
+        return;
+      }
+      setCheckingSession(false);
+    });
+  }, [next, router]);
+
+  const errorMessage =
+    error === 'workspace_not_allowed'
+      ? 'このSlackワークスペースからのログインは許可されていません。研究室のワークスペースでログインしてください。'
+      : error === 'auth_failed'
+      ? 'ログイン処理に失敗しました。もう一度お試しください。'
+      : error === 'oauth_failed'
+      ? 'Slackログインの開始に失敗しました。設定を確認してください。'
+      : error === 'no_code'
+      ? '認証コードを取得できませんでした。もう一度ログインしてください。'
+      : null;
+
+  if (checkingSession) {
+    return <div className="min-h-screen texture-bg" />;
+  }
 
   const handleSlackLogin = async () => {
     setLoading(true);
     const supabase = createClient();
+    const callbackUrl = new URL('/api/auth/callback', window.location.origin);
+    if (next?.startsWith('/')) {
+      callbackUrl.searchParams.set('next', next);
+    }
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'slack_oidc',
       options: {
-        redirectTo: `${window.location.origin}/api/auth/callback`,
+        redirectTo: callbackUrl.toString(),
         scopes: 'openid profile email',
       },
     });
     if (error) {
-      toast.error('ログインに失敗しました');
+      toast.error('ログインに失敗しました: ' + error.message);
       setLoading(false);
     }
   };
@@ -26,7 +65,6 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen texture-bg flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
-        {/* ロゴ */}
         <div className="text-center mb-10">
           <div className="text-6xl mb-4">☕</div>
           <h1 className="font-display font-bold text-4xl text-espresso">
@@ -34,15 +72,23 @@ export default function LoginPage() {
           </h1>
           <p className="text-espresso-400 mt-2">研究室のオンライン購買</p>
         </div>
-
         <div className="card space-y-6">
           <div className="text-center space-y-2">
             <h2 className="font-medium text-espresso">研究室のSlackでログイン</h2>
             <p className="text-sm text-espresso-400">
-              LIMUのSlackワークスペースに参加しているメンバーのみログインできます
+              LIMUのSlackワークスペースのメンバーはすぐに利用できます
             </p>
           </div>
-
+          {errorMessage && (
+            <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              <div>{errorMessage}</div>
+              {detectedWorkspaceId && (
+                <div className="mt-2 font-mono text-xs text-red-600">
+                  検出された workspace ID: {detectedWorkspaceId}
+                </div>
+              )}
+            </div>
+          )}
           <button
             onClick={handleSlackLogin}
             disabled={loading}
@@ -62,12 +108,21 @@ export default function LoginPage() {
               </>
             )}
           </button>
-
-          <p className="text-center text-xs text-espresso-400">
-            初回ログイン時は管理者の承認が必要です
-          </p>
+          <div className="border-t border-cream-200 pt-4 text-center text-sm">
+            <a href="/admin/login" className="text-espresso-500 hover:text-espresso-700 transition-colors">
+              管理者ログインはこちら
+            </a>
+          </div>
         </div>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen texture-bg" />}>
+      <LoginContent />
+    </Suspense>
   );
 }

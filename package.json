@@ -6,7 +6,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "legacy:extract": "node scripts/extract-legacy-from-emulator.mjs",
+    "legacy:extract:prod": "node scripts/extract-legacy-from-firestore.mjs",
+    "legacy:import": "node scripts/import-legacy-data.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.39.0",

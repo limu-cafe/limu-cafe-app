@@ -4,9 +4,14 @@ export type PaymentStatus = 'pending' | 'completed' | 'cancelled' | 'refunded';
 export type ChargeMethod = 'cash' | 'stripe';
 export type ChargeStatus = 'pending' | 'approved' | 'rejected' | 'cancelled';
 export type ItemRequestStatus = 'pending' | 'approved' | 'rejected';
+export type ItemRequestVoteType = 'up';
+export type ItemRequestCommentSource = 'app' | 'slack';
 export type SettlementStatus = 'pending' | 'completed';
 export type StockReason = 'restock' | 'purchase' | 'adjustment' | 'discard';
 export type Platform = 'amazon' | 'rakuten' | 'yahoo' | 'other';
+export type ItemShowcaseOverride = 'auto' | 'show' | 'hide';
+export type PurchasePaymentSource = 'cashbox' | 'personal_advance';
+export type PurchaseReimbursementStatus = 'not_needed' | 'pending_reimbursement' | 'reimbursed';
 
 export interface User {
   id: string;
@@ -43,6 +48,8 @@ export interface Item {
   stock: number;
   stock_alert_threshold: number;
   is_available: boolean;
+  popular_override: ItemShowcaseOverride;
+  new_arrival_override: ItemShowcaseOverride;
   created_at: string;
   updated_at: string;
 }
@@ -119,6 +126,24 @@ export interface ItemRequest {
   updated_at: string;
 }
 
+export interface ItemRequestVote {
+  id: string;
+  request_id: string;
+  user_id: string;
+  vote_type: ItemRequestVoteType;
+  created_at: string;
+}
+
+export interface ItemRequestComment {
+  id: string;
+  request_id: string;
+  user_id: string;
+  user?: Pick<User, 'id' | 'name' | 'avatar_url'>;
+  body: string;
+  source: ItemRequestCommentSource;
+  created_at: string;
+}
+
 export interface StockHistory {
   id: string;
   item_id: string;
@@ -142,6 +167,68 @@ export interface PriceWatch {
   is_active: boolean;
   notified_at?: string;
   created_by?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FavoriteItem {
+  id: string;
+  user_id: string;
+  item_id: string;
+  created_at: string;
+}
+
+export interface PurchaseRunItem {
+  id: string;
+  purchase_run_id: string;
+  item_id: string;
+  item_name: string;
+  quantity: number;
+  unit_price: number;
+  subtotal: number;
+  created_at: string;
+}
+
+export interface PurchaseRun {
+  id: string;
+  total_amount: number;
+  payment_source: PurchasePaymentSource;
+  reimbursement_status: PurchaseReimbursementStatus;
+  vendor?: string | null;
+  note?: string | null;
+  purchased_by?: string | null;
+  reimbursed_by?: string | null;
+  reimbursed_at?: string | null;
+  created_by?: string | null;
+  created_at: string;
+  items?: PurchaseRunItem[];
+}
+
+export interface LegacyUser {
+  id: string;
+  source: string;
+  legacy_user_key: string;
+  name: string;
+  email?: string;
+  legacy_balance: number;
+  favorite_item_names?: string[];
+  notes?: string;
+  matched_user_id?: string | null;
+  transferred_at?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LegacyTransferRequest {
+  id: string;
+  user_id: string;
+  legacy_name?: string | null;
+  note?: string | null;
+  status: 'pending' | 'completed' | 'rejected';
+  matched_legacy_user_id?: string | null;
+  reviewed_by?: string | null;
+  reviewed_at?: string | null;
+  rejection_reason?: string | null;
   created_at: string;
   updated_at: string;
 }

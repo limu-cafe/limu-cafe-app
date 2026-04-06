@@ -1,8 +1,10 @@
-import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/server';
 import UsersClient from './UsersClient';
 
+export const dynamic = 'force-dynamic';
+
 export default async function AdminUsersPage() {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
   const { data: users } = await supabase
     .from('users')
     .select('*')

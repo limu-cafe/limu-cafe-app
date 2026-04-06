@@ -13,7 +13,7 @@ import Link from 'next/link';
 type PaymentMethod = 'balance' | 'deferred' | 'cash';
 
 export default function CheckoutPage() {
-  const { items, total, clearCart } = useCartStore();
+  const { items, total, clearCart, hasHydrated } = useCartStore();
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [method, setMethod] = useState<PaymentMethod>('balance');
@@ -28,6 +28,16 @@ export default function CheckoutPage() {
       setUser(profile);
     });
   }, [router]);
+
+  if (!hasHydrated) {
+    return (
+      <UserLayout>
+        <div className="text-center py-24">
+          <p className="text-espresso-400">注文内容を読み込んでいます...</p>
+        </div>
+      </UserLayout>
+    );
+  }
 
   if (items.length === 0) {
     return (
@@ -95,9 +105,11 @@ export default function CheckoutPage() {
         throw new Error(err.error ?? '注文に失敗しました');
       }
 
+      const payload = await res.json();
+
       clearCart();
-      toast.success('注文が完了しました！');
-      router.push('/mypage');
+      toast.success('注文が完了しました');
+      router.push(`/order-complete?payment=${method}&order=${payload.order_id ?? ''}`);
     } catch (e: any) {
       toast.error(e.message);
     } finally {
@@ -107,18 +119,41 @@ export default function CheckoutPage() {
 
   return (
     <UserLayout>
-      <div className="max-w-lg mx-auto animate-fade-in space-y-6">
-        <h1 className="font-display font-bold text-3xl text-espresso">購入確認</h1>
+      <div className="mx-auto max-w-2xl animate-fade-in space-y-6">
+        <section className="hero-card px-5 py-6 sm:px-7">
+          <div className="space-y-4">
+            <div className="section-kicker">Checkout</div>
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <h1 className="font-display text-4xl font-bold text-espresso">購入確認</h1>
+                <p className="mt-1 text-sm text-espresso-500">
+                  合計と支払い方法を確認して、そのまま注文を確定します。
+                </p>
+              </div>
+              <div className="soft-panel bg-white/75">
+                <p className="text-[11px] uppercase tracking-[0.2em] text-espresso-400">Order total</p>
+                <p className="mt-2 font-display text-3xl font-bold text-espresso">¥{orderTotal.toLocaleString()}</p>
+              </div>
+            </div>
+          </div>
+        </section>
 
         {/* 注文内容 */}
         <div className="card space-y-3">
           <h2 className="font-medium text-espresso">注文内容</h2>
           {items.map(({ item, quantity }) => (
-            <div key={item.id} className="flex justify-between text-sm">
-              <span className="text-espresso-600">
-                {item.name}
-                <span className="text-espresso-400 ml-1">× {quantity}</span>
-              </span>
+            <div key={item.id} className="flex justify-between gap-4 text-sm">
+              <div>
+                <span className="text-espresso-600">
+                  {item.name}
+                  <span className="text-espresso-400 ml-1">× {quantity}</span>
+                </span>
+                {item.stock <= item.stock_alert_threshold && (
+                  <p className={`mt-1 text-xs ${item.stock === 0 ? 'text-red-600' : 'text-amber-600'}`}>
+                    {item.stock === 0 ? '在庫切れです' : `残り${item.stock}個`}
+                  </p>
+                )}
+              </div>
               <span className="font-mono font-medium">
                 ¥{(item.price * quantity).toLocaleString()}
               </span>

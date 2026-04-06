@@ -1,24 +1,55 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { revalidatePath } from 'next/cache';
+import { createAdminClient, createClient } from '@/lib/supabase/server';
+import { insertCashboxEntry } from '@/lib/cashbox';
+import { logAdminAction } from '@/lib/admin-audit';
 
 export async function POST(
   _request: Request,
   { params }: { params: { id: string } }
 ) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const sessionClient = await createClient();
+  const { data: { user } } = await sessionClient.auth.getUser();
+  const supabase = createAdminClient();
 
-  const { error } = await supabase
+  const { data: order, error } = await supabase
     .from('orders')
     .update({
       payment_status: 'completed',
       cash_confirmed_at: new Date().toISOString(),
-      cash_confirmed_by: user.id,
+      cash_confirmed_by: user?.id ?? null,
     })
     .eq('id', params.id)
-    .eq('payment_method', 'cash');
+    .eq('payment_method', 'cash')
+    .select('id, total_amount')
+    .single();
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error || !order) return NextResponse.json({ error: error?.message ?? '注文が見つかりません' }, { status: 500 });
+
+  await insertCashboxEntry(supabase, {
+    entry_type: 'cash_order',
+    direction: 'in',
+    amount: order.total_amount,
+    note: '現金払い注文の受領確認',
+    order_id: order.id,
+    created_by: user?.id ?? null,
+  });
+
+  await logAdminAction(supabase, {
+    actor_id: user?.id ?? null,
+    action_type: 'cash_order_confirmed',
+    target_type: 'order',
+    target_id: order.id,
+    summary: `現金注文 ${order.total_amount.toLocaleString()}円を受領確認しました`,
+    metadata: {
+      amount: order.total_amount,
+    },
+  });
+
+  revalidatePath('/admin');
+  revalidatePath('/admin/orders');
+  revalidatePath('/admin/cashbox');
+  revalidatePath('/admin/audit');
+
   return NextResponse.json({ ok: true });
 }

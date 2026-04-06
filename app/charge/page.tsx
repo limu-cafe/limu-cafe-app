@@ -11,7 +11,7 @@ const PRESET_AMOUNTS = [500, 1000, 2000, 3000, 5000];
 export default function ChargePage() {
   const router = useRouter();
   const [amount, setAmount] = useState<number | ''>('');
-  const [method, setMethod] = useState<'cash' | 'stripe'>('cash');
+  const [method, setMethod] = useState<'cash'>('cash');
   const [loading, setLoading] = useState(false);
 
   const handleCharge = async () => {
@@ -29,7 +29,7 @@ export default function ChargePage() {
       if (!res.ok) throw new Error((await res.json()).error);
       toast.success(
         method === 'cash'
-          ? '現金チャージを申請しました。管理者の承認をお待ちください。'
+          ? 'チャージを反映しました。金額は後払い残高に追加され、月次精算で回収されます。'
           : 'チャージが完了しました！'
       );
       router.push('/mypage');
@@ -46,7 +46,7 @@ export default function ChargePage() {
         <div>
           <h1 className="font-display font-bold text-3xl text-espresso">残高チャージ</h1>
           <p className="text-espresso-400 text-sm mt-1">
-            チャージした残高は次の購入時にすぐ使えます
+            チャージした残高はすぐ使えます。代金は後払い残高に加算され、月次精算でお支払いします
           </p>
         </div>
 
@@ -101,24 +101,25 @@ export default function ChargePage() {
             <div className="text-left flex-1">
               <p className="font-medium">現金</p>
               <p className={`text-sm ${method === 'cash' ? 'text-cream-200' : 'text-espresso-400'}`}>
-                管理者に渡して承認してもらいます
+                残高へすぐ反映し、代金は月次精算で回収します
               </p>
             </div>
           </button>
 
           <button
-            onClick={() => setMethod('stripe')}
-            className={`w-full flex items-center gap-4 p-4 rounded-xl border-2 transition-all duration-200 ${
-              method === 'stripe'
-                ? 'border-espresso bg-espresso text-cream-50'
-                : 'border-cream-200 hover:border-espresso-400'
-            }`}
+            disabled
+            className="w-full flex items-center gap-4 p-4 rounded-xl border-2 border-cream-200 bg-cream-50/70 opacity-70 cursor-not-allowed"
           >
-            <CreditCard size={22} className={method === 'stripe' ? 'text-cream-50' : 'text-espresso-600'} />
+            <CreditCard size={22} className="text-espresso-600" />
             <div className="text-left flex-1">
-              <p className="font-medium">クレジットカード</p>
-              <p className={`text-sm ${method === 'stripe' ? 'text-cream-200' : 'text-espresso-400'}`}>
-                Stripe経由で即時チャージ
+              <div className="flex items-center gap-2">
+                <p className="font-medium">クレジットカード</p>
+                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
+                  開発中
+                </span>
+              </div>
+              <p className="text-sm text-espresso-400">
+                Stripe 連携は準備中です。現在は現金チャージをご利用ください。
               </p>
             </div>
           </button>

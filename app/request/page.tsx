@@ -1,74 +1,101 @@
+import { redirect } from 'next/navigation';
 import UserLayout from '@/components/layout/UserLayout';
 import { createClient } from '@/lib/supabase/server';
-import { redirect } from 'next/navigation';
+import type { ItemRequestComment } from '@/types';
 import RequestForm from './RequestForm';
-import { format } from 'date-fns';
-import { ja } from 'date-fns/locale';
+import RequestBoardClient from './RequestBoardClient';
+
+type RequestUser = {
+  id: string;
+  name: string;
+  avatar_url?: string | null;
+};
+
+type RequestListRow = {
+  id: string;
+  user_id: string;
+  item_name: string;
+  reason?: string | null;
+  desired_price?: number | null;
+  status: 'pending' | 'approved' | 'rejected';
+  admin_note?: string | null;
+  created_at: string;
+  updated_at: string;
+  user?: RequestUser;
+  votes: Array<{ user_id: string }>;
+  comments: Array<ItemRequestComment & { user?: RequestUser }>;
+};
 
 export default async function RequestPage() {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
   if (!user) redirect('/login');
 
   const { data: requests } = await supabase
     .from('item_requests')
-    .select('*')
-    .eq('user_id', user.id)
-    .order('created_at', { ascending: false });
+    .select(
+      'id, user_id, item_name, reason, desired_price, status, admin_note, created_at, updated_at, user:users!item_requests_user_id_fkey(id, name, avatar_url), votes:item_request_votes(user_id), comments:item_request_comments(id, request_id, user_id, body, source, created_at, user:users!item_request_comments_user_id_fkey(id, name, avatar_url))'
+    )
+    .order('created_at', { ascending: false })
+    .order('created_at', { ascending: false, foreignTable: 'comments' })
+    .limit(1, { foreignTable: 'comments' });
 
-  const statusConfig = {
-    pending:  { label: '検討中', class: 'badge-pending' },
-    approved: { label: '採用 🎉', class: 'badge-approved' },
-    rejected: { label: '却下', class: 'badge-rejected' },
-  };
+  const boardRequests = ((requests ?? []) as any[]).map((request) => ({
+    ...request,
+    user: Array.isArray(request.user) ? request.user[0] : request.user,
+    comments: (request.comments ?? []).map((comment: any) => ({
+      ...comment,
+      user: Array.isArray(comment.user) ? comment.user[0] : comment.user,
+    })),
+  })) as RequestListRow[];
 
   return (
     <UserLayout>
-      <div className="max-w-lg mx-auto space-y-8 animate-fade-in">
-        <div>
-          <h1 className="font-display font-bold text-3xl text-espresso">商品の要望</h1>
-          <p className="text-espresso-400 text-sm mt-1">
-            欲しい商品をリクエストしましょう
-          </p>
+      <div className="mx-auto max-w-7xl space-y-6 animate-fade-in">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <h1 className="font-display text-3xl font-bold text-espresso">商品の要望</h1>
+            <p className="mt-1 text-sm text-espresso-400">
+              欲しい商品を共有して、賛成やコメントを集められます。
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2 text-xs text-espresso-500">
+            <span className="rounded-full bg-white px-3 py-2 ring-1 ring-cream-200">
+              要望 {boardRequests.length}件
+            </span>
+            <span className="rounded-full bg-white px-3 py-2 ring-1 ring-cream-200">
+              検討中 {boardRequests.filter((request) => request.status === 'pending').length}件
+            </span>
+          </div>
         </div>
 
-        <RequestForm />
+        <div className="grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
+          <aside className="space-y-4 xl:sticky xl:top-24 xl:self-start">
+            <RequestForm />
 
-        {/* 要望履歴 */}
-        {requests && requests.length > 0 && (
-          <div className="card space-y-4">
-            <h2 className="font-medium text-espresso">これまでの要望</h2>
-            <div className="space-y-3">
-              {requests.map((req) => (
-                <div key={req.id} className="border border-cream-200 rounded-xl p-4 space-y-2">
-                  <div className="flex items-start justify-between gap-2">
-                    <p className="font-medium text-espresso">{req.item_name}</p>
-                    <span className={statusConfig[req.status as keyof typeof statusConfig]?.class}>
-                      {statusConfig[req.status as keyof typeof statusConfig]?.label}
-                    </span>
-                  </div>
-                  {req.desired_price && (
-                    <p className="text-sm text-espresso-400">
-                      希望価格: ¥{req.desired_price.toLocaleString()}
-                    </p>
-                  )}
-                  {req.reason && (
-                    <p className="text-sm text-espresso-600">{req.reason}</p>
-                  )}
-                  {req.admin_note && (
-                    <div className="bg-cream-100 rounded-lg p-3 text-sm text-espresso-600">
-                      <span className="font-medium text-espresso-400 text-xs">管理者コメント: </span>
-                      {req.admin_note}
-                    </div>
-                  )}
-                  <p className="text-xs text-espresso-400">
-                    {format(new Date(req.created_at), 'M月d日', { locale: ja })}
-                  </p>
-                </div>
-              ))}
+            <div className="rounded-[28px] border border-cream-200 bg-white px-5 py-5 shadow-[0_18px_48px_-40px_rgba(44,26,14,0.28)]">
+              <h2 className="text-sm font-semibold text-espresso">使い方</h2>
+              <div className="mt-3 space-y-2 text-sm leading-6 text-espresso-500">
+                <p>商品名と理由を書いて要望を投稿できます。</p>
+                <p>他の要望に賛成したり、コメントで意見を追加できます。</p>
+                <p>採用された要望は購入候補として管理者に共有されます。</p>
+              </div>
             </div>
-          </div>
-        )}
+          </aside>
+
+          <section className="space-y-4">
+            <div className="rounded-[28px] border border-cream-200 bg-white px-5 py-5 shadow-[0_18px_48px_-40px_rgba(44,26,14,0.28)]">
+              <h2 className="font-medium text-espresso">みんなの要望</h2>
+              <p className="mt-1 text-sm text-espresso-400">
+                一覧では要点だけを表示しています。詳しい内容やコメントは詳細ページで確認できます。
+              </p>
+            </div>
+            <RequestBoardClient requests={boardRequests} currentUserId={user.id} />
+          </section>
+        </div>
       </div>
     </UserLayout>
   );
