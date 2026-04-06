@@ -49,7 +49,51 @@ export default function Navbar() {
 
   return (
     <nav className="sticky top-0 z-50 border-b border-cream-200 bg-white/90 backdrop-blur-xl">
-      <div className="mx-auto flex h-20 max-w-6xl items-center justify-between gap-4 px-4">
+      <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-3 px-4 md:hidden">
+        <Link href="/" className="group flex min-w-0 items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-espresso text-lg text-cream-50">
+            ☕
+          </div>
+          <div className="min-w-0">
+            <p className="font-display text-lg font-bold text-espresso">
+              LIMU<span className="text-matcha">喫茶</span>
+            </p>
+            <p className="text-[10px] font-medium tracking-[0.12em] text-espresso-400">
+              研究室向け購買アプリ
+            </p>
+          </div>
+        </Link>
+
+        <div className="flex items-center gap-2">
+          {user && (
+            <Link
+              href="/charge"
+              className="flex flex-col items-end rounded-xl border border-cream-200 bg-white px-3 py-2 transition-all duration-200 hover:bg-cream-50"
+            >
+              <span className="text-[10px] tracking-[0.12em] text-espresso-400">残高</span>
+              <span className="font-mono text-xs font-semibold text-espresso">
+                ¥{user.balance.toLocaleString()}
+              </span>
+            </Link>
+          )}
+
+          {user ? (
+            <button
+              onClick={handleLogout}
+              className="rounded-2xl border border-cream-200 bg-white p-2.5 text-espresso-400 transition-all duration-200 hover:bg-cream-50 hover:text-espresso"
+              title="ログアウト"
+            >
+              <LogOut size={18} />
+            </button>
+          ) : (
+            <Link href="/login" className="btn-primary px-3 py-2 text-xs">
+              ログイン
+            </Link>
+          )}
+        </div>
+      </div>
+
+      <div className="mx-auto hidden h-20 max-w-6xl items-center justify-between gap-4 px-4 md:flex">
         {/* ロゴ */}
         <Link href="/" className="group flex min-w-0 items-center gap-3">
           <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-espresso text-xl text-cream-50">
