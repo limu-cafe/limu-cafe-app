@@ -23,7 +23,7 @@ export async function POST(request: Request) {
       status: 'approved',
       approved_at: new Date().toISOString(),
       approved_by: user.id,
-      note: '即時反映・月次精算対象',
+      note: '即時反映・定期精算対象',
     })
     .select()
     .single();

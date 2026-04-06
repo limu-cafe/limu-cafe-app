@@ -65,7 +65,7 @@ export default function CheckoutPage() {
     {
       id: 'deferred' as const,
       label: '後払い',
-      description: '月次精算でまとめて支払い',
+      description: '定期精算でまとめて支払い',
       icon: Clock,
       disabled: false,
     },

@@ -29,7 +29,7 @@ export default function ChargePage() {
       if (!res.ok) throw new Error((await res.json()).error);
       toast.success(
         method === 'cash'
-          ? 'チャージを反映しました。金額は後払い残高に追加され、月次精算で回収されます。'
+          ? 'チャージを反映しました。金額は後払い残高に追加され、定期精算で回収されます。'
           : 'チャージが完了しました！'
       );
       router.push('/mypage');
@@ -46,7 +46,7 @@ export default function ChargePage() {
         <div>
           <h1 className="font-display font-bold text-3xl text-espresso">残高チャージ</h1>
           <p className="text-espresso-400 text-sm mt-1">
-            チャージした残高はすぐ使えます。代金は後払い残高に加算され、月次精算でお支払いします
+            チャージした残高はすぐ使えます。代金は後払い残高に加算され、定期精算でお支払いします
           </p>
         </div>
 
@@ -101,7 +101,7 @@ export default function ChargePage() {
             <div className="text-left flex-1">
               <p className="font-medium">現金</p>
               <p className={`text-sm ${method === 'cash' ? 'text-cream-200' : 'text-espresso-400'}`}>
-                残高へすぐ反映し、代金は月次精算で回収します
+                残高へすぐ反映し、代金は定期精算で回収します
               </p>
             </div>
           </button>

@@ -6,11 +6,24 @@ import { format } from 'date-fns';
 import { ja } from 'date-fns/locale';
 import toast from 'react-hot-toast';
 import { useRouter } from 'next/navigation';
+import type { SettlementReminderSettings } from '@/lib/settlement-reminder';
 
-export default function SettlementClient({ users, history }: { users: any[]; history: any[] }) {
+export default function SettlementClient({
+  users,
+  history,
+  reminderSettings,
+}: {
+  users: any[];
+  history: any[];
+  reminderSettings: SettlementReminderSettings;
+}) {
   const router = useRouter();
   const [loading, setLoading] = useState<string | null>(null);
   const [method, setMethod] = useState<Record<string, string>>({});
+  const [scheduleLoading, setScheduleLoading] = useState(false);
+  const [scheduleEnabled, setScheduleEnabled] = useState(reminderSettings.is_enabled);
+  const [nextNotificationOn, setNextNotificationOn] = useState(reminderSettings.next_notification_on);
+  const [intervalMonths, setIntervalMonths] = useState(reminderSettings.interval_months);
 
   const totalDeferred = users.reduce((s, u) => s + u.deferred_balance, 0);
 
@@ -48,6 +61,28 @@ export default function SettlementClient({ users, history }: { users: any[]; his
     toast.success('CSVをダウンロードしました');
   };
 
+  const handleSaveReminderSettings = async () => {
+    setScheduleLoading(true);
+    try {
+      const res = await fetch('/api/admin/settlement-reminder-settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          is_enabled: scheduleEnabled,
+          next_notification_on: nextNotificationOn,
+          interval_months: intervalMonths,
+        }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error ?? '通知設定の保存に失敗しました');
+      toast.success('精算通知の設定を保存しました');
+      router.refresh();
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setScheduleLoading(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -67,6 +102,76 @@ export default function SettlementClient({ users, history }: { users: any[]; his
           <Download size={16} />
           CSV出力
         </button>
+      </div>
+
+      <div className="rounded-2xl border border-gray-800 bg-gray-900 p-5 space-y-4">
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-white">精算通知の設定</h2>
+            <p className="mt-1 text-sm text-gray-400">
+              次回通知日を起点に、指定したか月ごとに後払い残高の DM を送ります。
+            </p>
+          </div>
+          {reminderSettings.last_notified_on && (
+            <p className="text-xs text-gray-500">
+              前回通知: {format(new Date(reminderSettings.last_notified_on), 'yyyy/MM/dd', { locale: ja })}
+            </p>
+          )}
+        </div>
+
+        <div className="grid gap-4 lg:grid-cols-[180px_1fr_180px_auto] lg:items-end">
+          <label className="space-y-2 text-sm text-gray-300">
+            <span className="block text-xs uppercase tracking-wider text-gray-500">通知</span>
+            <select
+              value={scheduleEnabled ? 'enabled' : 'disabled'}
+              onChange={(e) => setScheduleEnabled(e.target.value === 'enabled')}
+              className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white focus:outline-none"
+            >
+              <option value="enabled">有効</option>
+              <option value="disabled">停止</option>
+            </select>
+          </label>
+
+          <label className="space-y-2 text-sm text-gray-300">
+            <span className="block text-xs uppercase tracking-wider text-gray-500">次回通知日</span>
+            <input
+              type="date"
+              value={nextNotificationOn}
+              onChange={(e) => setNextNotificationOn(e.target.value)}
+              className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white focus:outline-none"
+            />
+          </label>
+
+          <label className="space-y-2 text-sm text-gray-300">
+            <span className="block text-xs uppercase tracking-wider text-gray-500">通知間隔</span>
+            <div className="flex items-center gap-2 rounded-lg border border-gray-700 bg-gray-800 px-3 py-2">
+              <input
+                type="number"
+                min={1}
+                max={12}
+                value={intervalMonths}
+                onChange={(e) => setIntervalMonths(Number(e.target.value || 1))}
+                className="w-16 bg-transparent text-sm text-white focus:outline-none"
+              />
+              <span className="text-sm text-gray-400">か月ごと</span>
+            </div>
+          </label>
+
+          <button
+            type="button"
+            onClick={handleSaveReminderSettings}
+            disabled={scheduleLoading}
+            className="rounded-lg bg-amber-400 px-4 py-2 text-sm font-medium text-gray-950 transition hover:bg-amber-300 disabled:opacity-50"
+          >
+            {scheduleLoading ? '保存中...' : '設定を保存'}
+          </button>
+        </div>
+
+        <div className="rounded-xl border border-gray-800 bg-gray-950/40 px-4 py-3 text-sm text-gray-400">
+          {scheduleEnabled
+            ? `${nextNotificationOn} を次回通知日として、以後は ${intervalMonths} か月ごとに通知します。`
+            : '精算通知は現在停止中です。'}
+        </div>
       </div>
 
       {/* 未精算ユーザー */}

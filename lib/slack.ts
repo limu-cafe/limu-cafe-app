@@ -469,7 +469,7 @@ export async function sendSlackEphemeralMessage(params: {
   });
 }
 
-// 月次精算リマインド
+// 定期精算リマインド
 export async function notifyMonthlySettlement(params: {
   users: { slackUserId: string; name: string; amount: number }[];
 }) {
@@ -477,8 +477,8 @@ export async function notifyMonthlySettlement(params: {
     await sendSlackDirectMessage({
       slackUserId: user.slackUserId,
       text:
-        `📅 月次精算のお知らせ\n` +
-        `${user.name}さんの今月の後払い残高は ¥${user.amount.toLocaleString()} です。\n` +
+        `📅 定期精算のお知らせ\n` +
+        `${user.name}さんの現在の後払い残高は ¥${user.amount.toLocaleString()} です。\n` +
         `LIMU喫茶で精算をお願いします。\n` +
         (APP_BASE_URL ? `${APP_BASE_URL}/mypage` : ''),
     });

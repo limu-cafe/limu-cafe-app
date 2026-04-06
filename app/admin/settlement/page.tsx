@@ -1,5 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/server';
 import SettlementClient from './SettlementClient';
+import { buildDefaultSettlementReminderSettings } from '@/lib/settlement-reminder';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,5 +21,17 @@ export default async function AdminSettlementPage() {
     .order('created_at', { ascending: false })
     .limit(30);
 
-  return <SettlementClient users={users ?? []} history={history ?? []} />;
+  const { data: settings } = await supabase
+    .from('settlement_reminder_settings')
+    .select('is_enabled, next_notification_on, interval_months, notification_day, last_notified_on')
+    .eq('singleton', 'default')
+    .maybeSingle();
+
+  return (
+    <SettlementClient
+      users={users ?? []}
+      history={history ?? []}
+      reminderSettings={settings ?? buildDefaultSettlementReminderSettings()}
+    />
+  );
 }

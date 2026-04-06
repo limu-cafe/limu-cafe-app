@@ -148,7 +148,7 @@ export default function MyPageClient({
           <p className="font-display text-3xl font-bold text-espresso">
             ¥{profile?.deferred_balance?.toLocaleString() ?? 0}
           </p>
-          <p className="text-xs text-espresso-400">月次精算でお支払い</p>
+          <p className="text-xs text-espresso-400">定期精算でお支払い</p>
         </div>
       </div>
 
