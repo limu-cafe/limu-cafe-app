@@ -13,10 +13,18 @@ const STORAGE_KEY = 'limu-install-dismissed';
 export default function InstallPromptCard() {
   const [promptEvent, setPromptEvent] = useState<BeforeInstallPromptEvent | null>(null);
   const [dismissed, setDismissed] = useState(true);
+  const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
     const hasDismissed = window.localStorage.getItem(STORAGE_KEY) === '1';
     setDismissed(hasDismissed);
+    const mobileQuery = window.matchMedia('(max-width: 767px)');
+
+    const updateIsMobile = () => {
+      setIsMobile(mobileQuery.matches);
+    };
+
+    updateIsMobile();
 
     const handleBeforeInstallPrompt = (event: Event) => {
       event.preventDefault();
@@ -24,14 +32,16 @@ export default function InstallPromptCard() {
       setDismissed(hasDismissed);
     };
 
+    mobileQuery.addEventListener('change', updateIsMobile);
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
 
     return () => {
+      mobileQuery.removeEventListener('change', updateIsMobile);
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     };
   }, []);
 
-  const canShow = useMemo(() => Boolean(promptEvent) && !dismissed, [dismissed, promptEvent]);
+  const canShow = useMemo(() => isMobile && Boolean(promptEvent) && !dismissed, [dismissed, isMobile, promptEvent]);
 
   if (!canShow) return null;
 
