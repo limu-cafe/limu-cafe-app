@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { format } from 'date-fns';
 import { ja } from 'date-fns/locale';
-import { CheckCircle, ChevronDown, ChevronUp } from 'lucide-react';
+import { CheckCircle, ChevronDown, ChevronUp, RotateCcw } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useRouter, useSearchParams } from 'next/navigation';
 
@@ -44,6 +44,20 @@ export default function OrdersClient({ orders }: { orders: any[] }) {
       router.refresh();
     } catch (e: any) { toast.error(e.message); }
     finally { setLoading(null); }
+  };
+
+  const handleCancelOrder = async (orderId: string) => {
+    setLoading(orderId);
+    try {
+      const res = await fetch(`/api/admin/orders/${orderId}/cancel`, { method: 'POST' });
+      if (!res.ok) throw new Error((await res.json()).error);
+      toast.success('注文をキャンセルしました');
+      router.refresh();
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setLoading(null);
+    }
   };
 
   return (
@@ -151,6 +165,21 @@ export default function OrdersClient({ orders }: { orders: any[] }) {
                           <CheckCircle size={16} />
                         )}
                         現金受け取りを確認
+                      </button>
+                    )}
+
+                    {['balance', 'deferred'].includes(order.payment_method) && order.payment_status === 'completed' && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleCancelOrder(order.id); }}
+                        disabled={loading === order.id}
+                        className="flex items-center gap-2 px-4 py-2 bg-red-500/15 text-red-300 hover:bg-red-500/25 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                      >
+                        {loading === order.id ? (
+                          <span className="animate-spin w-4 h-4 border border-red-300 border-t-transparent rounded-full" />
+                        ) : (
+                          <RotateCcw size={16} />
+                        )}
+                        注文をキャンセル
                       </button>
                     )}
                   </div>
