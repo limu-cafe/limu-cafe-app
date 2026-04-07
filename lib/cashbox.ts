@@ -7,6 +7,7 @@ export type CashboxEntryType =
   | 'cash_settlement'
   | 'manual_in'
   | 'manual_out'
+  | 'misc_expense'
   | 'restock_cash_out'
   | 'advance_reimbursement';
 
@@ -62,6 +63,7 @@ export const cashboxEntryLabels: Record<CashboxEntryType, string> = {
   cash_settlement: '現金精算',
   manual_in: '手動入金',
   manual_out: '手動出金',
+  misc_expense: '雑費',
   restock_cash_out: '仕入れ支出',
   advance_reimbursement: '立替精算',
 };

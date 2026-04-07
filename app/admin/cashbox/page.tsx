@@ -19,6 +19,8 @@ export default async function CashboxPage() {
     { data: reflectedChargesThisMonth },
     { data: purchaseRunsThisMonth },
     { data: unreimbursedPurchaseRuns },
+    { data: miscExpensesThisMonth },
+    { data: recentMiscExpenses },
   ] = await Promise.all([
     supabase
       .from('cashbox_entries')
@@ -72,6 +74,17 @@ export default async function CashboxPage() {
       .eq('reimbursement_status', 'pending_reimbursement')
       .order('created_at', { ascending: false })
       .limit(10),
+    supabase
+      .from('cashbox_entries')
+      .select('amount')
+      .eq('entry_type', 'misc_expense')
+      .gte('created_at', new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString()),
+    supabase
+      .from('cashbox_entries')
+      .select('*, created_by_user:users!cashbox_entries_created_by_fkey(name)')
+      .eq('entry_type', 'misc_expense')
+      .order('created_at', { ascending: false })
+      .limit(10),
   ]);
 
   const expectedAmount = calculateCashboxBalance((balanceRows ?? []) as { amount: number; direction: 'in' | 'out' }[]);
@@ -102,6 +115,10 @@ export default async function CashboxPage() {
       purchaseRun.payment_source === 'cashbox' ? sum + purchaseRun.total_amount : sum,
     0
   );
+  const monthlyMiscExpenseAmount = (miscExpensesThisMonth ?? []).reduce(
+    (sum: number, entry: { amount: number }) => sum + entry.amount,
+    0
+  );
   const projectedAmount =
     expectedAmount + pendingCashOrderAmount + deferredReceivableAmount - unreimbursedAdvanceAmount;
 
@@ -116,6 +133,8 @@ export default async function CashboxPage() {
       unreimbursedAdvanceAmount={unreimbursedAdvanceAmount}
       monthlyPurchaseAmount={monthlyPurchaseAmount}
       monthlyCashboxPurchaseAmount={monthlyCashboxPurchaseAmount}
+      monthlyMiscExpenseAmount={monthlyMiscExpenseAmount}
+      recentMiscExpenses={recentMiscExpenses ?? []}
       unreimbursedPurchaseRuns={unreimbursedPurchaseRuns ?? []}
       latestCount={latestCount}
       entries={entries ?? []}

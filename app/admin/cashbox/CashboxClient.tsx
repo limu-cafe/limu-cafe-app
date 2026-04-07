@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { format } from 'date-fns';
 import { ja } from 'date-fns/locale';
-import { ArrowDownLeft, ArrowUpRight, Calculator, CircleDollarSign, Scale, Wallet } from 'lucide-react';
+import { ArrowDownLeft, ArrowUpRight, Calculator, CircleDollarSign, Scale, ShoppingBasket, Wallet } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { cashboxEntryLabels } from '@/lib/cashbox';
 
@@ -47,6 +47,14 @@ type PendingPurchaseRun = {
   purchase_run_items?: Array<{ item_name: string; quantity: number }>;
 };
 
+type MiscExpense = {
+  id: string;
+  amount: number;
+  note: string | null;
+  created_at: string;
+  created_by_user?: { name?: string | null } | null;
+};
+
 export default function CashboxClient({
   expectedAmount,
   projectedAmount,
@@ -57,6 +65,8 @@ export default function CashboxClient({
   unreimbursedAdvanceAmount,
   monthlyPurchaseAmount,
   monthlyCashboxPurchaseAmount,
+  monthlyMiscExpenseAmount,
+  recentMiscExpenses,
   unreimbursedPurchaseRuns,
   latestCount,
   entries,
@@ -73,6 +83,8 @@ export default function CashboxClient({
   unreimbursedAdvanceAmount: number;
   monthlyPurchaseAmount: number;
   monthlyCashboxPurchaseAmount: number;
+  monthlyMiscExpenseAmount: number;
+  recentMiscExpenses: MiscExpense[];
   unreimbursedPurchaseRuns: PendingPurchaseRun[];
   latestCount: Count | null;
   entries: Entry[];
@@ -84,9 +96,12 @@ export default function CashboxClient({
   const [adjustmentAmount, setAdjustmentAmount] = useState<number | ''>('');
   const [adjustmentNote, setAdjustmentNote] = useState('');
   const [adjustmentDirection, setAdjustmentDirection] = useState<'in' | 'out'>('in');
+  const [miscExpenseAmount, setMiscExpenseAmount] = useState<number | ''>('');
+  const [miscExpenseName, setMiscExpenseName] = useState('');
+  const [miscExpenseNote, setMiscExpenseNote] = useState('');
   const [actualAmount, setActualAmount] = useState<number | ''>('');
   const [countNote, setCountNote] = useState('');
-  const [loading, setLoading] = useState<'adjustment' | 'count' | `reimburse:${string}` | null>(null);
+  const [loading, setLoading] = useState<'adjustment' | 'misc' | 'count' | `reimburse:${string}` | null>(null);
 
   const latestDifference = latestCount?.difference_amount ?? 0;
 
@@ -147,6 +162,45 @@ export default function CashboxClient({
       toast.success('金庫確認を記録しました');
       setActualAmount('');
       setCountNote('');
+      router.refresh();
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  const handleMiscExpense = async () => {
+    if (!miscExpenseAmount || miscExpenseAmount <= 0) {
+      toast.error('金額を入力してください');
+      return;
+    }
+
+    if (!miscExpenseName.trim()) {
+      toast.error('雑費名を入力してください');
+      return;
+    }
+
+    setLoading('misc');
+    try {
+      const res = await fetch('/api/admin/cashbox/misc-expenses', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount: miscExpenseAmount,
+          item_name: miscExpenseName,
+          note: miscExpenseNote,
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error((await res.json()).error);
+      }
+
+      toast.success('雑費を記録しました');
+      setMiscExpenseAmount('');
+      setMiscExpenseName('');
+      setMiscExpenseNote('');
       router.refresh();
     } catch (e: any) {
       toast.error(e.message);
@@ -265,7 +319,7 @@ export default function CashboxClient({
         </div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid gap-4 lg:grid-cols-4">
         <div className="rounded-2xl border border-gray-800 bg-gray-900 p-5">
           <p className="text-xs text-gray-400">未回収の現金注文</p>
           <p className="mt-1 font-display text-2xl font-bold text-amber-400">
@@ -292,12 +346,12 @@ export default function CashboxClient({
             ¥{pendingCashChargeAmount.toLocaleString()}
           </p>
           <p className="mt-2 text-xs text-gray-500">
-            残高には反映済みで、回収は月次精算で行います
+            残高には反映済みで、回収は定期精算で行います
           </p>
         </div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid gap-4 lg:grid-cols-4">
         <div className="rounded-2xl border border-gray-800 bg-gray-900 p-5">
           <p className="text-xs text-gray-400">未精算の立替総額</p>
           <p className="mt-1 font-display text-2xl font-bold text-sky-400">
@@ -325,6 +379,16 @@ export default function CashboxClient({
           </p>
           <p className="mt-2 text-xs text-gray-500">
             金庫から直接支払った仕入れ分です
+          </p>
+        </div>
+
+        <div className="rounded-2xl border border-gray-800 bg-gray-900 p-5">
+          <p className="text-xs text-gray-400">今月の雑費</p>
+          <p className="mt-1 font-display text-2xl font-bold text-rose-300">
+            ¥{monthlyMiscExpenseAmount.toLocaleString()}
+          </p>
+          <p className="mt-2 text-xs text-gray-500">
+            ティッシュなど無料提供品の支出です
           </p>
         </div>
       </div>
@@ -377,7 +441,46 @@ export default function CashboxClient({
         )}
       </div>
 
-      <div className="grid xl:grid-cols-2 gap-6">
+      <div className="grid xl:grid-cols-3 gap-6">
+        <div className="bg-gray-900 rounded-2xl border border-gray-800 p-5 space-y-4">
+          <div>
+            <h2 className="font-medium text-white">雑費を記録</h2>
+            <p className="text-sm text-gray-400 mt-1">
+              ティッシュや小物など、無料提供品の支出を金庫から記録します
+            </p>
+          </div>
+
+          <input
+            type="text"
+            value={miscExpenseName}
+            onChange={(e) => setMiscExpenseName(e.target.value)}
+            placeholder="雑費名（例: ティッシュ、紙コップ）"
+            className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-white/20"
+          />
+          <input
+            type="number"
+            min={1}
+            value={miscExpenseAmount}
+            onChange={(e) => setMiscExpenseAmount(e.target.value ? Number(e.target.value) : '')}
+            placeholder="金額"
+            className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-white/20"
+          />
+          <textarea
+            value={miscExpenseNote}
+            onChange={(e) => setMiscExpenseNote(e.target.value)}
+            placeholder="補足（例: 研究室共有用、ドラッグストア購入）"
+            rows={3}
+            className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-white/20 resize-none"
+          />
+          <button
+            onClick={handleMiscExpense}
+            disabled={loading !== null}
+            className="w-full bg-rose-500/20 text-rose-200 py-3 rounded-lg font-medium hover:bg-rose-500/30 transition-all disabled:opacity-50"
+          >
+            {loading === 'misc' ? '記録中...' : '雑費を記録する'}
+          </button>
+        </div>
+
         <div className="bg-gray-900 rounded-2xl border border-gray-800 p-5 space-y-4">
           <div>
             <h2 className="font-medium text-white">手動調整</h2>
@@ -464,6 +567,33 @@ export default function CashboxClient({
             {loading === 'count' ? '記録中...' : '確認結果を保存する'}
           </button>
         </div>
+      </div>
+
+      <div className="bg-gray-900 rounded-2xl border border-gray-800 overflow-hidden">
+        <div className="px-5 py-4 border-b border-gray-800 flex items-center gap-2">
+          <ShoppingBasket size={16} className="text-rose-300" />
+          <h2 className="font-medium text-white">最近の雑費</h2>
+        </div>
+        {recentMiscExpenses.length === 0 ? (
+          <p className="px-5 py-10 text-sm text-gray-500 text-center">雑費の記録はまだありません</p>
+        ) : (
+          <div className="divide-y divide-gray-800">
+            {recentMiscExpenses.map((expense) => (
+              <div key={expense.id} className="px-5 py-4 flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-white">{expense.note || '雑費'}</p>
+                  <p className="text-xs text-gray-500 mt-2">
+                    {format(new Date(expense.created_at), 'M/d HH:mm', { locale: ja })}
+                    {expense.created_by_user?.name ? ` ・ ${expense.created_by_user.name}` : ''}
+                  </p>
+                </div>
+                <div className="font-mono font-bold text-sm text-rose-300">
+                  -¥{expense.amount.toLocaleString()}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="grid xl:grid-cols-2 gap-6">
