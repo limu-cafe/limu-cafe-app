@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS settlement_reminder_settings (
 CREATE TRIGGER settlement_reminder_settings_updated_at
 BEFORE UPDATE ON settlement_reminder_settings
 FOR EACH ROW
-EXECUTE FUNCTION update_updated_at_column();
+EXECUTE FUNCTION update_updated_at();
 
 INSERT INTO settlement_reminder_settings (
   singleton,
