@@ -22,6 +22,15 @@ export default function Navbar() {
   const [user, setUser] = useState<NavbarUser | null>(null);
 
   useEffect(() => {
+    const cachedUser = sessionStorage.getItem('limu-navbar-user');
+    if (cachedUser) {
+      try {
+        setUser(JSON.parse(cachedUser));
+      } catch {
+        sessionStorage.removeItem('limu-navbar-user');
+      }
+    }
+
     const supabase = createClient();
     supabase.auth.getUser().then(async ({ data }) => {
       if (data.user) {
@@ -31,6 +40,12 @@ export default function Navbar() {
           .eq('id', data.user.id)
           .single();
         setUser(profile);
+        if (profile) {
+          sessionStorage.setItem('limu-navbar-user', JSON.stringify(profile));
+        }
+      } else {
+        setUser(null);
+        sessionStorage.removeItem('limu-navbar-user');
       }
     });
   }, []);
@@ -38,6 +53,7 @@ export default function Navbar() {
   const handleLogout = async () => {
     const supabase = createClient();
     await supabase.auth.signOut();
+    sessionStorage.removeItem('limu-navbar-user');
     router.push('/login');
   };
 

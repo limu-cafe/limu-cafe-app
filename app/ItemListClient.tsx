@@ -32,17 +32,19 @@ export default function ItemListClient({
   const [browseMode, setBrowseMode] = useState<BrowseMode>('all');
   const [favoriteItemIds, setFavoriteItemIds] = useState(initialFavoriteItemIds);
   const deferredQuery = useDeferredValue(query);
+  const itemMap = useMemo(() => new Map(items.map((item) => [item.id, item])), [items]);
+  const favoriteItemIdSet = useMemo(() => new Set(favoriteItemIds), [favoriteItemIds]);
 
   const favoriteItems = useMemo(
-    () => items.filter((item) => favoriteItemIds.includes(item.id)),
-    [favoriteItemIds, items]
+    () => items.filter((item) => favoriteItemIdSet.has(item.id)),
+    [favoriteItemIdSet, items]
   );
   const frequentItems = useMemo(
     () =>
       frequentItemIds
-        .map((itemId) => items.find((item) => item.id === itemId))
+        .map((itemId) => itemMap.get(itemId))
         .filter((item): item is Item => Boolean(item)),
-    [frequentItemIds, items]
+    [frequentItemIds, itemMap]
   );
   const lowStockItems = useMemo(
     () =>
@@ -54,16 +56,16 @@ export default function ItemListClient({
   const popularItems = useMemo(
     () =>
       popularItemIds
-        .map((itemId) => items.find((item) => item.id === itemId))
+        .map((itemId) => itemMap.get(itemId))
         .filter((item): item is Item => Boolean(item)),
-    [items, popularItemIds]
+    [itemMap, popularItemIds]
   );
   const newArrivalItems = useMemo(
     () =>
       newArrivalItemIds
-        .map((itemId) => items.find((item) => item.id === itemId))
+        .map((itemId) => itemMap.get(itemId))
         .filter((item): item is Item => Boolean(item)),
-    [items, newArrivalItemIds]
+    [itemMap, newArrivalItemIds]
   );
 
   const baseItems = useMemo(() => {
@@ -254,7 +256,7 @@ export default function ItemListClient({
                   >
                     <ItemCard
                       item={item}
-                      isFavorite={favoriteItemIds.includes(item.id)}
+                      isFavorite={favoriteItemIdSet.has(item.id)}
                       onToggleFavorite={handleToggleFavorite}
                     />
                   </div>
@@ -282,7 +284,7 @@ export default function ItemListClient({
                       <ItemCard
                         key={`${section.id}-${item.id}`}
                         item={item}
-                        isFavorite={favoriteItemIds.includes(item.id)}
+                        isFavorite={favoriteItemIdSet.has(item.id)}
                         onToggleFavorite={handleToggleFavorite}
                         compact
                         horizontal

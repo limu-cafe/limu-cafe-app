@@ -42,14 +42,14 @@ export default async function HomePage() {
       .select('order_items(item_id)')
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
-      .limit(20),
+      .limit(12),
     adminSupabase
       .from('orders')
       .select('created_at, order_items(item_id)')
       .eq('payment_status', 'completed')
       .gte('created_at', popularSince.toISOString())
       .order('created_at', { ascending: false })
-      .limit(250),
+      .limit(80),
   ]);
 
   const itemList = ((items ?? []) as any[]).map((item) => ({

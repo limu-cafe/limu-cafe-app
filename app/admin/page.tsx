@@ -11,7 +11,6 @@ import {
   Wallet,
 } from 'lucide-react';
 import { createAdminClient } from '@/lib/supabase/server';
-import { calculateCashboxBalance } from '@/lib/cashbox';
 
 export const dynamic = 'force-dynamic';
 
@@ -49,6 +48,11 @@ type PurchaseAmountRow = {
   total_amount: number;
 };
 
+type CashboxCountRow = {
+  actual_amount: number;
+  counted_at: string;
+};
+
 const toneClassNames: Record<PendingTask['tone'], string> = {
   amber: 'border-amber-400/20 bg-amber-400/10 text-amber-200',
   blue: 'border-sky-400/20 bg-sky-400/10 text-sky-200',
@@ -70,7 +74,7 @@ export default async function AdminDashboard() {
     { count: pendingLegacyTransfers },
     { data: lowStockItems },
     { data: monthlyOrders },
-    { data: cashboxEntries },
+    { data: latestCashboxCount },
     { data: pendingAdvanceRuns },
     { data: monthlyPurchaseRuns },
   ] = await Promise.all([
@@ -106,8 +110,10 @@ export default async function AdminDashboard() {
       .gte('created_at', monthStart)
       .lte('created_at', monthEnd),
     supabase
-      .from('cashbox_entries')
-      .select('amount, direction'),
+      .from('cashbox_counts')
+      .select('actual_amount, counted_at')
+      .order('counted_at', { ascending: false })
+      .limit(1),
     supabase
       .from('purchase_runs')
       .select('id, total_amount, vendor, created_at, purchase_run_items(item_name, quantity)')
@@ -158,9 +164,7 @@ export default async function AdminDashboard() {
       (sum, order) => sum + order.total_amount,
       0
     );
-  const cashboxBalance = calculateCashboxBalance(
-    (cashboxEntries ?? []) as { amount: number; direction: 'in' | 'out' }[]
-  );
+  const lastCashboxCount = ((latestCashboxCount ?? []) as CashboxCountRow[])[0] ?? null;
   const monthlyPurchaseAmount =
     ((monthlyPurchaseRuns ?? []) as PurchaseAmountRow[]).reduce(
       (sum, run) => sum + run.total_amount,
@@ -194,9 +198,9 @@ export default async function AdminDashboard() {
             icon={<Wallet size={16} className="text-emerald-300" />}
           />
           <SummaryCard
-            label="計算上の金庫"
-            value={`¥${cashboxBalance.toLocaleString()}`}
-            hint="現時点の見込み"
+            label="最新の金庫実測"
+            value={lastCashboxCount ? `¥${lastCashboxCount.actual_amount.toLocaleString()}` : '未記録'}
+            hint={lastCashboxCount ? format(new Date(lastCashboxCount.counted_at), 'M/d HH:mm', { locale: ja }) : '金庫管理で記録'}
             icon={<Banknote size={16} className="text-sky-300" />}
           />
           <SummaryCard

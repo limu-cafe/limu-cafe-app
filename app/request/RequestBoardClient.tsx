@@ -7,16 +7,10 @@ import { ja } from 'date-fns/locale';
 import { Heart, MessageCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
-import type { ItemRequestComment } from '@/types';
-
 type RequestUser = {
   id: string;
   name: string;
   avatar_url?: string | null;
-};
-
-type RequestVote = {
-  user_id: string;
 };
 
 type RequestRow = {
@@ -30,8 +24,8 @@ type RequestRow = {
   created_at: string;
   updated_at: string;
   user?: RequestUser;
-  votes: RequestVote[];
-  comments: (ItemRequestComment & { user?: RequestUser })[];
+  vote_count: number;
+  has_voted: boolean;
 };
 
 const statusConfig = {
@@ -42,10 +36,8 @@ const statusConfig = {
 
 export default function RequestBoardClient({
   requests,
-  currentUserId,
 }: {
   requests: RequestRow[];
-  currentUserId: string;
 }) {
   const router = useRouter();
   const [loadingVoteId, setLoadingVoteId] = useState<string | null>(null);
@@ -61,7 +53,7 @@ export default function RequestBoardClient({
       .sort((a, b) => {
         const statusGap = priority[a.status] - priority[b.status];
         if (statusGap !== 0) return statusGap;
-        if (b.votes.length !== a.votes.length) return b.votes.length - a.votes.length;
+        if (b.vote_count !== a.vote_count) return b.vote_count - a.vote_count;
         return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
       });
   }, [requests, statusFilter]);
@@ -119,7 +111,7 @@ export default function RequestBoardClient({
               <div className="min-w-0">
                 <p className="truncate text-sm font-medium text-espresso">{request.item_name}</p>
                 <p className="mt-1 text-xs text-espresso-400">
-                  {request.user?.name ?? '不明'} ・ 賛成 {request.votes.length}
+                  {request.user?.name ?? '不明'} ・ 賛成 {request.vote_count}
                 </p>
               </div>
               <span
@@ -165,8 +157,7 @@ export default function RequestBoardClient({
       {pendingRequests.length > 0 && (
         <div className="space-y-4">
           {pendingRequests.map((request) => {
-            const hasVoted = request.votes.some((vote) => vote.user_id === currentUserId);
-            const commentPreview = request.comments[0];
+            const hasVoted = request.has_voted;
 
             return (
               <section
@@ -197,8 +188,7 @@ export default function RequestBoardClient({
                           ? `¥${request.desired_price.toLocaleString()}`
                           : '指定なし'}
                       </p>
-                      <p>賛成 {request.votes.length}</p>
-                      <p>コメント {request.comments.length}件</p>
+                      <p>賛成 {request.vote_count}</p>
                     </div>
                     {request.reason ? (
                       <p className="line-clamp-2 max-w-3xl whitespace-pre-wrap text-sm leading-7 text-espresso-600">
@@ -222,43 +212,17 @@ export default function RequestBoardClient({
                   </button>
                 </div>
 
-                <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_180px]">
-                  <div className="rounded-[22px] border border-cream-100 bg-cream-50/70 px-4 py-3">
-                    <div className="mb-2 flex items-center gap-2 text-sm font-medium text-espresso">
-                      <MessageCircle size={15} className="text-espresso-400" />
-                      コメント
-                    </div>
-                    {commentPreview ? (
-                      <div className="rounded-2xl bg-white px-3 py-3 text-sm text-espresso">
-                        <div className="mb-1 flex flex-wrap items-center gap-1.5 text-[11px] text-espresso-400">
-                          <span>{commentPreview.user?.name ?? '不明なユーザー'}</span>
-                          <span>
-                            {format(new Date(commentPreview.created_at), 'M/d HH:mm', {
-                              locale: ja,
-                            })}
-                          </span>
-                          {commentPreview.source === 'slack' ? <span>Slack</span> : null}
-                        </div>
-                        <p className="whitespace-pre-wrap leading-6">{commentPreview.body}</p>
-                      </div>
-                    ) : (
-                      <div className="rounded-2xl bg-white px-3 py-3 text-sm text-espresso-400">
-                        まだコメントはありません。
-                      </div>
-                    )}
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-[22px] border border-cream-100 bg-cream-50/70 px-4 py-3">
+                  <div className="flex items-center gap-2 text-sm text-espresso-500">
+                    <MessageCircle size={15} className="text-espresso-400" />
+                    詳しい理由やコメントは詳細ページで確認できます。
                   </div>
-
-                  <div className="flex flex-col justify-between gap-3">
-                    <div className="rounded-[22px] border border-cream-100 bg-cream-50/70 px-4 py-3 text-sm text-espresso-500">
-                      詳しい理由や過去のコメントは詳細ページで確認できます。
-                    </div>
-                    <Link
-                      href={`/request/${request.id}`}
-                      className="inline-flex items-center justify-center rounded-2xl bg-espresso px-4 py-3 text-sm font-medium text-cream-50 transition-colors hover:bg-espresso-600"
-                    >
-                      詳細を見る
-                    </Link>
-                  </div>
+                  <Link
+                    href={`/request/${request.id}`}
+                    className="inline-flex items-center justify-center rounded-2xl bg-espresso px-4 py-3 text-sm font-medium text-cream-50 transition-colors hover:bg-espresso-600"
+                  >
+                    詳細を見る
+                  </Link>
                 </div>
               </section>
             );

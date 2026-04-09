@@ -1,7 +1,6 @@
 import { redirect } from 'next/navigation';
 import UserLayout from '@/components/layout/UserLayout';
 import { createClient } from '@/lib/supabase/server';
-import type { ItemRequestComment } from '@/types';
 import RequestForm from './RequestForm';
 import RequestBoardClient from './RequestBoardClient';
 
@@ -22,8 +21,8 @@ type RequestListRow = {
   created_at: string;
   updated_at: string;
   user?: RequestUser;
-  votes: Array<{ user_id: string }>;
-  comments: Array<ItemRequestComment & { user?: RequestUser }>;
+  vote_count: number;
+  has_voted: boolean;
 };
 
 export default async function RequestPage() {
@@ -37,20 +36,39 @@ export default async function RequestPage() {
   const { data: requests } = await supabase
     .from('item_requests')
     .select(
-      'id, user_id, item_name, reason, desired_price, status, admin_note, created_at, updated_at, user:users!item_requests_user_id_fkey(id, name, avatar_url), votes:item_request_votes(user_id), comments:item_request_comments(id, request_id, user_id, body, source, created_at, user:users!item_request_comments_user_id_fkey(id, name, avatar_url))'
+      'id, user_id, item_name, reason, desired_price, status, admin_note, created_at, updated_at, user:users!item_requests_user_id_fkey(id, name, avatar_url)'
     )
     .order('created_at', { ascending: false })
-    .order('created_at', { ascending: false, foreignTable: 'comments' })
-    .limit(1, { foreignTable: 'comments' });
+    .limit(36);
 
-  const boardRequests = ((requests ?? []) as any[]).map((request) => ({
-    ...request,
-    user: Array.isArray(request.user) ? request.user[0] : request.user,
-    comments: (request.comments ?? []).map((comment: any) => ({
-      ...comment,
-      user: Array.isArray(comment.user) ? comment.user[0] : comment.user,
-    })),
-  })) as RequestListRow[];
+  const requestIds = (requests ?? []).map((request) => request.id);
+
+  const { data: votes } = requestIds.length
+    ? await supabase
+        .from('item_request_votes')
+        .select('request_id, user_id')
+        .in('request_id', requestIds)
+    : { data: [] };
+
+  const voteMap = new Map<string, { count: number; hasVoted: boolean }>();
+
+  for (const vote of votes ?? []) {
+    const current = voteMap.get(vote.request_id) ?? { count: 0, hasVoted: false };
+    voteMap.set(vote.request_id, {
+      count: current.count + 1,
+      hasVoted: current.hasVoted || vote.user_id === user.id,
+    });
+  }
+
+  const boardRequests = ((requests ?? []) as any[]).map((request) => {
+    const voteState = voteMap.get(request.id) ?? { count: 0, hasVoted: false };
+    return {
+      ...request,
+      user: Array.isArray(request.user) ? request.user[0] : request.user,
+      vote_count: voteState.count,
+      has_voted: voteState.hasVoted,
+    };
+  }) as RequestListRow[];
 
   return (
     <UserLayout>
@@ -93,7 +111,7 @@ export default async function RequestPage() {
                 一覧では要点だけを表示しています。詳しい内容やコメントは詳細ページで確認できます。
               </p>
             </div>
-            <RequestBoardClient requests={boardRequests} currentUserId={user.id} />
+            <RequestBoardClient requests={boardRequests} />
           </section>
         </div>
       </div>
