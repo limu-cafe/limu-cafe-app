@@ -41,12 +41,12 @@ export default function ItemCard({
       ? {
           label: '少なめ',
           className: 'bg-amber-100 text-amber-700',
-          detail: `残り${item.stock}個`,
+          detail: '残りわずかです',
         }
       : {
           label: '在庫あり',
           className: 'bg-matcha/10 text-matcha-dark',
-          detail: `在庫 ${item.stock}個`,
+          detail: '購入できます',
         };
 
   if (horizontal) {
@@ -163,7 +163,7 @@ export default function ItemCard({
         {isLowStock && !isOutOfStock && (
           <div className="absolute left-2 top-2">
             <span className="bg-amber-cafe text-white text-xs font-bold px-2 py-0.5 rounded-full">
-              残り{item.stock}個
+              残りわずか
             </span>
           </div>
         )}

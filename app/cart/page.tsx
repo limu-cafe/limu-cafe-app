@@ -90,7 +90,7 @@ export default function CartPage() {
                 </p>
                 {item.stock <= item.stock_alert_threshold && (
                   <p className={`mt-1 text-xs ${item.stock === 0 ? 'text-red-600' : 'text-amber-600'}`}>
-                    {item.stock === 0 ? '在庫切れです。購入前に確認してください。' : `残り${item.stock}個です`}
+                    {item.stock === 0 ? '在庫切れです。購入前に確認してください。' : '在庫が少なくなっています。'}
                   </p>
                 )}
               </div>

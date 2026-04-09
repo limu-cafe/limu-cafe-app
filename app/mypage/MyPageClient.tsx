@@ -234,7 +234,7 @@ export default function MyPageClient({
                 </p>
                 <p className="mt-2 text-xs text-espresso-400">
                   {favorite.item.is_available && favorite.item.stock > 0
-                    ? `在庫 ${favorite.item.stock}個`
+                    ? '購入可能'
                     : '現在は購入不可'}
                 </p>
               </div>

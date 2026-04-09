@@ -150,7 +150,7 @@ export default function CheckoutPage() {
                 </span>
                 {item.stock <= item.stock_alert_threshold && (
                   <p className={`mt-1 text-xs ${item.stock === 0 ? 'text-red-600' : 'text-amber-600'}`}>
-                    {item.stock === 0 ? '在庫切れです' : `残り${item.stock}個`}
+                    {item.stock === 0 ? '在庫切れです' : '在庫が少なくなっています'}
                   </p>
                 )}
               </div>
