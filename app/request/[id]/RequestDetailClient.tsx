@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { startTransition, useEffect, useState } from 'react';
 import { format } from 'date-fns';
 import { ja } from 'date-fns/locale';
 import { Heart, MessageCircle, Send } from 'lucide-react';
@@ -51,23 +51,46 @@ export default function RequestDetailClient({
   const [loadingVote, setLoadingVote] = useState(false);
   const [loadingComment, setLoadingComment] = useState(false);
   const [commentDraft, setCommentDraft] = useState('');
+  const [localRequest, setLocalRequest] = useState(requestItem);
 
-  const hasVoted = requestItem.votes.some((vote) => vote.user_id === currentUserId);
-  const statusMeta = statusConfig[requestItem.status];
+  useEffect(() => {
+    setLocalRequest(requestItem);
+  }, [requestItem]);
+
+  const hasVoted = localRequest.votes.some((vote) => vote.user_id === currentUserId);
+  const statusMeta = statusConfig[localRequest.status];
 
   const handleVote = async () => {
+    const optimisticVoted = !hasVoted;
     setLoadingVote(true);
+    setLocalRequest((current) => ({
+      ...current,
+      votes: optimisticVoted
+        ? [...current.votes, { user_id: currentUserId }]
+        : current.votes.filter((vote) => vote.user_id !== currentUserId),
+    }));
+
     try {
       const res = await fetch('/api/request-votes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ request_id: requestItem.id }),
+        body: JSON.stringify({ request_id: localRequest.id }),
       });
       if (!res.ok) {
         throw new Error((await res.json()).error ?? '投票に失敗しました');
       }
-      router.refresh();
+      const data = await res.json();
+      setLocalRequest((current) => ({
+        ...current,
+        votes: data.voted
+          ? current.votes.some((vote) => vote.user_id === currentUserId)
+            ? current.votes
+            : [...current.votes, { user_id: currentUserId }]
+          : current.votes.filter((vote) => vote.user_id !== currentUserId),
+      }));
+      startTransition(() => router.refresh());
     } catch (error: any) {
+      setLocalRequest(requestItem);
       toast.error(error.message);
     } finally {
       setLoadingVote(false);
@@ -86,13 +109,13 @@ export default function RequestDetailClient({
       const res = await fetch('/api/request-comments', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ request_id: requestItem.id, body }),
+        body: JSON.stringify({ request_id: localRequest.id, body }),
       });
       if (!res.ok) {
         throw new Error((await res.json()).error ?? 'コメントの投稿に失敗しました');
       }
       setCommentDraft('');
-      router.refresh();
+      startTransition(() => router.refresh());
     } catch (error: any) {
       toast.error(error.message);
     } finally {
@@ -117,24 +140,24 @@ export default function RequestDetailClient({
                 {statusMeta.label}
               </span>
               {requestItem.user && (
-                <span className="text-xs text-espresso-400">{requestItem.user.name}</span>
-              )}
+              <span className="text-xs text-espresso-400">{requestItem.user.name}</span>
+            )}
               <span className="text-xs text-espresso-300">
-                {format(new Date(requestItem.created_at), 'M月d日 HH:mm', { locale: ja })}
+                {format(new Date(localRequest.created_at), 'M月d日 HH:mm', { locale: ja })}
               </span>
             </div>
             <h1 className="font-display text-3xl font-bold text-espresso">
-              {requestItem.item_name}
+              {localRequest.item_name}
             </h1>
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-espresso-500">
               <p>
                 希望価格:{' '}
-                {requestItem.desired_price
-                  ? `¥${requestItem.desired_price.toLocaleString()}`
+                {localRequest.desired_price
+                  ? `¥${localRequest.desired_price.toLocaleString()}`
                   : '指定なし'}
               </p>
-              <p>賛成 {requestItem.votes.length}</p>
-              <p>コメント {requestItem.comments.length}件</p>
+              <p>賛成 {localRequest.votes.length}</p>
+              <p>コメント {localRequest.comments.length}件</p>
             </div>
           </div>
 
@@ -153,23 +176,23 @@ export default function RequestDetailClient({
           </button>
         </div>
 
-        {requestItem.reason ? (
+        {localRequest.reason ? (
           <div className="mt-5 rounded-[24px] border border-cream-100 bg-cream-50/70 px-4 py-4">
             <p className="mb-2 text-xs font-medium tracking-[0.12em] text-espresso-400 uppercase">
               理由・補足
             </p>
             <p className="whitespace-pre-wrap text-sm leading-7 text-espresso-600">
-              {requestItem.reason}
+              {localRequest.reason}
             </p>
           </div>
         ) : null}
 
-        {requestItem.admin_note ? (
+        {localRequest.admin_note ? (
           <div className="mt-4 rounded-[24px] border border-cream-100 bg-cream-50/70 px-4 py-4">
             <p className="mb-2 text-xs font-medium tracking-[0.12em] text-espresso-400 uppercase">
               管理者メモ
             </p>
-            <p className="text-sm leading-7 text-espresso-600">{requestItem.admin_note}</p>
+            <p className="text-sm leading-7 text-espresso-600">{localRequest.admin_note}</p>
           </div>
         ) : null}
       </section>
@@ -181,12 +204,12 @@ export default function RequestDetailClient({
         </div>
 
         <div className="space-y-3">
-          {requestItem.comments.length === 0 ? (
+          {localRequest.comments.length === 0 ? (
             <div className="rounded-2xl bg-cream-50 px-4 py-4 text-sm text-espresso-400">
               まだコメントはありません。
             </div>
           ) : (
-            requestItem.comments.map((comment) => {
+            localRequest.comments.map((comment) => {
               const isOwn = comment.user_id === currentUserId;
 
               return (

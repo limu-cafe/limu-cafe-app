@@ -18,8 +18,6 @@ export default async function MyPage() {
     { data: chargeRequests },
     { data: favorites },
     { data: legacyTransferRequests },
-    { count: orderCount },
-    { count: chargeCount },
   ] = await Promise.all([
     supabase
       .from('users')
@@ -33,13 +31,13 @@ export default async function MyPage() {
       )
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
-      .limit(PAGE_SIZE),
+      .limit(PAGE_SIZE + 1),
     supabase
       .from('charge_requests')
       .select('id, amount, method, status, created_at')
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
-      .limit(PAGE_SIZE),
+      .limit(PAGE_SIZE + 1),
     supabase
       .from('favorite_items')
       .select('item:items(id, name, price, stock, is_available)')
@@ -51,24 +49,19 @@ export default async function MyPage() {
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
       .limit(1),
-    supabase
-      .from('orders')
-      .select('id', { count: 'exact', head: true })
-      .eq('user_id', user.id),
-    supabase
-      .from('charge_requests')
-      .select('id', { count: 'exact', head: true })
-      .eq('user_id', user.id),
   ]);
+
+  const initialOrders = (orders ?? []) as any[];
+  const initialCharges = (chargeRequests ?? []) as any[];
 
   return (
     <UserLayout>
       <MyPageClient
         profile={profile}
-        initialOrders={(orders ?? []) as any}
-        initialCharges={(chargeRequests ?? []) as any}
-        orderCount={orderCount ?? 0}
-        chargeCount={chargeCount ?? 0}
+        initialOrders={initialOrders.slice(0, PAGE_SIZE)}
+        initialCharges={initialCharges.slice(0, PAGE_SIZE)}
+        initialHasMoreOrders={initialOrders.length > PAGE_SIZE}
+        initialHasMoreCharges={initialCharges.length > PAGE_SIZE}
         favorites={(favorites ?? []) as any}
         latestLegacyTransferRequest={
           legacyTransferRequests?.[0]

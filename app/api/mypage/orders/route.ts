@@ -14,6 +14,7 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const offset = Math.max(0, Number(searchParams.get('offset') ?? '0'));
   const limit = Math.min(10, Math.max(1, Number(searchParams.get('limit') ?? '3')));
+  const fetchLimit = limit + 1;
 
   const { data: orders, error } = await supabase
     .from('orders')
@@ -22,11 +23,15 @@ export async function GET(request: Request) {
     )
     .eq('user_id', user.id)
     .order('created_at', { ascending: false })
-    .range(offset, offset + limit - 1);
+    .range(offset, offset + fetchLimit - 1);
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ orders: orders ?? [] });
+  const rows = orders ?? [];
+  return NextResponse.json({
+    orders: rows.slice(0, limit),
+    hasMore: rows.length > limit,
+  });
 }

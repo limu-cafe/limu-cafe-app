@@ -52,21 +52,23 @@ export default function MyPageClient({
   profile,
   initialOrders,
   initialCharges,
-  orderCount,
-  chargeCount,
+  initialHasMoreOrders,
+  initialHasMoreCharges,
   favorites,
   latestLegacyTransferRequest,
 }: {
   profile: Pick<User, 'name' | 'email' | 'avatar_url' | 'balance' | 'deferred_balance'> | null;
   initialOrders: MyOrder[];
   initialCharges: Pick<ChargeRequest, 'id' | 'amount' | 'method' | 'status' | 'created_at'>[];
-  orderCount: number;
-  chargeCount: number;
+  initialHasMoreOrders: boolean;
+  initialHasMoreCharges: boolean;
   favorites: FavoriteCard[];
   latestLegacyTransferRequest: LegacyTransferRequest | null;
 }) {
   const [orders, setOrders] = useState(initialOrders);
   const [charges, setCharges] = useState(initialCharges);
+  const [hasMoreOrders, setHasMoreOrders] = useState(initialHasMoreOrders);
+  const [hasMoreCharges, setHasMoreCharges] = useState(initialHasMoreCharges);
   const [loadingOrders, setLoadingOrders] = useState(false);
   const [loadingCharges, setLoadingCharges] = useState(false);
 
@@ -91,6 +93,7 @@ export default function MyPageClient({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? '購入履歴の取得に失敗しました');
       setOrders((current) => [...current, ...(data.orders ?? [])]);
+      setHasMoreOrders(Boolean(data.hasMore));
     } finally {
       setLoadingOrders(false);
     }
@@ -103,6 +106,7 @@ export default function MyPageClient({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'チャージ履歴の取得に失敗しました');
       setCharges((current) => [...current, ...(data.chargeRequests ?? [])]);
+      setHasMoreCharges(Boolean(data.hasMore));
     } finally {
       setLoadingCharges(false);
     }
@@ -158,7 +162,7 @@ export default function MyPageClient({
             <ShoppingBag size={18} />
             購入履歴
           </h2>
-          <span className="text-xs text-espresso-400">{orderCount}件</span>
+          <span className="text-xs text-espresso-400">直近 {orders.length}件</span>
         </div>
 
         {orders.length === 0 ? (
@@ -200,7 +204,7 @@ export default function MyPageClient({
               </div>
             ))}
 
-            {orders.length < orderCount && (
+            {hasMoreOrders && (
               <button
                 type="button"
                 onClick={loadMoreOrders}
@@ -247,13 +251,13 @@ export default function MyPageClient({
 
       {charges.length > 0 && (
         <div className="card space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="flex items-center gap-2 font-medium text-espresso">
-              <Wallet size={18} />
-              チャージ履歴
-            </h2>
-            <span className="text-xs text-espresso-400">{chargeCount}件</span>
-          </div>
+        <div className="flex items-center justify-between">
+          <h2 className="flex items-center gap-2 font-medium text-espresso">
+            <Wallet size={18} />
+            チャージ履歴
+          </h2>
+          <span className="text-xs text-espresso-400">直近 {charges.length}件</span>
+        </div>
           <div className="space-y-2">
             {charges.map((req) => (
               <div key={req.id} className="flex items-center justify-between text-sm">
@@ -284,7 +288,7 @@ export default function MyPageClient({
               </div>
             ))}
 
-            {charges.length < chargeCount && (
+            {hasMoreCharges && (
               <button
                 type="button"
                 onClick={loadMoreCharges}

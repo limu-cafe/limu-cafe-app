@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useMemo, useState } from 'react';
+import { startTransition, useEffect, useMemo, useState } from 'react';
 import { format } from 'date-fns';
 import { ja } from 'date-fns/locale';
 import { Heart, MessageCircle } from 'lucide-react';
@@ -44,11 +44,16 @@ export default function RequestBoardClient({
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>(
     'all'
   );
+  const [localRequests, setLocalRequests] = useState(requests);
+
+  useEffect(() => {
+    setLocalRequests(requests);
+  }, [requests]);
 
   const visibleRequests = useMemo(() => {
     const priority = { pending: 0, approved: 1, rejected: 2 } as const;
 
-    return [...requests]
+    return [...localRequests]
       .filter((request) => (statusFilter === 'all' ? true : request.status === statusFilter))
       .sort((a, b) => {
         const statusGap = priority[a.status] - priority[b.status];
@@ -56,14 +61,31 @@ export default function RequestBoardClient({
         if (b.vote_count !== a.vote_count) return b.vote_count - a.vote_count;
         return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
       });
-  }, [requests, statusFilter]);
+  }, [localRequests, statusFilter]);
 
   const pendingRequests = visibleRequests.filter((request) => request.status === 'pending');
   const approvedRequests = visibleRequests.filter((request) => request.status === 'approved');
   const rejectedRequests = visibleRequests.filter((request) => request.status === 'rejected');
 
   const handleVote = async (requestId: string) => {
+    const current = localRequests.find((request) => request.id === requestId);
+    if (!current) return;
+
+    const optimisticVoted = !current.has_voted;
+
     setLoadingVoteId(requestId);
+    setLocalRequests((rows) =>
+      rows.map((request) =>
+        request.id === requestId
+          ? {
+              ...request,
+              has_voted: optimisticVoted,
+              vote_count: Math.max(0, request.vote_count + (optimisticVoted ? 1 : -1)),
+            }
+          : request
+      )
+    );
+
     try {
       const res = await fetch('/api/request-votes', {
         method: 'POST',
@@ -73,8 +95,34 @@ export default function RequestBoardClient({
       if (!res.ok) {
         throw new Error((await res.json()).error ?? '投票に失敗しました');
       }
-      router.refresh();
+      const data = await res.json();
+      setLocalRequests((rows) =>
+        rows.map((request) =>
+          request.id === requestId
+            ? {
+                ...request,
+                has_voted: Boolean(data.voted),
+                vote_count:
+                  Boolean(data.voted) === current.has_voted
+                    ? current.vote_count
+                    : Math.max(0, current.vote_count + (data.voted ? 1 : -1)),
+              }
+            : request
+        )
+      );
+      startTransition(() => router.refresh());
     } catch (error: any) {
+      setLocalRequests((rows) =>
+        rows.map((request) =>
+          request.id === requestId
+            ? {
+                ...request,
+                has_voted: current.has_voted,
+                vote_count: current.vote_count,
+              }
+            : request
+        )
+      );
       toast.error(error.message);
     } finally {
       setLoadingVoteId(null);
@@ -82,10 +130,10 @@ export default function RequestBoardClient({
   };
 
   const statusCounts = {
-    all: requests.length,
-    pending: requests.filter((request) => request.status === 'pending').length,
-    approved: requests.filter((request) => request.status === 'approved').length,
-    rejected: requests.filter((request) => request.status === 'rejected').length,
+    all: localRequests.length,
+    pending: localRequests.filter((request) => request.status === 'pending').length,
+    approved: localRequests.filter((request) => request.status === 'approved').length,
+    rejected: localRequests.filter((request) => request.status === 'rejected').length,
   };
 
   const renderCompactList = (
