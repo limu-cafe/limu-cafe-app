@@ -39,7 +39,7 @@ export default async function RequestPage() {
       'id, user_id, item_name, reason, desired_price, status, admin_note, created_at, updated_at, user:users!item_requests_user_id_fkey(id, name, avatar_url)'
     )
     .order('created_at', { ascending: false })
-    .limit(36);
+    .limit(24);
 
   const requestIds = (requests ?? []).map((request) => request.id);
 
