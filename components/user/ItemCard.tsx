@@ -103,13 +103,13 @@ export default function ItemCard({
         )}
 
         <div className="grid grid-cols-[64px,minmax(0,1fr)] gap-3 pr-8">
-          <div className="relative h-16 w-16 flex-shrink-0 overflow-hidden rounded-[18px] bg-cream-100">
+          <div className="relative h-16 w-16 flex-shrink-0 overflow-hidden rounded-[18px] bg-cream-50">
             {item.image_url ? (
               <Image
                 src={item.image_url}
                 alt={item.name}
                 fill
-                className="object-cover"
+                className="object-contain p-1.5"
               />
             ) : (
               <div className="flex h-full w-full items-center justify-center text-3xl">
@@ -174,13 +174,13 @@ export default function ItemCard({
       )}
 
       {/* 画像 */}
-      <div className={`relative mb-3 overflow-hidden rounded-[20px] bg-cream-100 ${compact ? 'aspect-[1.05]' : 'aspect-[1.18]'}`}>
+      <div className={`relative mb-3 overflow-hidden rounded-[20px] bg-cream-50 ${compact ? 'aspect-[1.05]' : 'aspect-[1.18]'}`}>
         {item.image_url ? (
           <Image
             src={item.image_url}
             alt={item.name}
             fill
-            className="object-cover group-hover:scale-105 transition-transform duration-300"
+            className="object-contain p-3 transition-transform duration-300 group-hover:scale-[1.02]"
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center text-5xl">
