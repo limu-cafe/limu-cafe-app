@@ -27,11 +27,11 @@ export async function POST(request: Request) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  const { data: profile } = await supabase
-    .from('users')
-    .select('name')
-    .eq('id', user.id)
-    .single();
+  const userName =
+    user.user_metadata?.full_name ??
+    user.user_metadata?.name ??
+    user.email ??
+    '不明';
 
   const { data: recipients } = await adminSupabase
     .from('users')
@@ -41,7 +41,7 @@ export async function POST(request: Request) {
 
   await notifyNewItemRequest({
     requestId: data.id,
-    userName: profile?.name ?? '不明',
+    userName,
     itemName: item_name,
     desiredPrice: desired_price,
     reason,
