@@ -3,19 +3,67 @@
 import Link from 'next/link';
 import { Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import UserLayout from '@/components/layout/UserLayout';
 import { ArrowRight, CheckCircle2, ShoppingBag, UserCircle2 } from 'lucide-react';
-
-const paymentLabels: Record<string, string> = {
-  balance: '残高払い',
-  deferred: '後払い',
-  cash: '現金払い',
-};
+import UserLayout from '@/components/layout/UserLayout';
+import { useUserLocale } from '@/components/user/UserLocaleProvider';
 
 function OrderCompleteContent() {
   const searchParams = useSearchParams();
+  const { locale } = useUserLocale();
   const payment = searchParams.get('payment') ?? '';
   const orderId = searchParams.get('order') ?? '';
+
+  const paymentLabels =
+    locale === 'en'
+      ? {
+          balance: 'Balance',
+          deferred: 'Pay later',
+          cash: 'Cash',
+        }
+      : {
+          balance: '残高払い',
+          deferred: '後払い',
+          cash: '現金払い',
+        };
+
+  const copy =
+    locale === 'en'
+      ? {
+          title: 'Your order is complete',
+          acceptedWith: `${paymentLabels[payment as keyof typeof paymentLabels] ?? payment} order received.`,
+          accepted: 'Your order has been received.',
+          orderNumber: 'Order ID',
+          status: 'Status',
+          paymentMethod: 'Payment method',
+          nextAction: 'Next step',
+          received: 'Accepted',
+          unset: 'Not set',
+          continueShopping: 'You can keep shopping',
+          viewCart: 'View cart',
+          viewCartDesc: 'Check saved items and prepare your next order',
+          viewMyPage: 'Open My Page',
+          viewMyPageDesc: 'See your history and balances',
+          addMore: 'Add another item',
+          addMoreDesc: 'Go back to products and continue shopping',
+        }
+      : {
+          title: '購入が完了しました',
+          acceptedWith: `${paymentLabels[payment as keyof typeof paymentLabels] ?? payment}で注文を受け付けました。`,
+          accepted: '注文を受け付けました。',
+          orderNumber: '注文番号',
+          status: '状態',
+          paymentMethod: '支払い方法',
+          nextAction: '次の操作',
+          received: '受付済み',
+          unset: '未設定',
+          continueShopping: '続けて購入できます',
+          viewCart: 'カートを見る',
+          viewCartDesc: '追加済みの商品や次の注文を確認',
+          viewMyPage: 'マイページを見る',
+          viewMyPageDesc: '注文履歴や残高を確認',
+          addMore: 'もう1つ追加する',
+          addMoreDesc: '商品一覧に戻って続けて購入',
+        };
 
   return (
     <UserLayout>
@@ -26,24 +74,26 @@ function OrderCompleteContent() {
               <CheckCircle2 size={40} />
             </div>
             <div className="space-y-2">
-              <h1 className="font-display text-4xl font-bold text-espresso">購入が完了しました</h1>
+              <h1 className="font-display text-4xl font-bold text-espresso">{copy.title}</h1>
               <p className="text-sm text-espresso-500">
-                {payment ? `${paymentLabels[payment] ?? payment}で注文を受け付けました。` : '注文を受け付けました。'}
+                {payment ? copy.acceptedWith : copy.accepted}
               </p>
-              {orderId && <p className="text-xs text-espresso-400">注文番号: {orderId}</p>}
+              {orderId && <p className="text-xs text-espresso-400">{copy.orderNumber}: {orderId}</p>}
             </div>
             <div className="mx-auto grid max-w-xl gap-3 sm:grid-cols-3">
               <div className="soft-panel">
-                <p className="text-[11px] tracking-[0.14em] text-espresso-400">状態</p>
-                <p className="mt-2 font-semibold text-espresso">受付済み</p>
+                <p className="text-[11px] tracking-[0.14em] text-espresso-400">{copy.status}</p>
+                <p className="mt-2 font-semibold text-espresso">{copy.received}</p>
               </div>
               <div className="soft-panel">
-                <p className="text-[11px] tracking-[0.14em] text-espresso-400">支払い方法</p>
-                <p className="mt-2 font-semibold text-espresso">{paymentLabels[payment] ?? '未設定'}</p>
+                <p className="text-[11px] tracking-[0.14em] text-espresso-400">{copy.paymentMethod}</p>
+                <p className="mt-2 font-semibold text-espresso">
+                  {paymentLabels[payment as keyof typeof paymentLabels] ?? copy.unset}
+                </p>
               </div>
               <div className="soft-panel">
-                <p className="text-[11px] tracking-[0.14em] text-espresso-400">次の操作</p>
-                <p className="mt-2 font-semibold text-espresso">続けて購入できます</p>
+                <p className="text-[11px] tracking-[0.14em] text-espresso-400">{copy.nextAction}</p>
+                <p className="mt-2 font-semibold text-espresso">{copy.continueShopping}</p>
               </div>
             </div>
           </div>
@@ -56,8 +106,8 @@ function OrderCompleteContent() {
           >
             <ShoppingBag className="text-espresso" size={28} />
             <div>
-              <p className="font-medium text-espresso">カートを見る</p>
-              <p className="mt-1 text-sm text-espresso-400">追加済みの商品や次の注文を確認</p>
+              <p className="font-medium text-espresso">{copy.viewCart}</p>
+              <p className="mt-1 text-sm text-espresso-400">{copy.viewCartDesc}</p>
             </div>
           </Link>
 
@@ -67,8 +117,8 @@ function OrderCompleteContent() {
           >
             <UserCircle2 className="text-espresso" size={28} />
             <div>
-              <p className="font-medium text-espresso">マイページを見る</p>
-              <p className="mt-1 text-sm text-espresso-400">注文履歴や残高を確認</p>
+              <p className="font-medium text-espresso">{copy.viewMyPage}</p>
+              <p className="mt-1 text-sm text-espresso-400">{copy.viewMyPageDesc}</p>
             </div>
           </Link>
 
@@ -78,8 +128,8 @@ function OrderCompleteContent() {
           >
             <ArrowRight className="text-cream-50" size={28} />
             <div>
-              <p className="font-medium">もう1つ追加する</p>
-              <p className="mt-1 text-sm text-cream-200">商品一覧に戻って続けて購入</p>
+              <p className="font-medium">{copy.addMore}</p>
+              <p className="mt-1 text-sm text-cream-200">{copy.addMoreDesc}</p>
             </div>
           </Link>
         </div>

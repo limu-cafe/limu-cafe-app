@@ -5,6 +5,7 @@ import { AlertTriangle, Heart, Plus } from 'lucide-react';
 import { useCartStore } from '@/lib/store/cart';
 import type { Item } from '@/types';
 import toast from 'react-hot-toast';
+import { useUserLocale } from './UserLocaleProvider';
 
 interface ItemCardProps {
   item: Item;
@@ -22,31 +23,64 @@ export default function ItemCard({
   horizontal = false,
 }: ItemCardProps) {
   const addItem = useCartStore((s) => s.addItem);
+  const { locale } = useUserLocale();
+  const copy =
+    locale === 'en'
+      ? {
+          addSuccess: 'added to cart',
+          removeFavorite: 'Remove from favorites',
+          addFavorite: 'Add to favorites',
+          noStock: 'Sold out',
+          lowStock: 'Low stock',
+          inStock: 'In stock',
+          awaiting: 'Restock soon',
+          lowStockDetail: 'Only a few left',
+          available: 'Available',
+          product: 'Item',
+          add: 'Add',
+          waitlist: 'Waiting for restock',
+          addToCart: 'Add to cart',
+        }
+      : {
+          addSuccess: 'をカートに追加しました',
+          removeFavorite: 'お気に入りから外す',
+          addFavorite: 'お気に入りに追加する',
+          noStock: '在庫なし',
+          lowStock: '少なめ',
+          inStock: '在庫あり',
+          awaiting: '入荷待ちです',
+          lowStockDetail: '残りわずかです',
+          available: '購入できます',
+          product: '商品',
+          add: '追加',
+          waitlist: '補充待ち',
+          addToCart: 'カートに追加',
+        };
 
   const handleAdd = () => {
     if (!item.is_available || item.stock === 0) return;
     addItem(item);
-    toast.success(`${item.name} をカートに追加しました`);
+    toast.success(locale === 'en' ? `${item.name} ${copy.addSuccess}` : `${item.name}${copy.addSuccess}`);
   };
 
   const isOutOfStock = item.stock === 0 || !item.is_available;
   const isLowStock = item.stock > 0 && item.stock <= item.stock_alert_threshold;
   const stockStatus = isOutOfStock
     ? {
-        label: '在庫なし',
+        label: copy.noStock,
         className: 'bg-red-100 text-red-700',
-        detail: '入荷待ちです',
+        detail: copy.awaiting,
       }
     : isLowStock
       ? {
-          label: '少なめ',
+          label: copy.lowStock,
           className: 'bg-amber-100 text-amber-700',
-          detail: '残りわずかです',
+          detail: copy.lowStockDetail,
         }
       : {
-          label: '在庫あり',
+          label: copy.inStock,
           className: 'bg-matcha/10 text-matcha-dark',
-          detail: '購入できます',
+          detail: copy.available,
         };
 
   if (horizontal) {
@@ -59,7 +93,7 @@ export default function ItemCard({
             type="button"
             onClick={() => onToggleFavorite(item.id)}
             className="absolute right-2 top-2 z-20 flex h-7 w-7 items-center justify-center rounded-full border border-cream-200 bg-white text-espresso transition-colors hover:bg-cream-50"
-            aria-label={isFavorite ? 'お気に入りから外す' : 'お気に入りに追加する'}
+            aria-label={isFavorite ? copy.removeFavorite : copy.addFavorite}
           >
             <Heart
               size={13}
@@ -95,7 +129,7 @@ export default function ItemCard({
                 </p>
               </div>
               <div className="flex flex-wrap items-center justify-between gap-2 text-[11px]">
-                <span className="text-espresso-400">{item.category?.name ?? '商品'}</span>
+                <span className="text-espresso-400">{item.category?.name ?? copy.product}</span>
                 <span className={`rounded-full px-2 py-0.5 font-medium ${stockStatus.className}`}>
                   {stockStatus.label}
                 </span>
@@ -112,7 +146,7 @@ export default function ItemCard({
                     : 'bg-espresso text-cream-50 hover:bg-espresso-600 active:scale-[0.98]'
                 }`}
               >
-                追加
+                {copy.add}
               </button>
             </div>
           </div>
@@ -130,7 +164,7 @@ export default function ItemCard({
           type="button"
           onClick={() => onToggleFavorite(item.id)}
           className="absolute right-3 top-3 z-20 flex h-9 w-9 items-center justify-center rounded-full border border-cream-200 bg-white text-espresso transition-colors hover:bg-cream-50"
-          aria-label={isFavorite ? 'お気に入りから外す' : 'お気に入りに追加する'}
+          aria-label={isFavorite ? copy.removeFavorite : copy.addFavorite}
         >
           <Heart
             size={16}
@@ -156,14 +190,14 @@ export default function ItemCard({
         {isOutOfStock && (
           <div className="absolute inset-0 bg-white/70 flex items-center justify-center">
             <span className="bg-espresso text-cream-50 text-xs font-bold px-3 py-1 rounded-full">
-              在庫切れ
+              {copy.noStock}
             </span>
           </div>
         )}
         {isLowStock && !isOutOfStock && (
           <div className="absolute left-2 top-2">
             <span className="bg-amber-cafe text-white text-xs font-bold px-2 py-0.5 rounded-full">
-              残りわずか
+              {copy.lowStockDetail}
             </span>
           </div>
         )}
@@ -209,7 +243,7 @@ export default function ItemCard({
             }`}
           >
             <Plus size={16} />
-            {isOutOfStock ? '補充待ち' : 'カートに追加'}
+            {isOutOfStock ? copy.waitlist : copy.addToCart}
           </button>
         </div>
       </div>

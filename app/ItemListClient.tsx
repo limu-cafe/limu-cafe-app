@@ -8,6 +8,7 @@ import InstallPromptCard from '@/components/user/InstallPromptCard';
 import { isQueryMatch } from '@/lib/search';
 import { pickShowcaseItems } from '@/lib/item-highlights';
 import type { Category, Item } from '@/types';
+import { useUserLocale } from '@/components/user/UserLocaleProvider';
 
 interface Props {
   items: Item[];
@@ -26,6 +27,7 @@ export default function ItemListClient({
   initialFrequentItemIds,
   initialPopularItemIds,
 }: Props) {
+  const { locale } = useUserLocale();
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [browseMode, setBrowseMode] = useState<BrowseMode>('all');
@@ -153,40 +155,86 @@ export default function ItemListClient({
   };
 
   const activeCategoryName = categories.find((category) => category.id === selectedCategory)?.name;
+  const copy =
+    locale === 'en'
+      ? {
+          title: 'Products',
+          searchPlaceholder: 'Search by product name',
+          all: 'All',
+          favorites: 'Favorites',
+          frequent: 'Frequent',
+          lowStock: 'Low stock',
+          popular: 'Popular',
+          newArrivals: 'New',
+          showing: 'Showing',
+          search: 'Search',
+          category: 'Category',
+          sectionKicker: 'Products',
+          emptyTitle: 'No products found',
+          emptyDescription: 'Try a different keyword or remove some filters.',
+          quickSections: {
+            popular: { title: 'Popular', subtitle: 'Picked often lately' },
+            newArrivals: { title: 'New arrivals', subtitle: 'Recently added' },
+            frequent: { title: 'Buy again', subtitle: 'From recent history' },
+            favorites: { title: 'Favorites', subtitle: 'Quick access' },
+          },
+        }
+      : {
+          title: '商品一覧',
+          searchPlaceholder: '商品名で検索',
+          all: 'すべて',
+          favorites: 'お気に入り',
+          frequent: 'よく買う',
+          lowStock: '残りわずか',
+          popular: '人気',
+          newArrivals: '新入荷',
+          showing: '表示中',
+          search: '検索',
+          category: 'カテゴリ',
+          sectionKicker: '商品',
+          emptyTitle: '商品が見つかりませんでした',
+          emptyDescription: '検索語を変えるか、絞り込みを外してみてください。',
+          quickSections: {
+            popular: { title: '人気の商品', subtitle: '最近よく選ばれています' },
+            newArrivals: { title: '新入荷', subtitle: '新しく追加されました' },
+            frequent: { title: 'よく買う商品', subtitle: '直近の履歴' },
+            favorites: { title: 'お気に入り', subtitle: 'すぐ追加' },
+          },
+        };
   const quickBrowseOptions = [
-    { id: 'all' as const, label: 'すべて', count: items.length },
-    { id: 'popular' as const, label: '人気', count: popularItems.length },
-    { id: 'new-arrivals' as const, label: '新入荷', count: newArrivalItems.length },
-    { id: 'favorites' as const, label: 'お気に入り', count: favoriteItems.length },
-    { id: 'frequent' as const, label: 'よく買う', count: visibleFrequentItems.length },
-    { id: 'low-stock' as const, label: '残りわずか', count: lowStockItems.length },
+    { id: 'all' as const, label: copy.all, count: items.length },
+    { id: 'popular' as const, label: copy.popular, count: popularItems.length },
+    { id: 'new-arrivals' as const, label: copy.newArrivals, count: newArrivalItems.length },
+    { id: 'favorites' as const, label: copy.favorites, count: favoriteItems.length },
+    { id: 'frequent' as const, label: copy.frequent, count: visibleFrequentItems.length },
+    { id: 'low-stock' as const, label: copy.lowStock, count: lowStockItems.length },
   ];
   const quickSections = [
     {
       id: 'popular',
-      title: '人気の商品',
-      subtitle: '最近よく選ばれています',
+      title: copy.quickSections.popular.title,
+      subtitle: copy.quickSections.popular.subtitle,
       icon: Flame,
       items: popularItems.slice(0, 2),
     },
     {
       id: 'new-arrivals',
-      title: '新入荷',
-      subtitle: '新しく追加されました',
+      title: copy.quickSections.newArrivals.title,
+      subtitle: copy.quickSections.newArrivals.subtitle,
       icon: Sparkles,
       items: newArrivalItems.slice(0, 2),
     },
     {
       id: 'frequent',
-      title: 'よく買う商品',
-      subtitle: '直近の履歴',
+      title: copy.quickSections.frequent.title,
+      subtitle: copy.quickSections.frequent.subtitle,
       icon: Flame,
       items: visibleFrequentItems.slice(0, 2),
     },
     {
       id: 'favorites',
-      title: 'お気に入り',
-      subtitle: 'すぐ追加',
+      title: copy.quickSections.favorites.title,
+      subtitle: copy.quickSections.favorites.subtitle,
       icon: Heart,
       items: favoriteItems.slice(0, 2),
     },
@@ -195,7 +243,7 @@ export default function ItemListClient({
   return (
     <div className="space-y-6 animate-fade-in">
       <section className="space-y-2">
-        <h1 className="font-display text-4xl font-bold text-espresso">商品一覧</h1>
+        <h1 className="font-display text-4xl font-bold text-espresso">{copy.title}</h1>
       </section>
 
       <section className="card space-y-4">
@@ -206,7 +254,7 @@ export default function ItemListClient({
           />
           <input
             type="text"
-            placeholder="商品名で検索"
+            placeholder={copy.searchPlaceholder}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             className="input pl-11"
@@ -235,7 +283,7 @@ export default function ItemListClient({
             onClick={() => setSelectedCategory(null)}
             className={`chip-filter whitespace-nowrap ${!selectedCategory ? 'chip-filter-active' : ''}`}
           >
-            すべて
+            {copy.all}
           </button>
           {categories.map((cat) => (
             <button
@@ -252,9 +300,9 @@ export default function ItemListClient({
 
         {(query || activeCategoryName || browseMode !== 'all') && (
           <div className="flex flex-wrap gap-2 text-sm text-espresso-500">
-            <span>表示中 {filtered.length}件</span>
-            {query && <span>検索: 「{query}」</span>}
-            {activeCategoryName && <span>カテゴリ: {activeCategoryName}</span>}
+            <span>{copy.showing} {filtered.length}</span>
+            {query && <span>{copy.search}: “{query}”</span>}
+            {activeCategoryName && <span>{copy.category}: {activeCategoryName}</span>}
           </div>
         )}
       </section>
@@ -266,9 +314,9 @@ export default function ItemListClient({
           {filtered.length === 0 ? (
             <div className="card py-16 text-center text-espresso-400">
               <p className="mb-4 text-5xl">🔍</p>
-              <p className="font-medium text-espresso">商品が見つかりませんでした</p>
+              <p className="font-medium text-espresso">{copy.emptyTitle}</p>
               <p className="mt-2 text-sm text-espresso-400">
-                検索語を変えるか、絞り込みを外してみてください。
+                {copy.emptyDescription}
               </p>
             </div>
           ) : (
@@ -276,7 +324,7 @@ export default function ItemListClient({
               <div className="flex items-center justify-between">
                 <div className="section-kicker">
                   <Sparkles size={12} />
-                  商品
+                  {copy.sectionKicker}
                 </div>
                 <p className="text-sm text-espresso-400">{filtered.length}件</p>
               </div>

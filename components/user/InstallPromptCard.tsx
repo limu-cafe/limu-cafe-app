@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { Download, Smartphone, X } from 'lucide-react';
+import { useUserLocale } from './UserLocaleProvider';
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -11,9 +12,26 @@ interface BeforeInstallPromptEvent extends Event {
 const STORAGE_KEY = 'limu-install-dismissed';
 
 export default function InstallPromptCard() {
+  const { locale } = useUserLocale();
   const [promptEvent, setPromptEvent] = useState<BeforeInstallPromptEvent | null>(null);
   const [dismissed, setDismissed] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
+  const copy =
+    locale === 'en'
+      ? {
+          close: 'Close install prompt',
+          kicker: 'Add to home screen',
+          title: 'Open it like an app',
+          description: 'Add it to your home screen so you can launch it faster next time.',
+          action: 'Install',
+        }
+      : {
+          close: 'インストール案内を閉じる',
+          kicker: 'ホーム画面に追加',
+          title: 'すぐ開けるようにできます',
+          description: 'ホーム画面に追加すると、次回からアプリのように開けます。',
+          action: 'インストールする',
+        };
 
   useEffect(() => {
     const hasDismissed = window.localStorage.getItem(STORAGE_KEY) === '1';
@@ -68,7 +86,7 @@ export default function InstallPromptCard() {
         type="button"
         onClick={handleDismiss}
         className="absolute right-3 top-3 rounded-full p-1 text-espresso-400 transition-colors hover:bg-white hover:text-espresso"
-        aria-label="インストール案内を閉じる"
+        aria-label={copy.close}
       >
         <X size={16} />
       </button>
@@ -76,18 +94,18 @@ export default function InstallPromptCard() {
         <div className="space-y-2 pr-8">
           <div className="section-kicker">
             <Smartphone size={12} />
-            ホーム画面に追加
+            {copy.kicker}
           </div>
           <div>
-            <p className="font-display text-2xl font-bold text-espresso">すぐ開けるようにできます</p>
+            <p className="font-display text-2xl font-bold text-espresso">{copy.title}</p>
             <p className="mt-1 text-sm text-espresso-500">
-              ホーム画面に追加すると、次回からアプリのように開けます。
+              {copy.description}
             </p>
           </div>
         </div>
         <button type="button" onClick={handleInstall} className="btn-matcha flex items-center justify-center gap-2 px-5 py-3">
           <Download size={16} />
-          インストールする
+          {copy.action}
         </button>
       </div>
     </div>

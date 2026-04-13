@@ -5,18 +5,56 @@ import UserLayout from '@/components/layout/UserLayout';
 import toast from 'react-hot-toast';
 import { Banknote, CreditCard, ChevronRight } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { useUserLocale } from '@/components/user/UserLocaleProvider';
 
 const PRESET_AMOUNTS = [500, 1000, 2000, 3000, 5000];
 
 export default function ChargePage() {
   const router = useRouter();
+  const { locale } = useUserLocale();
   const [amount, setAmount] = useState<number | ''>('');
   const [method, setMethod] = useState<'cash'>('cash');
   const [loading, setLoading] = useState(false);
+  const copy =
+    locale === 'en'
+      ? {
+          minAmount: 'Please enter at least ¥100',
+          successCash: 'Top-up reflected. The amount was added to your deferred balance.',
+          success: 'Top-up completed!',
+          title: 'Top up balance',
+          subtitle:
+            'Your balance becomes available right away. Cash top-ups are settled later.',
+          amount: 'Top-up amount',
+          amountPlaceholder: 'Enter amount',
+          paymentMethod: 'Payment method',
+          cash: 'Cash',
+          cashDescription: 'Available immediately and collected at settlement time',
+          card: 'Credit card',
+          inProgress: 'In progress',
+          cardDescription: 'Stripe support is being prepared. Please use cash for now.',
+          action: 'Top up',
+        }
+      : {
+          minAmount: '100円以上で入力してください',
+          successCash: 'チャージを反映しました。金額は後払い残高に追加され、定期精算で回収されます。',
+          success: 'チャージが完了しました！',
+          title: '残高チャージ',
+          subtitle:
+            'チャージした残高はすぐ使えます。代金は後払い残高に加算され、定期精算でお支払いします',
+          amount: 'チャージ金額',
+          amountPlaceholder: '金額を入力',
+          paymentMethod: '支払い方法',
+          cash: '現金',
+          cashDescription: '残高へすぐ反映し、代金は定期精算で回収します',
+          card: 'クレジットカード',
+          inProgress: '開発中',
+          cardDescription: 'Stripe 連携は準備中です。現在は現金チャージをご利用ください。',
+          action: 'チャージする',
+        };
 
   const handleCharge = async () => {
     if (!amount || amount < 100) {
-      toast.error('100円以上で入力してください');
+      toast.error(copy.minAmount);
       return;
     }
     setLoading(true);
@@ -29,8 +67,8 @@ export default function ChargePage() {
       if (!res.ok) throw new Error((await res.json()).error);
       toast.success(
         method === 'cash'
-          ? 'チャージを反映しました。金額は後払い残高に追加され、定期精算で回収されます。'
-          : 'チャージが完了しました！'
+          ? copy.successCash
+          : copy.success
       );
       router.push('/mypage');
     } catch (e: any) {
@@ -44,15 +82,15 @@ export default function ChargePage() {
     <UserLayout>
       <div className="max-w-md mx-auto animate-fade-in space-y-6">
         <div>
-          <h1 className="font-display font-bold text-3xl text-espresso">残高チャージ</h1>
+          <h1 className="font-display font-bold text-3xl text-espresso">{copy.title}</h1>
           <p className="text-espresso-400 text-sm mt-1">
-            チャージした残高はすぐ使えます。代金は後払い残高に加算され、定期精算でお支払いします
+            {copy.subtitle}
           </p>
         </div>
 
         {/* 金額入力 */}
         <div className="card space-y-4">
-          <h2 className="font-medium text-espresso">チャージ金額</h2>
+          <h2 className="font-medium text-espresso">{copy.amount}</h2>
 
           {/* プリセット */}
           <div className="grid grid-cols-3 gap-2">
@@ -77,7 +115,7 @@ export default function ChargePage() {
             <input
               type="number"
               min={100}
-              placeholder="金額を入力"
+              placeholder={copy.amountPlaceholder}
               value={amount}
               onChange={(e) => setAmount(e.target.value ? Number(e.target.value) : '')}
               className="input pl-8 font-mono"
@@ -87,7 +125,7 @@ export default function ChargePage() {
 
         {/* 支払い方法 */}
         <div className="card space-y-3">
-          <h2 className="font-medium text-espresso">支払い方法</h2>
+          <h2 className="font-medium text-espresso">{copy.paymentMethod}</h2>
 
           <button
             onClick={() => setMethod('cash')}
@@ -99,9 +137,9 @@ export default function ChargePage() {
           >
             <Banknote size={22} className={method === 'cash' ? 'text-cream-50' : 'text-espresso-600'} />
             <div className="text-left flex-1">
-              <p className="font-medium">現金</p>
+              <p className="font-medium">{copy.cash}</p>
               <p className={`text-sm ${method === 'cash' ? 'text-cream-200' : 'text-espresso-400'}`}>
-                残高へすぐ反映し、代金は定期精算で回収します
+                {copy.cashDescription}
               </p>
             </div>
           </button>
@@ -113,13 +151,13 @@ export default function ChargePage() {
             <CreditCard size={22} className="text-espresso-600" />
             <div className="text-left flex-1">
               <div className="flex items-center gap-2">
-                <p className="font-medium">クレジットカード</p>
+                <p className="font-medium">{copy.card}</p>
                 <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
-                  開発中
+                  {copy.inProgress}
                 </span>
               </div>
               <p className="text-sm text-espresso-400">
-                Stripe 連携は準備中です。現在は現金チャージをご利用ください。
+                {copy.cardDescription}
               </p>
             </div>
           </button>
@@ -135,7 +173,11 @@ export default function ChargePage() {
             <span className="animate-spin w-5 h-5 border-2 border-white border-t-transparent rounded-full" />
           ) : (
             <>
-              {amount ? `¥${Number(amount).toLocaleString()} をチャージ` : 'チャージする'}
+              {amount
+                ? locale === 'en'
+                  ? `Top up ¥${Number(amount).toLocaleString()}`
+                  : `¥${Number(amount).toLocaleString()} をチャージ`
+                : copy.action}
               <ChevronRight size={18} />
             </>
           )}

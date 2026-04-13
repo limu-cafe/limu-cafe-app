@@ -3,10 +3,11 @@
 import Link from 'next/link';
 import { startTransition, useEffect, useMemo, useState } from 'react';
 import { format } from 'date-fns';
-import { ja } from 'date-fns/locale';
 import { Heart, MessageCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
+import { enUS, ja } from 'date-fns/locale';
+import { useUserLocale } from '@/components/user/UserLocaleProvider';
 type RequestUser = {
   id: string;
   name: string;
@@ -28,23 +29,67 @@ type RequestRow = {
   has_voted: boolean;
 };
 
-const statusConfig = {
-  pending: { label: '検討中', className: 'bg-amber-100 text-amber-700' },
-  approved: { label: '採用', className: 'bg-emerald-100 text-emerald-700' },
-  rejected: { label: '却下', className: 'bg-rose-100 text-rose-700' },
-};
-
 export default function RequestBoardClient({
   requests,
 }: {
   requests: RequestRow[];
 }) {
   const router = useRouter();
+  const { locale } = useUserLocale();
   const [loadingVoteId, setLoadingVoteId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>(
     'all'
   );
   const [localRequests, setLocalRequests] = useState(requests);
+  const dateLocale = locale === 'en' ? enUS : ja;
+  const copy =
+    locale === 'en'
+      ? {
+          all: 'All',
+          pending: 'Open',
+          approved: 'Approved',
+          rejected: 'Rejected',
+          voted: 'Votes',
+          detailsHint: 'See the detail page for the full reason and comments.',
+          openDetail: 'Open details',
+          emptyApproved: 'No approved requests yet.',
+          emptyRejected: 'No rejected requests yet.',
+          emptyFilter: 'No requests match this filter yet.',
+          approvedList: 'Approved requests',
+          rejectedList: 'Rejected requests',
+          voteAction: 'Support',
+          unknownUser: 'Unknown',
+        }
+      : {
+          all: 'すべて',
+          pending: '検討中',
+          approved: '採用',
+          rejected: '却下',
+          voted: '賛成',
+          detailsHint: '詳しい理由やコメントは詳細ページで確認できます。',
+          openDetail: '詳細を見る',
+          emptyApproved: '採用済みの要望はまだありません。',
+          emptyRejected: '却下済みの要望はまだありません。',
+          emptyFilter: 'この条件に当てはまる要望はまだありません。',
+          approvedList: '採用された要望',
+          rejectedList: '見送った要望',
+          voteAction: '賛成する',
+          unknownUser: '不明',
+        };
+  const statusConfig = {
+    pending: {
+      label: locale === 'en' ? 'Open' : '検討中',
+      className: 'bg-amber-100 text-amber-700',
+    },
+    approved: {
+      label: locale === 'en' ? 'Approved' : '採用',
+      className: 'bg-emerald-100 text-emerald-700',
+    },
+    rejected: {
+      label: locale === 'en' ? 'Rejected' : '却下',
+      className: 'bg-rose-100 text-rose-700',
+    },
+  };
 
   useEffect(() => {
     setLocalRequests(requests);
@@ -144,7 +189,7 @@ export default function RequestBoardClient({
     <section className="rounded-[24px] border border-cream-200 bg-white px-4 py-4 shadow-[0_18px_48px_-40px_rgba(44,26,14,0.28)]">
       <div className="mb-3 flex items-center justify-between">
         <h2 className="text-sm font-semibold text-espresso">{title}</h2>
-        <span className="text-xs text-espresso-400">{rows.length}件</span>
+        <span className="text-xs text-espresso-400">{rows.length}</span>
       </div>
       {rows.length === 0 ? (
         <p className="text-sm text-espresso-400">{emptyLabel}</p>
@@ -159,7 +204,7 @@ export default function RequestBoardClient({
               <div className="min-w-0">
                 <p className="truncate text-sm font-medium text-espresso">{request.item_name}</p>
                 <p className="mt-1 text-xs text-espresso-400">
-                  {request.user?.name ?? '不明'} ・ 賛成 {request.vote_count}
+                  {request.user?.name ?? copy.unknownUser} ・ {copy.voted} {request.vote_count}
                 </p>
               </div>
               <span
@@ -179,10 +224,10 @@ export default function RequestBoardClient({
       <div className="rounded-[24px] border border-cream-200 bg-white px-4 py-4 shadow-[0_18px_48px_-40px_rgba(44,26,14,0.28)]">
         <div className="flex flex-wrap gap-2">
           {[
-            ['all', 'すべて'],
-            ['pending', '検討中'],
-            ['approved', '採用'],
-            ['rejected', '却下'],
+            ['all', copy.all],
+            ['pending', copy.pending],
+            ['approved', copy.approved],
+            ['rejected', copy.rejected],
           ].map(([value, label]) => (
             <button
               key={value}
@@ -217,13 +262,13 @@ export default function RequestBoardClient({
                   <div className="space-y-2">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${statusConfig.pending.className}`}>
-                        検討中
+                        {statusConfig.pending.label}
                       </span>
                       {request.user && (
                         <span className="text-xs text-espresso-400">{request.user.name}</span>
                       )}
                       <span className="text-xs text-espresso-300">
-                        {format(new Date(request.created_at), 'M月d日 HH:mm', { locale: ja })}
+                        {format(new Date(request.created_at), locale === 'en' ? 'MMM d HH:mm' : 'M月d日 HH:mm', { locale: dateLocale })}
                       </span>
                     </div>
                     <h2 className="font-display text-2xl font-bold text-espresso">
@@ -231,12 +276,14 @@ export default function RequestBoardClient({
                     </h2>
                     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-espresso-500">
                       <p>
-                        希望価格:{' '}
+                        {locale === 'en' ? 'Desired price: ' : '希望価格: '}
                         {request.desired_price
                           ? `¥${request.desired_price.toLocaleString()}`
-                          : '指定なし'}
+                          : locale === 'en'
+                            ? 'Not set'
+                            : '指定なし'}
                       </p>
-                      <p>賛成 {request.vote_count}</p>
+                      <p>{copy.voted} {request.vote_count}</p>
                     </div>
                     {request.reason ? (
                       <p className="line-clamp-2 max-w-3xl whitespace-pre-wrap text-sm leading-7 text-espresso-600">
@@ -256,20 +303,20 @@ export default function RequestBoardClient({
                     }`}
                   >
                     <Heart size={16} className={hasVoted ? 'fill-current' : ''} />
-                    賛成する
+                    {copy.voteAction}
                   </button>
                 </div>
 
                 <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-[22px] border border-cream-100 bg-cream-50/70 px-4 py-3">
                   <div className="flex items-center gap-2 text-sm text-espresso-500">
                     <MessageCircle size={15} className="text-espresso-400" />
-                    詳しい理由やコメントは詳細ページで確認できます。
+                    {copy.detailsHint}
                   </div>
                   <Link
                     href={`/request/${request.id}`}
                     className="inline-flex items-center justify-center rounded-2xl bg-espresso px-4 py-3 text-sm font-medium text-cream-50 transition-colors hover:bg-espresso-600"
                   >
-                    詳細を見る
+                    {copy.openDetail}
                   </Link>
                 </div>
               </section>
@@ -280,14 +327,14 @@ export default function RequestBoardClient({
 
       {statusFilter !== 'pending' && (
         <div className="grid gap-4 lg:grid-cols-2">
-          {renderCompactList('採用された要望', approvedRequests, '採用済みの要望はまだありません。')}
-          {renderCompactList('見送った要望', rejectedRequests, '却下済みの要望はまだありません。')}
+          {renderCompactList(copy.approvedList, approvedRequests, copy.emptyApproved)}
+          {renderCompactList(copy.rejectedList, rejectedRequests, copy.emptyRejected)}
         </div>
       )}
 
       {visibleRequests.length === 0 && (
         <div className="rounded-[28px] border border-cream-200 bg-white px-5 py-10 text-center text-sm text-espresso-400 shadow-[0_18px_48px_-40px_rgba(44,26,14,0.28)]">
-          この条件に当てはまる要望はまだありません。
+          {copy.emptyFilter}
         </div>
       )}
     </div>

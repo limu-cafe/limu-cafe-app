@@ -3,11 +3,12 @@
 import Link from 'next/link';
 import { startTransition, useEffect, useState } from 'react';
 import { format } from 'date-fns';
-import { ja } from 'date-fns/locale';
+import { enUS, ja } from 'date-fns/locale';
 import { Heart, MessageCircle, Send } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import type { ItemRequestComment } from '@/types';
+import { useUserLocale } from '@/components/user/UserLocaleProvider';
 
 type RequestUser = {
   id: string;
@@ -34,12 +35,6 @@ type RequestRow = {
   comments: (ItemRequestComment & { user?: RequestUser })[];
 };
 
-const statusConfig = {
-  pending: { label: '検討中', className: 'bg-amber-100 text-amber-700' },
-  approved: { label: '採用', className: 'bg-emerald-100 text-emerald-700' },
-  rejected: { label: '却下', className: 'bg-rose-100 text-rose-700' },
-};
-
 export default function RequestDetailClient({
   requestItem,
   currentUserId,
@@ -48,10 +43,57 @@ export default function RequestDetailClient({
   currentUserId: string;
 }) {
   const router = useRouter();
+  const { locale } = useUserLocale();
   const [loadingVote, setLoadingVote] = useState(false);
   const [loadingComment, setLoadingComment] = useState(false);
   const [commentDraft, setCommentDraft] = useState('');
   const [localRequest, setLocalRequest] = useState(requestItem);
+  const dateLocale = locale === 'en' ? enUS : ja;
+  const copy =
+    locale === 'en'
+      ? {
+          back: 'Back to requests',
+          desiredPrice: 'Desired price',
+          notSet: 'Not set',
+          votes: 'Votes',
+          comments: 'Comments',
+          voted: 'Supported',
+          vote: 'Support',
+          reasonTitle: 'Reason / note',
+          adminNote: 'Admin note',
+          commentTitle: 'Comments',
+          noComments: 'No comments yet.',
+          unknownUser: 'Unknown user',
+          commentPlaceholder: 'Write a comment',
+          commentAction: 'Comment',
+          commentRequired: 'Please enter a comment',
+          voteFailed: 'Failed to update support',
+          commentFailed: 'Failed to post comment',
+        }
+      : {
+          back: '要望一覧に戻る',
+          desiredPrice: '希望価格',
+          notSet: '指定なし',
+          votes: '賛成',
+          comments: 'コメント',
+          voted: '賛成済み',
+          vote: '賛成する',
+          reasonTitle: '理由・補足',
+          adminNote: '管理者メモ',
+          commentTitle: 'コメント',
+          noComments: 'まだコメントはありません。',
+          unknownUser: '不明なユーザー',
+          commentPlaceholder: 'コメントを入力してください',
+          commentAction: 'コメントする',
+          commentRequired: 'コメントを入力してください',
+          voteFailed: '投票に失敗しました',
+          commentFailed: 'コメントの投稿に失敗しました',
+        };
+  const statusConfig = {
+    pending: { label: locale === 'en' ? 'Open' : '検討中', className: 'bg-amber-100 text-amber-700' },
+    approved: { label: locale === 'en' ? 'Approved' : '採用', className: 'bg-emerald-100 text-emerald-700' },
+    rejected: { label: locale === 'en' ? 'Rejected' : '却下', className: 'bg-rose-100 text-rose-700' },
+  };
 
   useEffect(() => {
     setLocalRequest(requestItem);
@@ -77,7 +119,7 @@ export default function RequestDetailClient({
         body: JSON.stringify({ request_id: localRequest.id }),
       });
       if (!res.ok) {
-        throw new Error((await res.json()).error ?? '投票に失敗しました');
+        throw new Error((await res.json()).error ?? copy.voteFailed);
       }
       const data = await res.json();
       setLocalRequest((current) => ({
@@ -100,7 +142,7 @@ export default function RequestDetailClient({
   const handleComment = async () => {
     const body = commentDraft.trim();
     if (!body) {
-      toast.error('コメントを入力してください');
+      toast.error(copy.commentRequired);
       return;
     }
 
@@ -112,7 +154,7 @@ export default function RequestDetailClient({
         body: JSON.stringify({ request_id: localRequest.id, body }),
       });
       if (!res.ok) {
-        throw new Error((await res.json()).error ?? 'コメントの投稿に失敗しました');
+        throw new Error((await res.json()).error ?? copy.commentFailed);
       }
       setCommentDraft('');
       startTransition(() => router.refresh());
@@ -129,7 +171,7 @@ export default function RequestDetailClient({
         href="/request"
         className="inline-flex items-center rounded-full bg-white px-3 py-2 text-sm text-espresso-500 ring-1 ring-cream-200 transition-colors hover:bg-cream-50"
       >
-        要望一覧に戻る
+        {copy.back}
       </Link>
 
       <section className="rounded-[28px] border border-cream-200 bg-white px-5 py-5 shadow-[0_18px_48px_-40px_rgba(44,26,14,0.28)]">
@@ -143,7 +185,7 @@ export default function RequestDetailClient({
               <span className="text-xs text-espresso-400">{requestItem.user.name}</span>
             )}
               <span className="text-xs text-espresso-300">
-                {format(new Date(localRequest.created_at), 'M月d日 HH:mm', { locale: ja })}
+                {format(new Date(localRequest.created_at), locale === 'en' ? 'MMM d HH:mm' : 'M月d日 HH:mm', { locale: dateLocale })}
               </span>
             </div>
             <h1 className="font-display text-3xl font-bold text-espresso">
@@ -151,13 +193,13 @@ export default function RequestDetailClient({
             </h1>
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-espresso-500">
               <p>
-                希望価格:{' '}
+                {copy.desiredPrice}:{' '}
                 {localRequest.desired_price
                   ? `¥${localRequest.desired_price.toLocaleString()}`
-                  : '指定なし'}
+                  : copy.notSet}
               </p>
-              <p>賛成 {localRequest.votes.length}</p>
-              <p>コメント {localRequest.comments.length}件</p>
+              <p>{copy.votes} {localRequest.votes.length}</p>
+              <p>{copy.comments} {localRequest.comments.length}</p>
             </div>
           </div>
 
@@ -172,14 +214,14 @@ export default function RequestDetailClient({
             }`}
           >
             <Heart size={16} className={hasVoted ? 'fill-current' : ''} />
-            {hasVoted ? '賛成済み' : '賛成する'}
+            {hasVoted ? copy.voted : copy.vote}
           </button>
         </div>
 
         {localRequest.reason ? (
           <div className="mt-5 rounded-[24px] border border-cream-100 bg-cream-50/70 px-4 py-4">
             <p className="mb-2 text-xs font-medium tracking-[0.12em] text-espresso-400 uppercase">
-              理由・補足
+              {copy.reasonTitle}
             </p>
             <p className="whitespace-pre-wrap text-sm leading-7 text-espresso-600">
               {localRequest.reason}
@@ -190,7 +232,7 @@ export default function RequestDetailClient({
         {localRequest.admin_note ? (
           <div className="mt-4 rounded-[24px] border border-cream-100 bg-cream-50/70 px-4 py-4">
             <p className="mb-2 text-xs font-medium tracking-[0.12em] text-espresso-400 uppercase">
-              管理者メモ
+              {copy.adminNote}
             </p>
             <p className="text-sm leading-7 text-espresso-600">{localRequest.admin_note}</p>
           </div>
@@ -200,13 +242,13 @@ export default function RequestDetailClient({
       <section className="rounded-[28px] border border-cream-200 bg-white px-5 py-5 shadow-[0_18px_48px_-40px_rgba(44,26,14,0.28)]">
         <div className="mb-4 flex items-center gap-2">
           <MessageCircle size={16} className="text-espresso-400" />
-          <h2 className="text-base font-semibold text-espresso">コメント</h2>
+          <h2 className="text-base font-semibold text-espresso">{copy.commentTitle}</h2>
         </div>
 
         <div className="space-y-3">
           {localRequest.comments.length === 0 ? (
             <div className="rounded-2xl bg-cream-50 px-4 py-4 text-sm text-espresso-400">
-              まだコメントはありません。
+              {copy.noComments}
             </div>
           ) : (
             localRequest.comments.map((comment) => {
@@ -223,10 +265,8 @@ export default function RequestDetailClient({
                     }`}
                   >
                     <div className="mb-1 flex flex-wrap items-center gap-1.5 text-[11px] opacity-75">
-                      <span>{comment.user?.name ?? '不明なユーザー'}</span>
-                      <span>
-                        {format(new Date(comment.created_at), 'M/d HH:mm', { locale: ja })}
-                      </span>
+                      <span>{comment.user?.name ?? copy.unknownUser}</span>
+                      <span>{format(new Date(comment.created_at), locale === 'en' ? 'MMM d HH:mm' : 'M/d HH:mm', { locale: dateLocale })}</span>
                       {comment.source === 'slack' ? <span>Slack</span> : null}
                     </div>
                     <p className="whitespace-pre-wrap leading-6">{comment.body}</p>
@@ -242,7 +282,7 @@ export default function RequestDetailClient({
             rows={3}
             value={commentDraft}
             onChange={(event) => setCommentDraft(event.target.value)}
-            placeholder="コメントを入力してください"
+            placeholder={copy.commentPlaceholder}
             className="w-full resize-none border-0 bg-transparent px-2 py-2 text-sm leading-6 text-espresso placeholder:text-espresso-300 focus:outline-none"
           />
           <div className="mt-2 flex justify-end">
@@ -253,7 +293,7 @@ export default function RequestDetailClient({
               className="inline-flex items-center gap-2 rounded-2xl bg-espresso px-4 py-2.5 text-sm font-medium text-cream-50 hover:bg-espresso-600 disabled:opacity-60"
             >
               <Send size={15} />
-              コメントする
+              {copy.commentAction}
             </button>
           </div>
         </div>

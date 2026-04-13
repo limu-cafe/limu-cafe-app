@@ -3,15 +3,13 @@ import { createAdminClient, createClient } from '@/lib/supabase/server';
 import { syncUserProfile } from '@/lib/supabase/sync-user';
 import { redirect } from 'next/navigation';
 import MyPageClient from './MyPageClient';
+import { Suspense } from 'react';
+import DeferredDataPlaceholder from '@/components/user/DeferredDataPlaceholder';
+import type { User as AuthUser } from '@supabase/supabase-js';
 
 const PAGE_SIZE = 3;
 
-export default async function MyPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect('/login');
+async function MyPageContent({ user }: { user: AuthUser }) {
   await syncUserProfile(user);
   const adminClient = createAdminClient();
 
@@ -56,38 +54,46 @@ export default async function MyPage() {
 
   const initialOrders = (orders ?? []) as any[];
   const initialCharges = (chargeRequests ?? []) as any[];
-  const layoutUser = profile
-    ? {
-        id: user.id,
-        name: profile.name,
-        balance: profile.balance,
+  return (
+    <MyPageClient
+      profile={profile}
+      initialOrders={initialOrders.slice(0, PAGE_SIZE)}
+      initialCharges={initialCharges.slice(0, PAGE_SIZE)}
+      initialHasMoreOrders={initialOrders.length > PAGE_SIZE}
+      initialHasMoreCharges={initialCharges.length > PAGE_SIZE}
+      favorites={(favorites ?? []) as any}
+      latestLegacyTransferRequest={
+        legacyTransferRequests?.[0]
+          ? {
+              ...legacyTransferRequests[0],
+              legacy_name: legacyTransferRequests[0].legacy_name ?? null,
+              note: legacyTransferRequests[0].note ?? null,
+              rejection_reason: legacyTransferRequests[0].rejection_reason ?? null,
+            }
+          : null
       }
-    : {
-        id: user.id,
-        name: user.user_metadata?.full_name ?? user.user_metadata?.name ?? user.email ?? 'LIMUメンバー',
-        balance: 0,
-      };
+    />
+  );
+}
+
+export default async function MyPage() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect('/login');
+
+  const layoutUser = {
+    id: user.id,
+    name: user.user_metadata?.full_name ?? user.user_metadata?.name ?? user.email ?? 'LIMUメンバー',
+    balance: 0,
+  };
 
   return (
     <UserLayout initialUser={layoutUser}>
-      <MyPageClient
-        profile={profile}
-        initialOrders={initialOrders.slice(0, PAGE_SIZE)}
-        initialCharges={initialCharges.slice(0, PAGE_SIZE)}
-        initialHasMoreOrders={initialOrders.length > PAGE_SIZE}
-        initialHasMoreCharges={initialCharges.length > PAGE_SIZE}
-        favorites={(favorites ?? []) as any}
-        latestLegacyTransferRequest={
-          legacyTransferRequests?.[0]
-            ? {
-                ...legacyTransferRequests[0],
-                legacy_name: legacyTransferRequests[0].legacy_name ?? null,
-                note: legacyTransferRequests[0].note ?? null,
-                rejection_reason: legacyTransferRequests[0].rejection_reason ?? null,
-              }
-            : null
-        }
-      />
+      <Suspense fallback={<DeferredDataPlaceholder blocks={3} titleWidthClassName="w-40" />}>
+        <MyPageContent user={user} />
+      </Suspense>
     </UserLayout>
   );
 }

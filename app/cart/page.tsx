@@ -5,16 +5,48 @@ import { useCartStore } from '@/lib/store/cart';
 import { Minus, Plus, Trash2, ShoppingBag } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
+import { useUserLocale } from '@/components/user/UserLocaleProvider';
 
 export default function CartPage() {
+  const { locale } = useUserLocale();
   const { items, removeItem, updateQuantity, total, clearCart, hasHydrated } = useCartStore();
+  const copy =
+    locale === 'en'
+      ? {
+          loading: 'Loading your cart...',
+          emptyTitle: 'Your cart is empty',
+          emptyDescription: 'Add some products to get started',
+          backToProducts: 'Back to products',
+          title: 'Cart',
+          subtitle: 'Adjust quantities and continue to checkout smoothly.',
+          summary: 'Total',
+          clearAll: 'Clear all',
+          soldOut: 'Sold out. Please double-check before purchase.',
+          lowStock: 'Stock is getting low.',
+          subtotal: 'Subtotal',
+          checkout: 'Go to checkout',
+        }
+      : {
+          loading: 'カートを読み込んでいます...',
+          emptyTitle: 'カートは空です',
+          emptyDescription: '商品を追加してみましょう',
+          backToProducts: '商品一覧へ',
+          title: 'カート',
+          subtitle: '数量を調整して、そのままスムーズに購入へ進めます。',
+          summary: '合計',
+          clearAll: 'すべて削除',
+          soldOut: '在庫切れです。購入前に確認してください。',
+          lowStock: '在庫が少なくなっています。',
+          subtotal: '小計',
+          checkout: '購入手続きへ',
+        };
 
   if (!hasHydrated) {
     return (
       <UserLayout>
         <div className="text-center py-24 animate-fade-in">
           <div className="text-6xl mb-4">🛒</div>
-          <p className="text-espresso-400">カートを読み込んでいます...</p>
+          <p className="text-espresso-400">{copy.loading}</p>
         </div>
       </UserLayout>
     );
@@ -26,12 +58,12 @@ export default function CartPage() {
         <div className="text-center py-24 animate-fade-in">
           <div className="text-6xl mb-4">🛒</div>
           <h2 className="font-display text-2xl font-bold text-espresso mb-2">
-            カートは空です
+            {copy.emptyTitle}
           </h2>
-          <p className="text-espresso-400 mb-6">商品を追加してみましょう</p>
+          <p className="text-espresso-400 mb-6">{copy.emptyDescription}</p>
           <Link href="/" className="btn-primary inline-flex items-center gap-2">
             <ShoppingBag size={18} />
-            商品一覧へ
+            {copy.backToProducts}
           </Link>
         </div>
       </UserLayout>
@@ -48,13 +80,13 @@ export default function CartPage() {
                 <ShoppingBag size={12} />
                 Cart
               </div>
-              <h1 className="mt-3 font-display text-4xl font-bold text-espresso">カート</h1>
+              <h1 className="mt-3 font-display text-4xl font-bold text-espresso">{copy.title}</h1>
               <p className="mt-1 text-sm text-espresso-500">
-                数量を調整して、そのままスムーズに購入へ進めます。
+                {copy.subtitle}
               </p>
             </div>
             <div className="soft-panel bg-white/75 text-sm text-espresso-500">
-              合計 <span className="ml-2 font-display text-2xl font-bold text-espresso">¥{total().toLocaleString()}</span>
+              {copy.summary} <span className="ml-2 font-display text-2xl font-bold text-espresso">¥{total().toLocaleString()}</span>
             </div>
           </div>
         </div>
@@ -65,7 +97,7 @@ export default function CartPage() {
             className="text-sm text-red-500 hover:text-red-700 flex items-center gap-1 transition-colors"
           >
             <Trash2 size={14} />
-            すべて削除
+            {copy.clearAll}
           </button>
         </div>
 
@@ -90,7 +122,7 @@ export default function CartPage() {
                 </p>
                 {item.stock <= item.stock_alert_threshold && (
                   <p className={`mt-1 text-xs ${item.stock === 0 ? 'text-red-600' : 'text-amber-600'}`}>
-                    {item.stock === 0 ? '在庫切れです。購入前に確認してください。' : '在庫が少なくなっています。'}
+                    {item.stock === 0 ? copy.soldOut : copy.lowStock}
                   </p>
                 )}
               </div>
@@ -132,11 +164,11 @@ export default function CartPage() {
         {/* 合計・購入へ */}
         <div className="rounded-[28px] bg-gradient-to-br from-espresso to-espresso-600 p-6 text-cream-50 shadow-[0_24px_60px_-32px_rgba(44,26,14,0.55)] space-y-4">
           <div className="flex justify-between items-center text-cream-200">
-            <span>小計</span>
+            <span>{copy.subtotal}</span>
             <span className="font-mono">¥{total().toLocaleString()}</span>
           </div>
           <div className="border-t border-espresso-600 pt-4 flex justify-between items-center">
-            <span className="font-display font-bold text-xl">合計</span>
+            <span className="font-display font-bold text-xl">{copy.summary}</span>
             <span className="font-display font-bold text-2xl">
               ¥{total().toLocaleString()}
             </span>
@@ -145,7 +177,7 @@ export default function CartPage() {
             href="/checkout"
             className="block w-full text-center bg-matcha hover:bg-matcha-dark text-white py-3 rounded-xl font-medium transition-colors"
           >
-            購入手続きへ →
+            {copy.checkout} →
           </Link>
         </div>
       </div>

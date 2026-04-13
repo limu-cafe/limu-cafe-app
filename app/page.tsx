@@ -5,22 +5,19 @@ import { unstable_noStore as noStore } from 'next/cache';
 import { redirect } from 'next/navigation';
 import type { Item, Category } from '@/types';
 import ItemListClient from './ItemListClient';
+import { Suspense } from 'react';
+import DeferredDataPlaceholder from '@/components/user/DeferredDataPlaceholder';
+import type { User as AuthUser } from '@supabase/supabase-js';
 
-export default async function HomePage() {
-  noStore();
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect('/login');
-  await syncUserProfile(user);
+async function HomeContent({ userId, authUser }: { userId: string; authUser: AuthUser }) {
+  await syncUserProfile(authUser);
   const adminClient = createAdminClient();
 
   const [
     { data: items, error: itemsError },
     { data: categories, error: categoriesError },
     { data: favoriteItems, error: favoriteItemsError },
-    { data: profile },
-  ] =
-    await Promise.all([
+  ] = await Promise.all([
     adminClient
       .from('items')
       .select(
@@ -32,26 +29,12 @@ export default async function HomePage() {
       .from('categories')
       .select('id, name, icon, sort_order, created_at')
       .order('sort_order'),
-    adminClient
-      .from('favorite_items')
-      .select('item_id')
-      .eq('user_id', user.id),
-    adminClient
-      .from('users')
-      .select('id, name, balance')
-      .eq('id', user.id)
-      .maybeSingle(),
+    adminClient.from('favorite_items').select('item_id').eq('user_id', userId),
   ]);
 
-  if (itemsError) {
-    console.error('failed to load items for home page', itemsError);
-  }
-  if (categoriesError) {
-    console.error('failed to load categories for home page', categoriesError);
-  }
-  if (favoriteItemsError) {
-    console.error('failed to load favorites for home page', favoriteItemsError);
-  }
+  if (itemsError) console.error('failed to load items for home page', itemsError);
+  if (categoriesError) console.error('failed to load categories for home page', categoriesError);
+  if (favoriteItemsError) console.error('failed to load favorites for home page', favoriteItemsError);
 
   const categoryMap = new Map(((categories ?? []) as Category[]).map((category) => [category.id, category]));
   const itemList = ((items ?? []) as Item[]).map((item) => ({
@@ -59,21 +42,34 @@ export default async function HomePage() {
     category: item.category_id ? categoryMap.get(item.category_id) : undefined,
   }));
   const favoriteItemIds = (favoriteItems ?? []).map((favorite: { item_id: string }) => favorite.item_id);
+
+  return (
+    <ItemListClient
+      items={itemList}
+      categories={(categories ?? []) as Category[]}
+      initialFavoriteItemIds={favoriteItemIds}
+      initialFrequentItemIds={[]}
+      initialPopularItemIds={[]}
+    />
+  );
+}
+
+export default async function HomePage() {
+  noStore();
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect('/login');
   const layoutUser = {
-    id: profile?.id ?? user.id,
-    name: profile?.name ?? user.user_metadata?.full_name ?? user.user_metadata?.name ?? user.email ?? 'LIMUメンバー',
-    balance: profile?.balance ?? 0,
+    id: user.id,
+    name: user.user_metadata?.full_name ?? user.user_metadata?.name ?? user.email ?? 'LIMUメンバー',
+    balance: 0,
   };
 
   return (
     <UserLayout initialUser={layoutUser}>
-      <ItemListClient
-        items={itemList}
-        categories={(categories ?? []) as Category[]}
-        initialFavoriteItemIds={favoriteItemIds}
-        initialFrequentItemIds={[]}
-        initialPopularItemIds={[]}
-      />
+      <Suspense fallback={<DeferredDataPlaceholder blocks={4} titleWidthClassName="w-44" />}>
+        <HomeContent userId={user.id} authUser={user} />
+      </Suspense>
     </UserLayout>
   );
 }
