@@ -56,14 +56,13 @@ npm install
    ```
 4. Supabase ダッシュボード → **Authentication → Providers → Slack** で
    Client ID / Secret を設定
-5. **Incoming Webhooks** でチャンネルごとにWebhook URLを作成：
-   - `#limu-orders` → `SLACK_WEBHOOK_ORDERS`
+5. **Incoming Webhooks** で管理者通知用のWebhook URLを作成：
    - `#limu-admin` → `SLACK_WEBHOOK_ADMIN`
 6. **Bot Token** をコピー → `SLACK_BOT_TOKEN`
 
 注意:
 - Slack アプリを再インストールしたり、Webhook を作り直した場合は URL が変わることがあります
-- 通知が急に来なくなった場合は、まず `SLACK_WEBHOOK_ORDERS` / `SLACK_WEBHOOK_ADMIN` を再確認してください
+- 通知が急に来なくなった場合は、まず `SLACK_WEBHOOK_ADMIN` を再確認してください
 
 ### 4. Stripe のセットアップ（クレカ払いを使う場合）
 
@@ -99,7 +98,6 @@ NEXT_PUBLIC_SUPABASE_URL=...
 NEXT_PUBLIC_SUPABASE_ANON_KEY=...
 SUPABASE_SERVICE_ROLE_KEY=...
 APP_BASE_URL=...
-SLACK_WEBHOOK_ORDERS=...
 SLACK_WEBHOOK_ADMIN=...
 SLACK_BOT_TOKEN=...
 ADMIN_PASSWORD=...
@@ -649,12 +647,11 @@ npm run dev
 - Slack API Dashboard → LIMU喫茶bot → **Incoming Webhooks**
 
 確認する内容:
-- `#limu-orders` 用の Webhook URL
 - `#limu-admin` 用の Webhook URL
 
 変わっていた場合:
 1. 新しい URL をコピー
-2. `~/.config/limu-cafe/env` の `SLACK_WEBHOOK_ORDERS` / `SLACK_WEBHOOK_ADMIN` を更新
+2. `~/.config/limu-cafe/env` の `SLACK_WEBHOOK_ADMIN` を更新
 3. Vercel の Environment Variables も同じ値に更新
 4. `npm run dev` を再起動
 
@@ -987,7 +984,7 @@ Redirect URL が Supabase のものになっているか確認。
 → Supabase SQL Editor で `002_rpc_functions.sql` が実行されているか確認。
 
 ### Slack通知が来ない
-→ 外部 env ファイルの `SLACK_WEBHOOK_ORDERS` / `SLACK_WEBHOOK_ADMIN` が正しいか確認。
+→ 外部 env ファイルの `SLACK_WEBHOOK_ADMIN` が正しいか確認。
 Slack アプリを再インストールした場合は Webhook URL が変わっていることがあります。
 
 ### 管理者画面に入れない
