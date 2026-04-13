@@ -10,6 +10,7 @@ import { useCartStore } from '@/lib/store/cart';
 import { createClient } from '@/lib/supabase/client';
 import type { User } from '@/types';
 import { useUserLocale } from '@/components/user/UserLocaleProvider';
+import { getItemDisplayName } from '@/lib/item-display';
 
 type PaymentMethod = 'balance' | 'deferred' | 'cash';
 
@@ -203,9 +204,13 @@ export default function CheckoutPage() {
           <h2 className="font-medium text-espresso">{copy.orderItems}</h2>
           {items.map(({ item, quantity }) => (
             <div key={item.id} className="flex justify-between gap-4 text-sm">
+              {(() => {
+                const displayName = getItemDisplayName(item, locale);
+                return (
+                  <>
               <div>
                 <span className="text-espresso-600">
-                  {item.name}
+                  {displayName}
                   <span className="ml-1 text-espresso-400">× {quantity}</span>
                 </span>
                 {item.stock <= item.stock_alert_threshold && (
@@ -215,6 +220,9 @@ export default function CheckoutPage() {
                 )}
               </div>
               <span className="font-mono font-medium">¥{(item.price * quantity).toLocaleString()}</span>
+                  </>
+                );
+              })()}
             </div>
           ))}
           <div className="flex justify-between border-t border-cream-200 pt-3 font-bold">

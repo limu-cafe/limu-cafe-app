@@ -21,7 +21,7 @@ async function HomeContent({ userId, authUser }: { userId: string; authUser: Aut
     adminClient
       .from('items')
       .select(
-        'id, name, description, price, category_id, image_url, stock, stock_alert_threshold, is_available, popular_override, new_arrival_override, created_at, updated_at'
+        'id, name, english_name, description, price, category_id, image_url, stock, stock_alert_threshold, is_available, popular_override, new_arrival_override, created_at, updated_at'
       )
       .eq('is_available', true)
       .order('created_at', { ascending: false }),

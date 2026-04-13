@@ -6,6 +6,7 @@ import { Minus, Plus, Trash2, ShoppingBag } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useUserLocale } from '@/components/user/UserLocaleProvider';
+import { getItemDisplayName } from '@/lib/item-display';
 
 export default function CartPage() {
   const { locale } = useUserLocale();
@@ -105,10 +106,15 @@ export default function CartPage() {
         <div className="space-y-3">
           {items.map(({ item, quantity }) => (
             <div key={item.id} className="card flex items-center gap-4 py-4">
+              {/** Keep product names locale-aware while preserving cart item ids and prices. */}
+              {(() => {
+                const displayName = getItemDisplayName(item, locale);
+                return (
+                  <>
               {/* 画像 */}
               <div className="w-16 h-16 rounded-lg overflow-hidden bg-cream-100 flex-shrink-0 flex items-center justify-center text-2xl">
                 {item.image_url ? (
-                  <Image src={item.image_url} alt={item.name} width={64} height={64} className="object-cover" />
+                  <Image src={item.image_url} alt={displayName} width={64} height={64} className="object-contain p-1" />
                 ) : (
                   item.category?.icon ?? '📦'
                 )}
@@ -116,7 +122,7 @@ export default function CartPage() {
 
               {/* 情報 */}
               <div className="flex-1 min-w-0">
-                <p className="font-medium text-espresso truncate">{item.name}</p>
+                <p className="font-medium text-espresso truncate">{displayName}</p>
                 <p className="text-sm text-espresso-400">
                   ¥{item.price.toLocaleString()} × {quantity}
                 </p>
@@ -157,6 +163,9 @@ export default function CartPage() {
                   ¥{(item.price * quantity).toLocaleString()}
                 </p>
               </div>
+                  </>
+                );
+              })()}
             </div>
           ))}
         </div>

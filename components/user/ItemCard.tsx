@@ -6,6 +6,7 @@ import { useCartStore } from '@/lib/store/cart';
 import type { Item } from '@/types';
 import toast from 'react-hot-toast';
 import { useUserLocale } from './UserLocaleProvider';
+import { getItemDisplayName } from '@/lib/item-display';
 
 interface ItemCardProps {
   item: Item;
@@ -24,6 +25,7 @@ export default function ItemCard({
 }: ItemCardProps) {
   const addItem = useCartStore((s) => s.addItem);
   const { locale } = useUserLocale();
+  const displayName = getItemDisplayName(item, locale);
   const copy =
     locale === 'en'
       ? {
@@ -60,7 +62,7 @@ export default function ItemCard({
   const handleAdd = () => {
     if (!item.is_available || item.stock === 0) return;
     addItem(item);
-    toast.success(locale === 'en' ? `${item.name} ${copy.addSuccess}` : `${item.name}${copy.addSuccess}`);
+    toast.success(locale === 'en' ? `${displayName} ${copy.addSuccess}` : `${displayName}${copy.addSuccess}`);
   };
 
   const isOutOfStock = item.stock === 0 || !item.is_available;
@@ -107,7 +109,7 @@ export default function ItemCard({
             {item.image_url ? (
               <Image
                 src={item.image_url}
-                alt={item.name}
+                alt={displayName}
                 fill
                 className="object-contain p-1.5"
               />
@@ -121,8 +123,8 @@ export default function ItemCard({
           <div className="min-w-0 space-y-2">
             <div className="space-y-1">
               <div className="flex items-start justify-between gap-2">
-                <p className="line-clamp-2 min-w-0 text-sm font-semibold leading-snug text-espresso">
-                  {item.name}
+                  <p className="line-clamp-2 min-w-0 text-sm font-semibold leading-snug text-espresso">
+                  {displayName}
                 </p>
                 <p className="whitespace-nowrap font-display text-base font-bold text-espresso">
                   ¥{item.price.toLocaleString()}
@@ -178,7 +180,7 @@ export default function ItemCard({
         {item.image_url ? (
           <Image
             src={item.image_url}
-            alt={item.name}
+            alt={displayName}
             fill
             className="object-contain p-3 transition-transform duration-300 group-hover:scale-[1.02]"
           />
@@ -218,7 +220,7 @@ export default function ItemCard({
           </p>
         </div>
         <h3 className={`leading-snug text-espresso ${compact ? 'text-sm font-semibold' : 'text-base font-semibold'}`}>
-          {item.name}
+          {displayName}
         </h3>
         {item.description && (
           <p className={`line-clamp-2 text-xs text-espresso-400 ${compact ? 'hidden sm:block' : ''}`}>

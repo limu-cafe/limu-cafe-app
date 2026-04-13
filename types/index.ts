@@ -40,6 +40,7 @@ export interface Category {
 export interface Item {
   id: string;
   name: string;
+  english_name?: string | null;
   description?: string;
   price: number;
   category_id?: string;

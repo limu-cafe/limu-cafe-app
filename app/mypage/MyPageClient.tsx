@@ -9,11 +9,13 @@ import ReorderButton from '@/components/user/ReorderButton';
 import LegacyTransferRequestCard from './LegacyTransferRequestCard';
 import type { ChargeRequest, LegacyTransferRequest, User } from '@/types';
 import { useUserLocale } from '@/components/user/UserLocaleProvider';
+import { getItemDisplayName } from '@/lib/item-display';
 
 type FavoriteCard = {
   item: {
     id: string;
     name: string;
+    english_name?: string | null;
     price: number;
     stock: number;
     is_available: boolean;
@@ -29,11 +31,12 @@ type MyOrder = {
   order_items?: Array<{
     item_name: string;
     quantity: number;
-    item?: {
-      id: string;
-      name: string;
-      price: number;
-      stock: number;
+      item?: {
+        id: string;
+        name: string;
+        english_name?: string | null;
+        price: number;
+        stock: number;
       is_available: boolean;
       stock_alert_threshold: number;
       category_id?: string | null;
@@ -263,7 +266,11 @@ export default function MyPageClient({
                   </div>
                 </div>
                 <div className="text-sm text-espresso-600">
-                  {order.order_items?.map((oi) => oi.item_name).join('、')}
+                  {order.order_items
+                    ?.map((oi) =>
+                      oi.item ? getItemDisplayName(oi.item, locale) : oi.item_name
+                    )
+                    .join(locale === 'en' ? ', ' : '、')}
                 </div>
                 <div className="flex items-center justify-between">
                   <ReorderButton orderItems={(order.order_items ?? []) as any} />
@@ -302,7 +309,9 @@ export default function MyPageClient({
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             {favorites.map((favorite) => (
               <div key={favorite.item.id} className="rounded-xl border border-cream-200 p-3">
-                <p className="font-medium text-espresso">{favorite.item.name}</p>
+                <p className="font-medium text-espresso">
+                  {getItemDisplayName(favorite.item, locale)}
+                </p>
                 <p className="mt-1 text-sm text-espresso-400">
                   ¥{favorite.item.price.toLocaleString()}
                 </p>
