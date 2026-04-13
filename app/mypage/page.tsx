@@ -56,9 +56,20 @@ export default async function MyPage() {
 
   const initialOrders = (orders ?? []) as any[];
   const initialCharges = (chargeRequests ?? []) as any[];
+  const layoutUser = profile
+    ? {
+        id: user.id,
+        name: profile.name,
+        balance: profile.balance,
+      }
+    : {
+        id: user.id,
+        name: user.user_metadata?.full_name ?? user.user_metadata?.name ?? user.email ?? 'LIMUメンバー',
+        balance: 0,
+      };
 
   return (
-    <UserLayout>
+    <UserLayout initialUser={layoutUser}>
       <MyPageClient
         profile={profile}
         initialOrders={initialOrders.slice(0, PAGE_SIZE)}

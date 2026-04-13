@@ -18,6 +18,7 @@ export default async function HomePage() {
     { data: items, error: itemsError },
     { data: categories, error: categoriesError },
     { data: favoriteItems, error: favoriteItemsError },
+    { data: profile },
   ] =
     await Promise.all([
     adminClient
@@ -35,6 +36,11 @@ export default async function HomePage() {
       .from('favorite_items')
       .select('item_id')
       .eq('user_id', user.id),
+    adminClient
+      .from('users')
+      .select('id, name, balance')
+      .eq('id', user.id)
+      .maybeSingle(),
   ]);
 
   if (itemsError) {
@@ -53,9 +59,14 @@ export default async function HomePage() {
     category: item.category_id ? categoryMap.get(item.category_id) : undefined,
   }));
   const favoriteItemIds = (favoriteItems ?? []).map((favorite: { item_id: string }) => favorite.item_id);
+  const layoutUser = {
+    id: profile?.id ?? user.id,
+    name: profile?.name ?? user.user_metadata?.full_name ?? user.user_metadata?.name ?? user.email ?? 'LIMUメンバー',
+    balance: profile?.balance ?? 0,
+  };
 
   return (
-    <UserLayout>
+    <UserLayout initialUser={layoutUser}>
       <ItemListClient
         items={itemList}
         categories={(categories ?? []) as Category[]}
