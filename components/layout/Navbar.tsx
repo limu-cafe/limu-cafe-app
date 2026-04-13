@@ -39,10 +39,14 @@ export default function Navbar() {
           .select('id, name, balance')
           .eq('id', data.user.id)
           .single();
-        setUser(profile);
-        if (profile) {
-          sessionStorage.setItem('limu-navbar-user', JSON.stringify(profile));
-        }
+        const fallbackUser = {
+          id: data.user.id,
+          name: data.user.user_metadata?.full_name ?? data.user.user_metadata?.name ?? data.user.email ?? 'LIMUメンバー',
+          balance: 0,
+        };
+        const navbarUser = profile ?? fallbackUser;
+        setUser(navbarUser);
+        sessionStorage.setItem('limu-navbar-user', JSON.stringify(navbarUser));
       } else {
         setUser(null);
         sessionStorage.removeItem('limu-navbar-user');

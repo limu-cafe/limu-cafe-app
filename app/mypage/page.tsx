@@ -1,5 +1,6 @@
 import UserLayout from '@/components/layout/UserLayout';
 import { createClient } from '@/lib/supabase/server';
+import { syncUserProfile } from '@/lib/supabase/sync-user';
 import { redirect } from 'next/navigation';
 import MyPageClient from './MyPageClient';
 
@@ -11,6 +12,7 @@ export default async function MyPage() {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect('/login');
+  await syncUserProfile(user);
 
   const [
     { data: profile },

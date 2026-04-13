@@ -1,5 +1,6 @@
 import UserLayout from '@/components/layout/UserLayout';
 import { createClient } from '@/lib/supabase/server';
+import { syncUserProfile } from '@/lib/supabase/sync-user';
 import { unstable_noStore as noStore } from 'next/cache';
 import { redirect } from 'next/navigation';
 import type { Item, Category } from '@/types';
@@ -10,6 +11,7 @@ export default async function HomePage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect('/login');
+  await syncUserProfile(user);
 
   const [
     { data: items, error: itemsError },
