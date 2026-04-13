@@ -1,5 +1,5 @@
 import UserLayout from '@/components/layout/UserLayout';
-import { createClient } from '@/lib/supabase/server';
+import { createAdminClient, createClient } from '@/lib/supabase/server';
 import { syncUserProfile } from '@/lib/supabase/sync-user';
 import { unstable_noStore as noStore } from 'next/cache';
 import { redirect } from 'next/navigation';
@@ -12,6 +12,7 @@ export default async function HomePage() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect('/login');
   await syncUserProfile(user);
+  const adminClient = createAdminClient();
 
   const [
     { data: items, error: itemsError },
@@ -19,18 +20,18 @@ export default async function HomePage() {
     { data: favoriteItems, error: favoriteItemsError },
   ] =
     await Promise.all([
-    supabase
+    adminClient
       .from('items')
       .select(
         'id, name, description, price, category_id, image_url, stock, stock_alert_threshold, is_available, popular_override, new_arrival_override, created_at, updated_at'
       )
       .eq('is_available', true)
       .order('created_at', { ascending: false }),
-    supabase
+    adminClient
       .from('categories')
       .select('id, name, icon, sort_order, created_at')
       .order('sort_order'),
-    supabase
+    adminClient
       .from('favorite_items')
       .select('item_id')
       .eq('user_id', user.id),
@@ -51,7 +52,7 @@ export default async function HomePage() {
     ...item,
     category: item.category_id ? categoryMap.get(item.category_id) : undefined,
   }));
-  const favoriteItemIds = (favoriteItems ?? []).map((favorite) => favorite.item_id);
+  const favoriteItemIds = (favoriteItems ?? []).map((favorite: { item_id: string }) => favorite.item_id);
 
   return (
     <UserLayout>

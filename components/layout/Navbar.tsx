@@ -14,12 +14,12 @@ type NavbarUser = {
   balance: number;
 };
 
-export default function Navbar() {
+export default function Navbar({ initialUser = null }: { initialUser?: NavbarUser | null }) {
   const pathname = usePathname();
   const router = useRouter();
   const cartCount = useCartStore((s) => s.count());
   const hasHydrated = useCartStore((s) => s.hasHydrated);
-  const [user, setUser] = useState<NavbarUser | null>(null);
+  const [user, setUser] = useState<NavbarUser | null>(initialUser);
 
   useEffect(() => {
     const cachedUser = sessionStorage.getItem('limu-navbar-user');
@@ -52,7 +52,7 @@ export default function Navbar() {
         sessionStorage.removeItem('limu-navbar-user');
       }
     });
-  }, []);
+  }, [initialUser]);
 
   const handleLogout = async () => {
     const supabase = createClient();

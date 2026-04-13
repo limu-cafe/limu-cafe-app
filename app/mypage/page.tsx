@@ -1,5 +1,5 @@
 import UserLayout from '@/components/layout/UserLayout';
-import { createClient } from '@/lib/supabase/server';
+import { createAdminClient, createClient } from '@/lib/supabase/server';
 import { syncUserProfile } from '@/lib/supabase/sync-user';
 import { redirect } from 'next/navigation';
 import MyPageClient from './MyPageClient';
@@ -13,6 +13,7 @@ export default async function MyPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect('/login');
   await syncUserProfile(user);
+  const adminClient = createAdminClient();
 
   const [
     { data: profile },
@@ -21,12 +22,12 @@ export default async function MyPage() {
     { data: favorites },
     { data: legacyTransferRequests },
   ] = await Promise.all([
-    supabase
+    adminClient
       .from('users')
       .select('name, email, avatar_url, balance, deferred_balance')
       .eq('id', user.id)
       .single(),
-    supabase
+    adminClient
       .from('orders')
       .select(
         'id, total_amount, payment_method, payment_status, created_at, order_items(item_name, quantity, item:items(id, name, price, stock, is_available, stock_alert_threshold, category_id, image_url, description, popular_override, new_arrival_override, created_at, updated_at))'
@@ -34,18 +35,18 @@ export default async function MyPage() {
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
       .limit(PAGE_SIZE + 1),
-    supabase
+    adminClient
       .from('charge_requests')
       .select('id, amount, method, status, created_at')
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
       .limit(PAGE_SIZE + 1),
-    supabase
+    adminClient
       .from('favorite_items')
       .select('item:items(id, name, price, stock, is_available)')
       .eq('user_id', user.id)
       .limit(6),
-    supabase
+    adminClient
       .from('legacy_transfer_requests')
       .select('*')
       .eq('user_id', user.id)
