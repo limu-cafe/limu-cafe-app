@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { CheckCircle, XCircle } from 'lucide-react';
+import { CheckCircle, RotateCcw, XCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { ja } from 'date-fns/locale';
 import toast from 'react-hot-toast';
@@ -12,9 +12,11 @@ const STATUS_COLOR: Record<string, string> = {
   approved: 'bg-green-500/20 text-green-400',
   rejected: 'bg-red-500/20 text-red-400',
   cancelled: 'bg-gray-500/20 text-gray-400',
+  refunded: 'bg-sky-500/20 text-sky-300',
 };
 const STATUS_LABEL: Record<string, string> = {
   pending: '申請中', approved: '承認済み', rejected: '却下', cancelled: 'キャンセル',
+  refunded: '返金済み',
 };
 
 export default function ChargeClient({ requests }: { requests: any[] }) {
@@ -71,6 +73,20 @@ export default function ChargeClient({ requests }: { requests: any[] }) {
       }
       toast.success(`${selectedIds.length}件を${action === 'approve' ? '承認' : '却下'}しました`);
       setSelectedIds([]);
+      router.refresh();
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  const handleRefund = async (id: string) => {
+    setLoading(id + 'refund');
+    try {
+      const res = await fetch(`/api/admin/charge/${id}/refund`, { method: 'POST' });
+      if (!res.ok) throw new Error((await res.json()).error);
+      toast.success('返金処理を記録しました');
       router.refresh();
     } catch (error: any) {
       toast.error(error.message);
@@ -219,7 +235,7 @@ export default function ChargeClient({ requests }: { requests: any[] }) {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-800">
-                  {['ユーザー', '金額', '方法', 'ステータス', '日時'].map(h => (
+                  {['ユーザー', '金額', '方法', 'ステータス', '日時', '操作'].map(h => (
                     <th key={h} className="px-4 py-3 text-left font-medium text-gray-400">{h}</th>
                   ))}
                 </tr>
@@ -237,6 +253,22 @@ export default function ChargeClient({ requests }: { requests: any[] }) {
                     </td>
                     <td className="px-4 py-3 text-gray-500 text-xs">
                       {format(new Date(req.created_at), 'M/d HH:mm', { locale: ja })}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      {req.status === 'approved' && (
+                        <button
+                          onClick={() => handleRefund(req.id)}
+                          disabled={!!loading}
+                          className="inline-flex items-center gap-2 rounded-lg bg-sky-500/15 px-3 py-2 text-xs font-medium text-sky-300 transition-colors hover:bg-sky-500/25 disabled:opacity-50"
+                        >
+                          {loading === req.id + 'refund' ? (
+                            <span className="block h-4 w-4 animate-spin rounded-full border border-sky-300 border-t-transparent" />
+                          ) : (
+                            <RotateCcw size={14} />
+                          )}
+                          返金処理
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}

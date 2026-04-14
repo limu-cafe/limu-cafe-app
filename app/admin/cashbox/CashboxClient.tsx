@@ -8,6 +8,8 @@ import { ArrowDownLeft, ArrowUpRight, Calculator, CircleDollarSign, Scale, Shopp
 import toast from 'react-hot-toast';
 import { cashboxEntryLabels } from '@/lib/cashbox';
 
+const DENOMINATIONS = [10000, 5000, 1000, 500, 100, 50, 10, 5, 1] as const;
+
 type Entry = {
   id: string;
   entry_type: keyof typeof cashboxEntryLabels;
@@ -98,9 +100,15 @@ export default function CashboxClient({
   const [adjustmentDirection, setAdjustmentDirection] = useState<'in' | 'out'>('in');
   const [actualAmount, setActualAmount] = useState<number | ''>('');
   const [countNote, setCountNote] = useState('');
+  const [denominationCounts, setDenominationCounts] = useState<Record<string, number>>(
+    Object.fromEntries(DENOMINATIONS.map((denomination) => [String(denomination), 0]))
+  );
   const [loading, setLoading] = useState<'adjustment' | 'count' | `reimburse:${string}` | null>(null);
 
   const latestDifference = latestCount?.difference_amount ?? 0;
+  const denominationTotal = DENOMINATIONS.reduce((sum, denomination) => {
+    return sum + denomination * (denominationCounts[String(denomination)] ?? 0);
+  }, 0);
 
   const handleAdjustment = async () => {
     if (!adjustmentAmount || adjustmentAmount <= 0) {
@@ -136,7 +144,12 @@ export default function CashboxClient({
   };
 
   const handleCount = async () => {
-    if (actualAmount === '' || actualAmount < 0) {
+    const hasDenominationInput = DENOMINATIONS.some(
+      (denomination) => (denominationCounts[String(denomination)] ?? 0) > 0
+    );
+    const finalActualAmount = hasDenominationInput ? denominationTotal : actualAmount;
+
+    if (finalActualAmount === '' || finalActualAmount < 0) {
       toast.error('実測金額を入力してください');
       return;
     }
@@ -147,7 +160,8 @@ export default function CashboxClient({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          actual_amount: actualAmount,
+          actual_amount: finalActualAmount,
+          denomination_counts: hasDenominationInput ? denominationCounts : null,
           note: countNote,
         }),
       });
@@ -159,6 +173,9 @@ export default function CashboxClient({
       toast.success('金庫確認を記録しました');
       setActualAmount('');
       setCountNote('');
+      setDenominationCounts(
+        Object.fromEntries(DENOMINATIONS.map((denomination) => [String(denomination), 0]))
+      );
       router.refresh();
     } catch (e: any) {
       toast.error(e.message);
@@ -459,7 +476,37 @@ export default function CashboxClient({
           <div>
             <h2 className="font-medium text-white">金庫確認</h2>
             <p className="text-sm text-gray-400 mt-1">
-              実際に金庫内を数えて、理論残高との差を残します
+              枚数を入れるだけで合計を計算し、理論残高との差を残します
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            {DENOMINATIONS.map((denomination) => (
+              <label
+                key={denomination}
+                className="rounded-xl border border-gray-800 bg-gray-950/40 px-3 py-3 text-sm text-gray-300"
+              >
+                <span className="mb-2 block text-xs text-gray-500">{denomination.toLocaleString()}円</span>
+                <input
+                  type="number"
+                  min={0}
+                  value={denominationCounts[String(denomination)] ?? 0}
+                  onChange={(e) =>
+                    setDenominationCounts((current) => ({
+                      ...current,
+                      [String(denomination)]: e.target.value ? Number(e.target.value) : 0,
+                    }))
+                  }
+                  className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-white/20"
+                />
+              </label>
+            ))}
+          </div>
+
+          <div className="rounded-xl border border-blue-500/20 bg-blue-500/10 px-4 py-3">
+            <p className="text-xs text-blue-200/80">枚数から計算した合計</p>
+            <p className="mt-1 font-display text-2xl font-bold text-blue-300">
+              ¥{denominationTotal.toLocaleString()}
             </p>
           </div>
 
@@ -468,7 +515,7 @@ export default function CashboxClient({
             min={0}
             value={actualAmount}
             onChange={(e) => setActualAmount(e.target.value ? Number(e.target.value) : '')}
-            placeholder="実測金額"
+            placeholder="実測金額（枚数を使わない場合のみ）"
             className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-white/20"
           />
           <textarea

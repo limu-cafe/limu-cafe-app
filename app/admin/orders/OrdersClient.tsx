@@ -64,6 +64,20 @@ export default function OrdersClient({ orders }: { orders: any[] }) {
     }
   };
 
+  const handleRefundOrder = async (orderId: string) => {
+    setLoading(orderId);
+    try {
+      const res = await fetch(`/api/admin/orders/${orderId}/refund`, { method: 'POST' });
+      if (!res.ok) throw new Error((await res.json()).error);
+      toast.success('返金処理を記録しました');
+      router.refresh();
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setLoading(null);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div>
@@ -174,7 +188,8 @@ export default function OrdersClient({ orders }: { orders: any[] }) {
                       </button>
                     )}
 
-                    {['balance', 'deferred'].includes(order.payment_method) && order.payment_status === 'completed' && (
+                    {['balance', 'deferred', 'cash'].includes(order.payment_method) &&
+                      ['pending', 'completed'].includes(order.payment_status) && (
                       <div className="flex flex-wrap gap-2">
                         {order.payment_method === 'deferred' && (
                           <button
@@ -186,6 +201,19 @@ export default function OrdersClient({ orders }: { orders: any[] }) {
                           </button>
                         )}
                         <button
+                          onClick={(e) => { e.stopPropagation(); handleRefundOrder(order.id); }}
+                          disabled={loading === order.id}
+                          className="flex items-center gap-2 px-4 py-2 bg-sky-500/15 text-sky-300 hover:bg-sky-500/25 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                        >
+                          {loading === order.id ? (
+                            <span className="animate-spin w-4 h-4 border border-sky-300 border-t-transparent rounded-full" />
+                          ) : (
+                            <RotateCcw size={16} />
+                          )}
+                          返金処理
+                        </button>
+                        {['balance', 'deferred'].includes(order.payment_method) && order.payment_status === 'completed' && (
+                          <button
                           onClick={(e) => { e.stopPropagation(); handleCancelOrder(order.id); }}
                           disabled={loading === order.id}
                           className="flex items-center gap-2 px-4 py-2 bg-red-500/15 text-red-300 hover:bg-red-500/25 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
@@ -197,6 +225,7 @@ export default function OrdersClient({ orders }: { orders: any[] }) {
                           )}
                           注文をキャンセル
                         </button>
+                        )}
                       </div>
                     )}
                   </div>
