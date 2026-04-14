@@ -61,7 +61,7 @@ export default async function HomePage() {
   if (!user) redirect('/login');
   const layoutUser = {
     id: user.id,
-    name: user.user_metadata?.full_name ?? user.user_metadata?.name ?? user.email ?? 'LIMUメンバー',
+    name: user.user_metadata?.full_name ?? user.user_metadata?.name ?? user.email ?? 'LIMU Member',
     balance: 0,
   };
 

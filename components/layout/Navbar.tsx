@@ -77,7 +77,7 @@ export default function Navbar({ initialUser = null }: { initialUser?: NavbarUse
           .single();
         const fallbackUser = {
           id: data.user.id,
-          name: data.user.user_metadata?.full_name ?? data.user.user_metadata?.name ?? data.user.email ?? 'LIMUメンバー',
+          name: data.user.user_metadata?.full_name ?? data.user.user_metadata?.name ?? data.user.email ?? 'LIMU Member',
           balance: 0,
         };
         const navbarUser = profile ?? fallbackUser;

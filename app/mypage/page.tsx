@@ -99,7 +99,7 @@ export default async function MyPage() {
 
   const layoutUser = {
     id: user.id,
-    name: user.user_metadata?.full_name ?? user.user_metadata?.name ?? user.email ?? 'LIMUメンバー',
+    name: user.user_metadata?.full_name ?? user.user_metadata?.name ?? user.email ?? 'LIMU Member',
     balance: 0,
   };
 
