@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
 import { createAdminClient, createClient } from '@/lib/supabase/server';
 import { notifyCashOrderPending, notifyNewOrder, notifyLowStock } from '@/lib/slack';
+import { isMissingDeferredSettlementMethodColumn } from '@/lib/orders';
 
 interface OrderItemInput {
   item_id: string;
@@ -110,17 +111,31 @@ export async function POST(request: Request) {
 
   // トランザクション的に処理
   // 1. 注文作成
-  const { data: order, error: orderError } = await adminSupabase
+  const baseOrderPayload = {
+    user_id: user.id,
+    total_amount,
+    payment_method,
+    payment_status: payment_method === 'cash' ? 'pending' : 'completed',
+  };
+
+  let orderInsert = await adminSupabase
     .from('orders')
     .insert({
-      user_id: user.id,
-      total_amount,
-      payment_method,
+      ...baseOrderPayload,
       deferred_settlement_method: payment_method === 'deferred' ? deferred_settlement_method : null,
-      payment_status: payment_method === 'cash' ? 'pending' : 'completed',
     })
     .select()
     .single();
+
+  if (isMissingDeferredSettlementMethodColumn(orderInsert.error)) {
+    orderInsert = await adminSupabase
+      .from('orders')
+      .insert(baseOrderPayload)
+      .select()
+      .single();
+  }
+
+  const { data: order, error: orderError } = orderInsert;
 
   if (orderError || !order) {
     return NextResponse.json({ error: '注文の作成に失敗しました' }, { status: 500 });

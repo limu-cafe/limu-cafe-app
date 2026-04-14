@@ -6,12 +6,33 @@ import MyPageClient from './MyPageClient';
 import { Suspense } from 'react';
 import DeferredDataPlaceholder from '@/components/user/DeferredDataPlaceholder';
 import type { User as AuthUser } from '@supabase/supabase-js';
+import {
+  isMissingDeferredSettlementMethodColumn,
+  ORDERS_SELECT_LEGACY,
+  ORDERS_SELECT_WITH_DEFERRED,
+} from '@/lib/orders';
 
 const PAGE_SIZE = 3;
 
 async function MyPageContent({ user }: { user: AuthUser }) {
   await syncUserProfile(user);
   const adminClient = createAdminClient();
+
+  let ordersQuery: any = await adminClient
+    .from('orders')
+    .select(ORDERS_SELECT_WITH_DEFERRED)
+    .eq('user_id', user.id)
+    .order('created_at', { ascending: false })
+    .limit(PAGE_SIZE + 1);
+
+  if (isMissingDeferredSettlementMethodColumn(ordersQuery.error)) {
+    ordersQuery = await adminClient
+      .from('orders')
+      .select(ORDERS_SELECT_LEGACY)
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(PAGE_SIZE + 1);
+  }
 
   const [
     { data: profile },
@@ -25,14 +46,7 @@ async function MyPageContent({ user }: { user: AuthUser }) {
       .select('name, email, avatar_url, balance, deferred_balance')
       .eq('id', user.id)
       .single(),
-    adminClient
-      .from('orders')
-      .select(
-        'id, total_amount, payment_method, deferred_settlement_method, payment_status, created_at, order_items(item_name, quantity, item:items(id, name, english_name, price, stock, is_available, stock_alert_threshold, category_id, image_url, description, popular_override, new_arrival_override, created_at, updated_at))'
-      )
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false })
-      .limit(PAGE_SIZE + 1),
+    ordersQuery,
     adminClient
       .from('charge_requests')
       .select('id, amount, method, status, created_at')

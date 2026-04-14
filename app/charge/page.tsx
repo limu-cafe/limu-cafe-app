@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import UserLayout from '@/components/layout/UserLayout';
 import toast from 'react-hot-toast';
-import { Banknote, CreditCard, ChevronRight } from 'lucide-react';
+import { Banknote, CreditCard, ChevronRight, CheckCircle2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useUserLocale } from '@/components/user/UserLocaleProvider';
 
@@ -14,6 +14,7 @@ export default function ChargePage() {
   const { locale } = useUserLocale();
   const [amount, setAmount] = useState<number | ''>('');
   const [method, setMethod] = useState<'cash'>('cash');
+  const [showConfirmation, setShowConfirmation] = useState(false);
   const [loading, setLoading] = useState(false);
   const copy =
     locale === 'en'
@@ -32,6 +33,13 @@ export default function ChargePage() {
           card: 'Credit card',
           inProgress: 'In progress',
           cardDescription: 'Stripe support is being prepared. Please use cash for now.',
+          confirmHeading: 'Confirmation',
+          reviewButton: 'Open confirmation screen',
+          reviewTitle: 'Final confirmation',
+          reviewSubtitle: 'Please check the amount and settlement method one more time before topping up.',
+          balanceReflection: 'Your balance will be available immediately.',
+          settlementNote: 'The amount will also be added to your deferred balance and collected at settlement time.',
+          backToCharge: 'Go back',
           action: 'Top up',
         }
       : {
@@ -49,6 +57,13 @@ export default function ChargePage() {
           card: 'クレジットカード',
           inProgress: '開発中',
           cardDescription: 'Stripe 連携は準備中です。現在は現金チャージをご利用ください。',
+          confirmHeading: '確認内容',
+          reviewButton: '確認画面へ進む',
+          reviewTitle: '最終確認',
+          reviewSubtitle: 'チャージ金額と精算方法をもう一度確認してから、確定してください。',
+          balanceReflection: 'チャージ残高にはすぐ反映されます。',
+          settlementNote: '同時に後払い残高にも追加され、定期精算で回収されます。',
+          backToCharge: '戻って修正する',
           action: 'チャージする',
         };
 
@@ -128,7 +143,10 @@ export default function ChargePage() {
           <h2 className="font-medium text-espresso">{copy.paymentMethod}</h2>
 
           <button
-            onClick={() => setMethod('cash')}
+            onClick={() => {
+              setMethod('cash');
+              setShowConfirmation(false);
+            }}
             className={`w-full flex items-center gap-4 p-4 rounded-xl border-2 transition-all duration-200 ${
               method === 'cash'
                 ? 'border-espresso bg-espresso text-cream-50'
@@ -164,24 +182,87 @@ export default function ChargePage() {
         </div>
 
         {/* チャージボタン */}
+        <div className="card space-y-3 border-espresso-200/70 bg-white/80">
+          <div className="flex items-center gap-2 text-sm font-medium text-espresso">
+            <CheckCircle2 size={18} />
+            <span>{copy.confirmHeading}</span>
+          </div>
+          <p className="text-sm text-espresso-500">{copy.balanceReflection}</p>
+          <p className="text-sm text-espresso-500">{copy.settlementNote}</p>
+        </div>
+
         <button
-          onClick={handleCharge}
+          onClick={() => setShowConfirmation(true)}
           disabled={!amount || loading}
-          className="w-full btn-matcha py-4 text-base flex items-center justify-center gap-2"
+          className="w-full btn-primary py-4 text-base flex items-center justify-center gap-2"
         >
-          {loading ? (
-            <span className="animate-spin w-5 h-5 border-2 border-white border-t-transparent rounded-full" />
-          ) : (
-            <>
-              {amount
-                ? locale === 'en'
-                  ? `Top up ¥${Number(amount).toLocaleString()}`
-                  : `¥${Number(amount).toLocaleString()} をチャージ`
-                : copy.action}
-              <ChevronRight size={18} />
-            </>
-          )}
+          {copy.reviewButton}
+          <ChevronRight size={18} />
         </button>
+
+        {showConfirmation && amount && (
+          <div className="fixed inset-0 z-50 flex items-end justify-center bg-espresso/45 p-4 sm:items-center">
+            <div className="w-full max-w-xl rounded-[28px] border border-cream-200 bg-white p-6 shadow-2xl">
+              <div className="space-y-2">
+                <div className="section-kicker">Charge</div>
+                <h2 className="font-display text-3xl font-bold text-espresso">{copy.reviewTitle}</h2>
+                <p className="text-sm text-espresso-500">{copy.reviewSubtitle}</p>
+              </div>
+
+              <div className="mt-5 space-y-4">
+                <div className="rounded-2xl border border-cream-200 bg-cream-50/70 p-4">
+                  <div className="flex items-center gap-2 text-sm font-medium text-espresso">
+                    <CheckCircle2 size={18} />
+                    <span>{copy.confirmHeading}</span>
+                  </div>
+                  <div className="mt-3 space-y-2 text-sm text-espresso-600">
+                    <div className="flex items-center justify-between gap-4">
+                      <span>{copy.amount}</span>
+                      <span className="font-display text-2xl font-bold text-espresso">
+                        ¥{Number(amount).toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-4">
+                      <span>{copy.paymentMethod}</span>
+                      <span className="font-medium text-espresso">{copy.cash}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-cream-200 p-4 text-sm text-espresso-500">
+                  <p>{copy.balanceReflection}</p>
+                  <p className="mt-2">{copy.settlementNote}</p>
+                </div>
+              </div>
+
+              <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+                <button
+                  onClick={() => setShowConfirmation(false)}
+                  disabled={loading}
+                  className="flex-1 rounded-full border border-cream-300 px-5 py-3 text-sm font-medium text-espresso transition hover:bg-cream-50"
+                >
+                  {copy.backToCharge}
+                </button>
+                <button
+                  onClick={handleCharge}
+                  disabled={loading}
+                  className="btn-matcha flex flex-1 items-center justify-center gap-2 py-3 text-sm"
+                >
+                  {loading ? (
+                    <span className="animate-spin w-5 h-5 border-2 border-white border-t-transparent rounded-full" />
+                  ) : (
+                    <>
+                      {locale === 'en'
+                        ? `Top up ¥${Number(amount).toLocaleString()}`
+                        : `¥${Number(amount).toLocaleString()} をチャージ`}
+                      <ChevronRight size={18} />
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </UserLayout>
   );
