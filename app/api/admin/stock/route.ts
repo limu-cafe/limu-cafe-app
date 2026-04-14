@@ -35,7 +35,7 @@ export async function POST(request: Request) {
 
   if (purchase?.record) {
     const paymentSource = purchase.payment_source;
-    const unitPrice = Number(purchase.unit_price);
+    const totalAmount = Number(purchase.total_amount);
     const vendor = purchase.vendor?.trim() || null;
     const purchaseNote = purchase.note?.trim() || null;
 
@@ -43,16 +43,18 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: '支払い元が不正です' }, { status: 400 });
     }
 
-    if (!Number.isFinite(unitPrice) || unitPrice < 0) {
-      return NextResponse.json({ error: '仕入れ単価を入力してください' }, { status: 400 });
+    if (!Number.isFinite(totalAmount) || totalAmount < 0) {
+      return NextResponse.json({ error: '仕入れ合計額を入力してください' }, { status: 400 });
     }
+
+    const unitPrice = Number(quantity) > 0 ? Math.round(totalAmount / Number(quantity)) : 0;
 
     normalizedPurchase = {
       paymentSource,
       unitPrice,
       vendor,
       purchaseNote,
-      totalAmount: unitPrice * Number(quantity),
+      totalAmount,
       reimbursementStatus: paymentSource === 'cashbox' ? 'not_needed' : 'pending_reimbursement',
     };
   }
