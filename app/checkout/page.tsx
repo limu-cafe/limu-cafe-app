@@ -29,6 +29,7 @@ export default function CheckoutPage() {
   const [paymentTiming, setPaymentTiming] = useState<PaymentTiming>('balance');
   const [deferredSettlementMethod, setDeferredSettlementMethod] =
     useState<DeferredSettlementMethod>('cash');
+  const [showConfirmation, setShowConfirmation] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const copy =
@@ -63,6 +64,10 @@ export default function CheckoutPage() {
           deferredSummary: 'This order will be added to your deferred balance and settled later.',
           plannedSettlement: 'Planned settlement',
           confirmHeading: 'Confirmation',
+          reviewButton: 'Open confirmation screen',
+          reviewTitle: 'Final confirmation',
+          reviewSubtitle: 'Please check the payment timing and order details once more before placing the order.',
+          backToCheckout: 'Go back',
           confirmButton: 'Confirm and place order',
         }
       : {
@@ -95,6 +100,10 @@ export default function CheckoutPage() {
           deferredSummary: '今回の注文は後払い残高に追加され、あとで精算します。',
           plannedSettlement: '精算予定',
           confirmHeading: '決済内容の確認',
+          reviewButton: '確認画面へ進む',
+          reviewTitle: '最終確認',
+          reviewSubtitle: '支払い方法と注文内容をもう一度確認してから、注文を確定してください。',
+          backToCheckout: '戻って修正する',
           confirmButton: '内容を確認して注文する',
         };
 
@@ -285,7 +294,11 @@ export default function CheckoutPage() {
           {paymentOptions.map(({ id, label, description, icon: Icon, disabled, disabledReason }) => (
             <button
               key={id}
-              onClick={() => !disabled && setPaymentTiming(id)}
+              onClick={() => {
+                if (disabled) return;
+                setPaymentTiming(id);
+                setShowConfirmation(false);
+              }}
               disabled={disabled}
               className={`card flex w-full items-center gap-4 text-left transition-all duration-200 ${
                 paymentTiming === id && !disabled
@@ -339,7 +352,11 @@ export default function CheckoutPage() {
           {deferredOptions.map(({ id, label, description, icon: Icon, disabled }) => (
               <button
                 key={id}
-                onClick={() => !disabled && setDeferredSettlementMethod(id)}
+                onClick={() => {
+                  if (disabled) return;
+                  setDeferredSettlementMethod(id);
+                  setShowConfirmation(false);
+                }}
                 disabled={disabled}
                 className={`card flex w-full items-center gap-4 text-left transition-all duration-200 ${
                   deferredSettlementMethod === id && !disabled
@@ -399,19 +416,86 @@ export default function CheckoutPage() {
         </div>
 
         <button
-          onClick={handleOrder}
+          onClick={() => setShowConfirmation(true)}
           disabled={loading}
-          className="btn-matcha flex w-full items-center justify-center gap-2 py-4 text-base"
+          className="btn-primary flex w-full items-center justify-center gap-2 py-4 text-base"
         >
-          {loading ? (
-            <span className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" />
-          ) : (
-            <>
-              {copy.confirmButton}
-              <ChevronRight size={18} />
-            </>
-          )}
+          {copy.reviewButton}
+          <ChevronRight size={18} />
         </button>
+
+        {showConfirmation && (
+          <div className="fixed inset-0 z-50 flex items-end justify-center bg-espresso/45 p-4 sm:items-center">
+            <div className="w-full max-w-xl rounded-[28px] border border-cream-200 bg-white p-6 shadow-2xl">
+              <div className="space-y-2">
+                <div className="section-kicker">{copy.heroKicker}</div>
+                <h2 className="font-display text-3xl font-bold text-espresso">{copy.reviewTitle}</h2>
+                <p className="text-sm text-espresso-500">{copy.reviewSubtitle}</p>
+              </div>
+
+              <div className="mt-5 space-y-4">
+                <div className="rounded-2xl border border-cream-200 bg-cream-50/70 p-4">
+                  <div className="flex items-center gap-2 text-sm font-medium text-espresso">
+                    <CheckCircle2 size={18} />
+                    <span>{copy.confirmHeading}</span>
+                  </div>
+                  <p className="mt-3 text-sm text-espresso-500">
+                    {paymentTiming === 'balance' ? copy.balanceSummary : copy.deferredSummary}
+                  </p>
+                  {paymentTiming === 'deferred' && (
+                    <p className="mt-2 text-sm text-espresso-500">
+                      {copy.plannedSettlement}: {deferredSettlementMethod === 'cash' ? copy.cash : copy.card}
+                    </p>
+                  )}
+                </div>
+
+                <div className="rounded-2xl border border-cream-200 p-4">
+                  <h3 className="font-medium text-espresso">{copy.orderItems}</h3>
+                  <div className="mt-3 space-y-2">
+                    {items.map(({ item, quantity }) => (
+                      <div key={item.id} className="flex justify-between gap-4 text-sm">
+                        <span className="text-espresso-600">
+                          {getItemDisplayName(item, locale)}
+                          <span className="ml-1 text-espresso-400">× {quantity}</span>
+                        </span>
+                        <span className="font-mono font-medium">¥{(item.price * quantity).toLocaleString()}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-3 flex justify-between border-t border-cream-200 pt-3 font-bold text-espresso">
+                    <span>{copy.total}</span>
+                    <span className="font-display text-xl">¥{orderTotal.toLocaleString()}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+                <button
+                  onClick={() => setShowConfirmation(false)}
+                  disabled={loading}
+                  className="flex-1 rounded-full border border-cream-300 px-5 py-3 text-sm font-medium text-espresso transition hover:bg-cream-50"
+                >
+                  {copy.backToCheckout}
+                </button>
+                <button
+                  onClick={handleOrder}
+                  disabled={loading}
+                  className="btn-matcha flex flex-1 items-center justify-center gap-2 py-3 text-sm"
+                >
+                  {loading ? (
+                    <span className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                  ) : (
+                    <>
+                      {copy.confirmButton}
+                      <ChevronRight size={18} />
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
       </div>
     </UserLayout>
   );
