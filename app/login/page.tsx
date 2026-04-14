@@ -29,11 +29,13 @@ function LoginContent() {
     });
   }, [next, router]);
 
+  const isWorkspaceMismatch = error === 'workspace_not_allowed';
+
   const errorMessage =
-    error === 'workspace_not_allowed'
+    isWorkspaceMismatch
       ? locale === 'en'
-        ? 'This Slack workspace is not allowed. Please sign in with the LIMU workspace.'
-        : 'このSlackワークスペースからのログインは許可されていません。研究室のワークスペースでログインしてください。'
+        ? 'You are currently signed in to a different Slack workspace.'
+        : '現在、別の Slack ワークスペースでログインされています。'
       : error === 'auth_failed'
       ? locale === 'en'
         ? 'Authentication failed. Please try again.'
@@ -49,10 +51,10 @@ function LoginContent() {
       : null;
 
   const workspaceHint =
-    error === 'workspace_not_allowed'
+    isWorkspaceMismatch
       ? locale === 'en'
-        ? 'If Slack opens another workspace first, switch to the LIMU workspace in Slack and try again. If it still fails, use a private/incognito window.'
-        : 'Slack で別のワークスペースが先に開いてしまう場合は、Slack 側で LIMU のワークスペースに切り替えてから再度お試しください。うまくいかない場合はシークレットウィンドウも有効です。'
+        ? 'Please switch to the LIMU workspace in Slack and try again. If Slack keeps opening another workspace first, using a private/incognito window usually helps.'
+        : 'Slack 側で LIMU のワークスペースに切り替えてから、もう一度ログインしてください。別のワークスペースが先に開いてしまう場合は、シークレットウィンドウを使うと入りやすいです。'
       : null;
 
   if (checkingSession) {
@@ -101,10 +103,27 @@ function LoginContent() {
             </p>
           </div>
           {errorMessage && (
-            <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-              <div>{errorMessage}</div>
+            <div
+              className={`rounded-xl px-4 py-3 text-sm ${
+                isWorkspaceMismatch
+                  ? 'border border-amber-200 bg-amber-50 text-amber-800'
+                  : 'border border-red-200 bg-red-50 text-red-700'
+              }`}
+            >
+              <div className="font-medium">
+                {isWorkspaceMismatch
+                  ? locale === 'en'
+                    ? 'Signed in to another workspace'
+                    : '別のワークスペースでログイン中です'
+                  : errorMessage}
+              </div>
+              {isWorkspaceMismatch ? <div className="mt-1">{errorMessage}</div> : null}
               {detectedWorkspaceId && (
-                <div className="mt-2 font-mono text-xs text-red-600">
+                <div
+                  className={`mt-2 font-mono text-xs ${
+                    isWorkspaceMismatch ? 'text-amber-700' : 'text-red-600'
+                  }`}
+                >
                   {locale === 'en' ? 'Detected workspace ID' : '検出された workspace ID'}: {detectedWorkspaceId}
                 </div>
               )}
