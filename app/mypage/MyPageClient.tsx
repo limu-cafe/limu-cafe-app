@@ -26,6 +26,7 @@ type MyOrder = {
   id: string;
   total_amount: number;
   payment_method: string;
+  deferred_settlement_method?: 'cash' | 'stripe' | null;
   payment_status: string;
   created_at: string;
   order_items?: Array<{
@@ -250,7 +251,9 @@ export default function MyPageClient({
                   </span>
                   <div className="flex items-center gap-2">
                     <span className="rounded-full bg-cream-100 px-2 py-0.5 text-xs text-espresso-600">
-                      {copy.paymentMethodLabel[order.payment_method]}
+                      {order.payment_method === 'deferred' && order.deferred_settlement_method
+                        ? `${copy.paymentMethodLabel[order.payment_method]} / ${copy.paymentMethodLabel[order.deferred_settlement_method]}`
+                        : copy.paymentMethodLabel[order.payment_method]}
                     </span>
                     <span
                       className={`rounded-full px-2 py-0.5 text-xs ${

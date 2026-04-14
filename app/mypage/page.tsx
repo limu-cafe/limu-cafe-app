@@ -28,7 +28,7 @@ async function MyPageContent({ user }: { user: AuthUser }) {
     adminClient
       .from('orders')
       .select(
-        'id, total_amount, payment_method, payment_status, created_at, order_items(item_name, quantity, item:items(id, name, english_name, price, stock, is_available, stock_alert_threshold, category_id, image_url, description, popular_override, new_arrival_override, created_at, updated_at))'
+        'id, total_amount, payment_method, deferred_settlement_method, payment_status, created_at, order_items(item_name, quantity, item:items(id, name, english_name, price, stock, is_available, stock_alert_threshold, category_id, image_url, description, popular_override, new_arrival_override, created_at, updated_at))'
       )
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })

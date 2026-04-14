@@ -10,6 +10,10 @@ import { useRouter, useSearchParams } from 'next/navigation';
 const METHOD_LABEL: Record<string, string> = {
   balance: '残高', deferred: '後払い', cash: '現金', stripe: 'クレカ',
 };
+const DEFERRED_SETTLEMENT_LABEL: Record<string, string> = {
+  cash: '現金で精算',
+  stripe: 'クレカで精算',
+};
 const STATUS_LABEL: Record<string, string> = {
   pending: '処理中', completed: '完了', cancelled: 'キャンセル', refunded: '返金済み',
 };
@@ -118,9 +122,11 @@ export default function OrdersClient({ orders }: { orders: any[] }) {
                   </span>
 
                   {/* 支払い方法 */}
-                  <span className="text-xs bg-gray-700 text-gray-300 px-2 py-0.5 rounded-full flex-shrink-0">
-                    {METHOD_LABEL[order.payment_method]}
-                  </span>
+                    <span className="text-xs bg-gray-700 text-gray-300 px-2 py-0.5 rounded-full flex-shrink-0">
+                      {order.payment_method === 'deferred' && order.deferred_settlement_method
+                        ? `${METHOD_LABEL[order.payment_method]} / ${DEFERRED_SETTLEMENT_LABEL[order.deferred_settlement_method] ?? order.deferred_settlement_method}`
+                        : METHOD_LABEL[order.payment_method]}
+                    </span>
 
                   {/* ステータス */}
                   <span className={`text-xs px-2 py-0.5 rounded-full flex-shrink-0 ${STATUS_COLOR[order.payment_status]}`}>
@@ -169,18 +175,29 @@ export default function OrdersClient({ orders }: { orders: any[] }) {
                     )}
 
                     {['balance', 'deferred'].includes(order.payment_method) && order.payment_status === 'completed' && (
-                      <button
-                        onClick={(e) => { e.stopPropagation(); handleCancelOrder(order.id); }}
-                        disabled={loading === order.id}
-                        className="flex items-center gap-2 px-4 py-2 bg-red-500/15 text-red-300 hover:bg-red-500/25 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
-                      >
-                        {loading === order.id ? (
-                          <span className="animate-spin w-4 h-4 border border-red-300 border-t-transparent rounded-full" />
-                        ) : (
-                          <RotateCcw size={16} />
+                      <div className="flex flex-wrap gap-2">
+                        {order.payment_method === 'deferred' && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); router.push('/admin/settlement'); }}
+                            className="flex items-center gap-2 rounded-lg bg-sky-500/15 px-4 py-2 text-sm font-medium text-sky-300 transition-colors hover:bg-sky-500/25"
+                          >
+                            <CheckCircle size={16} />
+                            決済を確認する
+                          </button>
                         )}
-                        注文をキャンセル
-                      </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleCancelOrder(order.id); }}
+                          disabled={loading === order.id}
+                          className="flex items-center gap-2 px-4 py-2 bg-red-500/15 text-red-300 hover:bg-red-500/25 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                        >
+                          {loading === order.id ? (
+                            <span className="animate-spin w-4 h-4 border border-red-300 border-t-transparent rounded-full" />
+                          ) : (
+                            <RotateCcw size={16} />
+                          )}
+                          注文をキャンセル
+                        </button>
+                      </div>
                     )}
                   </div>
                 )}

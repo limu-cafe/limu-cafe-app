@@ -75,7 +75,7 @@ export async function POST(request: Request) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const { items, total_amount, payment_method } = await request.json();
+  const { items, total_amount, payment_method, deferred_settlement_method } = await request.json();
 
   // ユーザー情報取得
   const { data: profile } = await supabase
@@ -90,6 +90,10 @@ export async function POST(request: Request) {
     if (profile.balance < total_amount) {
       return NextResponse.json({ error: '残高が不足しています' }, { status: 400 });
     }
+  }
+
+  if (payment_method === 'deferred' && !['cash', 'stripe'].includes(deferred_settlement_method)) {
+    return NextResponse.json({ error: '後払い時の精算方法を選択してください' }, { status: 400 });
   }
 
   // 在庫確認
@@ -112,6 +116,7 @@ export async function POST(request: Request) {
       user_id: user.id,
       total_amount,
       payment_method,
+      deferred_settlement_method: payment_method === 'deferred' ? deferred_settlement_method : null,
       payment_status: payment_method === 'cash' ? 'pending' : 'completed',
     })
     .select()

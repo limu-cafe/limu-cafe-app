@@ -12,6 +12,7 @@ function OrderCompleteContent() {
   const { locale } = useUserLocale();
   const payment = searchParams.get('payment') ?? '';
   const orderId = searchParams.get('order') ?? '';
+  const settlement = searchParams.get('settlement') ?? '';
 
   const paymentLabels =
     locale === 'en'
@@ -19,11 +20,13 @@ function OrderCompleteContent() {
           balance: 'Balance',
           deferred: 'Pay later',
           cash: 'Cash',
+          stripe: 'Card',
         }
       : {
           balance: '残高払い',
           deferred: '後払い',
           cash: '現金払い',
+          stripe: 'クレカ',
         };
 
   const copy =
@@ -35,6 +38,7 @@ function OrderCompleteContent() {
           orderNumber: 'Order ID',
           status: 'Status',
           paymentMethod: 'Payment method',
+          settlementMethod: 'Settlement',
           nextAction: 'Next step',
           received: 'Accepted',
           unset: 'Not set',
@@ -53,6 +57,7 @@ function OrderCompleteContent() {
           orderNumber: '注文番号',
           status: '状態',
           paymentMethod: '支払い方法',
+          settlementMethod: '精算方法',
           nextAction: '次の操作',
           received: '受付済み',
           unset: '未設定',
@@ -80,7 +85,7 @@ function OrderCompleteContent() {
               </p>
               {orderId && <p className="text-xs text-espresso-400">{copy.orderNumber}: {orderId}</p>}
             </div>
-            <div className="mx-auto grid max-w-xl gap-3 sm:grid-cols-3">
+            <div className="mx-auto grid max-w-3xl gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <div className="soft-panel">
                 <p className="text-[11px] tracking-[0.14em] text-espresso-400">{copy.status}</p>
                 <p className="mt-2 font-semibold text-espresso">{copy.received}</p>
@@ -89,6 +94,14 @@ function OrderCompleteContent() {
                 <p className="text-[11px] tracking-[0.14em] text-espresso-400">{copy.paymentMethod}</p>
                 <p className="mt-2 font-semibold text-espresso">
                   {paymentLabels[payment as keyof typeof paymentLabels] ?? copy.unset}
+                </p>
+              </div>
+              <div className="soft-panel">
+                <p className="text-[11px] tracking-[0.14em] text-espresso-400">{copy.settlementMethod}</p>
+                <p className="mt-2 font-semibold text-espresso">
+                  {payment === 'deferred'
+                    ? paymentLabels[settlement as keyof typeof paymentLabels] ?? copy.unset
+                    : copy.unset}
                 </p>
               </div>
               <div className="soft-panel">

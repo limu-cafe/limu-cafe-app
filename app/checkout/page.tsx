@@ -4,22 +4,31 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
-import { Wallet, Clock, Banknote, CreditCard, ChevronRight } from 'lucide-react';
+import {
+  Wallet,
+  Clock,
+  Banknote,
+  CreditCard,
+  ChevronRight,
+  CheckCircle2,
+} from 'lucide-react';
 import UserLayout from '@/components/layout/UserLayout';
 import { useCartStore } from '@/lib/store/cart';
 import { createClient } from '@/lib/supabase/client';
-import type { User } from '@/types';
+import type { DeferredSettlementMethod, User } from '@/types';
 import { useUserLocale } from '@/components/user/UserLocaleProvider';
 import { getItemDisplayName } from '@/lib/item-display';
 
-type PaymentMethod = 'balance' | 'deferred' | 'cash';
+type PaymentTiming = 'balance' | 'deferred';
 
 export default function CheckoutPage() {
   const { items, total, hasHydrated, clearCart } = useCartStore();
   const router = useRouter();
   const { locale } = useUserLocale();
   const [user, setUser] = useState<User | null>(null);
-  const [method, setMethod] = useState<PaymentMethod>('balance');
+  const [paymentTiming, setPaymentTiming] = useState<PaymentTiming>('balance');
+  const [deferredSettlementMethod, setDeferredSettlementMethod] =
+    useState<DeferredSettlementMethod>('cash');
   const [loading, setLoading] = useState(false);
 
   const copy =
@@ -32,22 +41,29 @@ export default function CheckoutPage() {
           orderDone: 'Order completed',
           heroKicker: 'Checkout',
           title: 'Confirm order',
-          subtitle: 'Review your total and payment method before placing the order.',
+          subtitle: 'Choose when to pay, then review how the order will be settled.',
           orderTotal: 'Order total',
           orderItems: 'Items',
           soldOut: 'Sold out',
           lowStock: 'Stock is getting low',
           total: 'Total',
-          paymentMethod: 'Payment method',
-          balance: 'Pay with balance',
+          paymentTiming: 'When to pay',
+          balance: 'Use prepaid balance',
           balanceDescription: `Current balance: ¥${user?.balance?.toLocaleString() ?? 0}`,
           balanceShortage: 'Your balance is not enough',
           deferred: 'Pay later',
-          deferredDescription: 'Added to your deferred balance and settled later',
+          deferredDescription: 'Add this order to your deferred balance',
+          settlementMethod: 'How you plan to settle it',
           cash: 'Cash',
-          cashDescription: 'Pay an admin directly in cash',
+          cashDescription: 'Settle later in cash',
+          card: 'Card',
+          cardDescription: 'Settle later by card',
           topUpBalance: 'Top up your balance',
-          placeOrder: 'Place order',
+          balanceSummary: 'This order will be deducted from your prepaid balance immediately.',
+          deferredSummary: 'This order will be added to your deferred balance and settled later.',
+          plannedSettlement: 'Planned settlement',
+          confirmHeading: 'Confirmation',
+          confirmButton: 'Confirm and place order',
         }
       : {
           loadingCart: '注文内容を読み込んでいます...',
@@ -57,22 +73,29 @@ export default function CheckoutPage() {
           orderDone: '注文が完了しました',
           heroKicker: 'Checkout',
           title: '購入確認',
-          subtitle: '合計と支払い方法を確認して、そのまま注文を確定します。',
+          subtitle: '前払い残高を使うか、後払いにするかを選んだ上で、そのまま注文内容を確認できます。',
           orderTotal: 'Order total',
           orderItems: '注文内容',
           soldOut: '在庫切れです',
           lowStock: '在庫が少なくなっています',
           total: '合計',
-          paymentMethod: '支払い方法',
-          balance: '残高払い',
+          paymentTiming: '支払いタイミング',
+          balance: '前払い残高を使う',
           balanceDescription: `現在の残高: ¥${user?.balance?.toLocaleString() ?? 0}`,
           balanceShortage: '残高が不足しています',
           deferred: '後払い',
-          deferredDescription: '定期精算でまとめて支払い',
-          cash: '現金払い',
-          cashDescription: '管理者に直接現金で支払います',
+          deferredDescription: '今回の注文を後払い残高に追加します',
+          settlementMethod: 'あとでどう支払うか',
+          cash: '現金',
+          cashDescription: 'あとで現金で精算',
+          card: 'クレカ',
+          cardDescription: 'あとでクレカで精算',
           topUpBalance: '残高をチャージする',
-          placeOrder: '注文を確定する',
+          balanceSummary: '今回の注文は前払い残高からすぐに差し引かれます。',
+          deferredSummary: '今回の注文は後払い残高に追加され、あとで精算します。',
+          plannedSettlement: '精算予定',
+          confirmHeading: '決済内容の確認',
+          confirmButton: '内容を確認して注文する',
         };
 
   useEffect(() => {
@@ -130,18 +153,28 @@ export default function CheckoutPage() {
       icon: Clock,
       disabled: false,
     },
+  ];
+
+  const deferredOptions = [
     {
       id: 'cash' as const,
       label: copy.cash,
       description: copy.cashDescription,
       icon: Banknote,
-      disabled: false,
+    },
+    {
+      id: 'stripe' as const,
+      label: copy.card,
+      description: copy.cardDescription,
+      icon: CreditCard,
     },
   ];
 
   const handleOrder = async () => {
     if (!user) return;
     setLoading(true);
+
+    const paymentMethod = paymentTiming === 'balance' ? 'balance' : 'deferred';
 
     try {
       const res = await fetch('/api/orders', {
@@ -156,7 +189,9 @@ export default function CheckoutPage() {
             subtotal: item.price * quantity,
           })),
           total_amount: orderTotal,
-          payment_method: method,
+          payment_method: paymentMethod,
+          deferred_settlement_method:
+            paymentMethod === 'deferred' ? deferredSettlementMethod : null,
         }),
       });
 
@@ -169,7 +204,14 @@ export default function CheckoutPage() {
 
       clearCart();
       toast.success(copy.orderDone);
-      router.push(`/order-complete?payment=${method}&order=${payload.order_id ?? ''}`);
+
+      const completeUrl = new URL('/order-complete', window.location.origin);
+      completeUrl.searchParams.set('payment', paymentMethod);
+      completeUrl.searchParams.set('order', payload.order_id ?? '');
+      if (paymentMethod === 'deferred') {
+        completeUrl.searchParams.set('settlement', deferredSettlementMethod);
+      }
+      router.push(`${completeUrl.pathname}${completeUrl.search}`);
     } catch (error: any) {
       toast.error(error.message);
     } finally {
@@ -208,18 +250,18 @@ export default function CheckoutPage() {
                 const displayName = getItemDisplayName(item, locale);
                 return (
                   <>
-              <div>
-                <span className="text-espresso-600">
-                  {displayName}
-                  <span className="ml-1 text-espresso-400">× {quantity}</span>
-                </span>
-                {item.stock <= item.stock_alert_threshold && (
-                  <p className={`mt-1 text-xs ${item.stock === 0 ? 'text-red-600' : 'text-amber-600'}`}>
-                    {item.stock === 0 ? copy.soldOut : copy.lowStock}
-                  </p>
-                )}
-              </div>
-              <span className="font-mono font-medium">¥{(item.price * quantity).toLocaleString()}</span>
+                    <div>
+                      <span className="text-espresso-600">
+                        {displayName}
+                        <span className="ml-1 text-espresso-400">× {quantity}</span>
+                      </span>
+                      {item.stock <= item.stock_alert_threshold && (
+                        <p className={`mt-1 text-xs ${item.stock === 0 ? 'text-red-600' : 'text-amber-600'}`}>
+                          {item.stock === 0 ? copy.soldOut : copy.lowStock}
+                        </p>
+                      )}
+                    </div>
+                    <span className="font-mono font-medium">¥{(item.price * quantity).toLocaleString()}</span>
                   </>
                 );
               })()}
@@ -232,14 +274,14 @@ export default function CheckoutPage() {
         </div>
 
         <div className="space-y-3">
-          <h2 className="font-medium text-espresso">{copy.paymentMethod}</h2>
+          <h2 className="font-medium text-espresso">{copy.paymentTiming}</h2>
           {paymentOptions.map(({ id, label, description, icon: Icon, disabled, disabledReason }) => (
             <button
               key={id}
-              onClick={() => !disabled && setMethod(id)}
+              onClick={() => !disabled && setPaymentTiming(id)}
               disabled={disabled}
               className={`card flex w-full items-center gap-4 text-left transition-all duration-200 ${
-                method === id && !disabled
+                paymentTiming === id && !disabled
                   ? 'bg-espresso text-cream-50 ring-2 ring-espresso'
                   : disabled
                     ? 'cursor-not-allowed opacity-50'
@@ -248,21 +290,21 @@ export default function CheckoutPage() {
             >
               <div
                 className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full ${
-                  method === id && !disabled ? 'bg-white/20' : 'bg-cream-100'
+                  paymentTiming === id && !disabled ? 'bg-white/20' : 'bg-cream-100'
                 }`}
               >
                 <Icon
                   size={20}
-                  className={method === id && !disabled ? 'text-cream-50' : 'text-espresso-600'}
+                  className={paymentTiming === id && !disabled ? 'text-cream-50' : 'text-espresso-600'}
                 />
               </div>
               <div className="flex-1">
                 <p className="font-medium">{label}</p>
-                <p className={`text-sm ${method === id && !disabled ? 'text-cream-200' : 'text-espresso-400'}`}>
+                <p className={`text-sm ${paymentTiming === id && !disabled ? 'text-cream-200' : 'text-espresso-400'}`}>
                   {disabled ? disabledReason : description}
                 </p>
               </div>
-              {method === id && !disabled && (
+              {paymentTiming === id && !disabled && (
                 <div className="flex h-5 w-5 items-center justify-center rounded-full bg-white">
                   <div className="h-2.5 w-2.5 rounded-full bg-espresso" />
                 </div>
@@ -284,6 +326,60 @@ export default function CheckoutPage() {
           )}
         </div>
 
+        {paymentTiming === 'deferred' && (
+          <div className="space-y-3">
+            <h2 className="font-medium text-espresso">{copy.settlementMethod}</h2>
+            {deferredOptions.map(({ id, label, description, icon: Icon }) => (
+              <button
+                key={id}
+                onClick={() => setDeferredSettlementMethod(id)}
+                className={`card flex w-full items-center gap-4 text-left transition-all duration-200 ${
+                  deferredSettlementMethod === id
+                    ? 'bg-espresso text-cream-50 ring-2 ring-espresso'
+                    : 'hover:border-espresso-400'
+                }`}
+              >
+                <div
+                  className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full ${
+                    deferredSettlementMethod === id ? 'bg-white/20' : 'bg-cream-100'
+                  }`}
+                >
+                  <Icon
+                    size={20}
+                    className={deferredSettlementMethod === id ? 'text-cream-50' : 'text-espresso-600'}
+                  />
+                </div>
+                <div className="flex-1">
+                  <p className="font-medium">{label}</p>
+                  <p className={`text-sm ${deferredSettlementMethod === id ? 'text-cream-200' : 'text-espresso-400'}`}>
+                    {description}
+                  </p>
+                </div>
+                {deferredSettlementMethod === id && (
+                  <div className="flex h-5 w-5 items-center justify-center rounded-full bg-white">
+                    <div className="h-2.5 w-2.5 rounded-full bg-espresso" />
+                  </div>
+                )}
+              </button>
+            ))}
+          </div>
+        )}
+
+        <div className="card space-y-3 border-espresso-200/70 bg-white/80">
+          <div className="flex items-center gap-2 text-sm font-medium text-espresso">
+            <CheckCircle2 size={18} />
+            <span>{copy.confirmHeading}</span>
+          </div>
+          <p className="text-sm text-espresso-500">
+            {paymentTiming === 'balance' ? copy.balanceSummary : copy.deferredSummary}
+          </p>
+          {paymentTiming === 'deferred' && (
+            <p className="text-sm text-espresso-500">
+              {copy.plannedSettlement}: {deferredSettlementMethod === 'cash' ? copy.cash : copy.card}
+            </p>
+          )}
+        </div>
+
         <button
           onClick={handleOrder}
           disabled={loading}
@@ -293,7 +389,7 @@ export default function CheckoutPage() {
             <span className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" />
           ) : (
             <>
-              {copy.placeOrder}
+              {copy.confirmButton}
               <ChevronRight size={18} />
             </>
           )}
