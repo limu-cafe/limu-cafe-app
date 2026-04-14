@@ -3,7 +3,6 @@
 import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import toast from 'react-hot-toast';
 import { createClient } from '@/lib/supabase/client';
 
 function AdminLoginContent() {
@@ -32,22 +31,9 @@ function AdminLoginContent() {
 
   const handleSlackLogin = async () => {
     setLoading(true);
-    const supabase = createClient();
-    const callbackUrl = new URL('/api/auth/callback', window.location.origin);
-    callbackUrl.searchParams.set('next', passwordPath);
-
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'slack_oidc',
-      options: {
-        redirectTo: callbackUrl.toString(),
-        scopes: 'openid profile email',
-      },
-    });
-
-    if (error) {
-      toast.error('Slackログインに失敗しました');
-      setLoading(false);
-    }
+    const loginUrl = new URL('/api/auth/login', window.location.origin);
+    loginUrl.searchParams.set('next', passwordPath);
+    window.location.href = loginUrl.toString();
   };
 
   if (checkingSession) {

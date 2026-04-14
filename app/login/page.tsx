@@ -48,28 +48,24 @@ function LoginContent() {
         : '認証コードを取得できませんでした。もう一度ログインしてください。'
       : null;
 
+  const workspaceHint =
+    error === 'workspace_not_allowed'
+      ? locale === 'en'
+        ? 'If Slack opens another workspace first, switch to the LIMU workspace in Slack and try again. If it still fails, use a private/incognito window.'
+        : 'Slack で別のワークスペースが先に開いてしまう場合は、Slack 側で LIMU のワークスペースに切り替えてから再度お試しください。うまくいかない場合はシークレットウィンドウも有効です。'
+      : null;
+
   if (checkingSession) {
     return <div className="min-h-screen texture-bg" />;
   }
 
   const handleSlackLogin = async () => {
     setLoading(true);
-    const supabase = createClient();
-    const callbackUrl = new URL('/api/auth/callback', window.location.origin);
+    const loginUrl = new URL('/api/auth/login', window.location.origin);
     if (next?.startsWith('/')) {
-      callbackUrl.searchParams.set('next', next);
+      loginUrl.searchParams.set('next', next);
     }
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'slack_oidc',
-      options: {
-        redirectTo: callbackUrl.toString(),
-        scopes: 'openid profile email',
-      },
-    });
-    if (error) {
-      toast.error((locale === 'en' ? 'Login failed: ' : 'ログインに失敗しました: ') + error.message);
-      setLoading(false);
-    }
+    window.location.href = loginUrl.toString();
   };
 
   return (
@@ -112,6 +108,7 @@ function LoginContent() {
                   {locale === 'en' ? 'Detected workspace ID' : '検出された workspace ID'}: {detectedWorkspaceId}
                 </div>
               )}
+              {workspaceHint && <div className="mt-2">{workspaceHint}</div>}
             </div>
           )}
           <button
