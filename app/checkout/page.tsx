@@ -57,7 +57,7 @@ export default function CheckoutPage() {
           cash: 'Cash',
           cashDescription: 'Settle later in cash',
           card: 'Card',
-          cardDescription: 'Settle later by card',
+          cardDescription: 'Card settlement is coming soon. Please choose cash for now.',
           topUpBalance: 'Top up your balance',
           balanceSummary: 'This order will be deducted from your prepaid balance immediately.',
           deferredSummary: 'This order will be added to your deferred balance and settled later.',
@@ -89,7 +89,7 @@ export default function CheckoutPage() {
           cash: '現金',
           cashDescription: 'あとで現金で精算',
           card: 'クレカ',
-          cardDescription: 'あとでクレカで精算',
+          cardDescription: 'クレカ精算は今後実装予定です。今は現金を選んでください。',
           topUpBalance: '残高をチャージする',
           balanceSummary: '今回の注文は前払い残高からすぐに差し引かれます。',
           deferredSummary: '今回の注文は後払い残高に追加され、あとで精算します。',
@@ -137,6 +137,11 @@ export default function CheckoutPage() {
   const orderTotal = total();
   const hasEnoughBalance = user ? user.balance >= orderTotal : false;
 
+  useEffect(() => {
+    if (!user) return;
+    setPaymentTiming(user.balance >= orderTotal ? 'balance' : 'deferred');
+  }, [user, orderTotal]);
+
   const paymentOptions = [
     {
       id: 'balance' as const,
@@ -161,12 +166,14 @@ export default function CheckoutPage() {
       label: copy.cash,
       description: copy.cashDescription,
       icon: Banknote,
+      disabled: false,
     },
     {
       id: 'stripe' as const,
       label: copy.card,
       description: copy.cardDescription,
       icon: CreditCard,
+      disabled: true,
     },
   ];
 
@@ -329,33 +336,44 @@ export default function CheckoutPage() {
         {paymentTiming === 'deferred' && (
           <div className="space-y-3">
             <h2 className="font-medium text-espresso">{copy.settlementMethod}</h2>
-            {deferredOptions.map(({ id, label, description, icon: Icon }) => (
+          {deferredOptions.map(({ id, label, description, icon: Icon, disabled }) => (
               <button
                 key={id}
-                onClick={() => setDeferredSettlementMethod(id)}
+                onClick={() => !disabled && setDeferredSettlementMethod(id)}
+                disabled={disabled}
                 className={`card flex w-full items-center gap-4 text-left transition-all duration-200 ${
-                  deferredSettlementMethod === id
+                  deferredSettlementMethod === id && !disabled
                     ? 'bg-espresso text-cream-50 ring-2 ring-espresso'
-                    : 'hover:border-espresso-400'
+                    : disabled
+                      ? 'cursor-not-allowed opacity-60'
+                      : 'hover:border-espresso-400'
                 }`}
               >
                 <div
                   className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full ${
-                    deferredSettlementMethod === id ? 'bg-white/20' : 'bg-cream-100'
+                    deferredSettlementMethod === id && !disabled ? 'bg-white/20' : 'bg-cream-100'
                   }`}
                 >
                   <Icon
                     size={20}
-                    className={deferredSettlementMethod === id ? 'text-cream-50' : 'text-espresso-600'}
+                    className={
+                      deferredSettlementMethod === id && !disabled
+                        ? 'text-cream-50'
+                        : 'text-espresso-600'
+                    }
                   />
                 </div>
                 <div className="flex-1">
                   <p className="font-medium">{label}</p>
-                  <p className={`text-sm ${deferredSettlementMethod === id ? 'text-cream-200' : 'text-espresso-400'}`}>
+                  <p
+                    className={`text-sm ${
+                      deferredSettlementMethod === id && !disabled ? 'text-cream-200' : 'text-espresso-400'
+                    }`}
+                  >
                     {description}
                   </p>
                 </div>
-                {deferredSettlementMethod === id && (
+                {deferredSettlementMethod === id && !disabled && (
                   <div className="flex h-5 w-5 items-center justify-center rounded-full bg-white">
                     <div className="h-2.5 w-2.5 rounded-full bg-espresso" />
                   </div>
