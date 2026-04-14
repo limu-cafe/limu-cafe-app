@@ -120,6 +120,14 @@ export default function CheckoutPage() {
     });
   }, [router]);
 
+  const orderTotal = total();
+  const hasEnoughBalance = user ? user.balance >= orderTotal : false;
+
+  useEffect(() => {
+    if (!user) return;
+    setPaymentTiming(user.balance >= orderTotal ? 'balance' : 'deferred');
+  }, [user, orderTotal]);
+
   if (!hasHydrated) {
     return (
       <UserLayout>
@@ -142,14 +150,6 @@ export default function CheckoutPage() {
       </UserLayout>
     );
   }
-
-  const orderTotal = total();
-  const hasEnoughBalance = user ? user.balance >= orderTotal : false;
-
-  useEffect(() => {
-    if (!user) return;
-    setPaymentTiming(user.balance >= orderTotal ? 'balance' : 'deferred');
-  }, [user, orderTotal]);
 
   const paymentOptions = [
     {
