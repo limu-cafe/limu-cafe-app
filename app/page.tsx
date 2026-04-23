@@ -66,8 +66,6 @@ async function HomeContent({ userId, authUser }: { userId: string; authUser: Aut
       items={itemList}
       categories={(categories ?? []) as Category[]}
       initialFavoriteItemIds={favoriteItemIds}
-      initialFrequentItemIds={[]}
-      initialPopularItemIds={[]}
     />
   );
 }

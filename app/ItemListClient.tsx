@@ -1,12 +1,11 @@
 'use client';
 
-import { useDeferredValue, useEffect, useMemo, useState } from 'react';
-import { Flame, Heart, Search, Sparkles } from 'lucide-react';
+import { useDeferredValue, useMemo, useState } from 'react';
+import { Heart, Search, Sparkles } from 'lucide-react';
 import toast from 'react-hot-toast';
 import ItemCard from '@/components/user/ItemCard';
 import InstallPromptCard from '@/components/user/InstallPromptCard';
 import { isQueryMatch } from '@/lib/search';
-import { pickShowcaseItems } from '@/lib/item-highlights';
 import type { Category, Item } from '@/types';
 import { useUserLocale } from '@/components/user/UserLocaleProvider';
 
@@ -14,70 +13,26 @@ interface Props {
   items: Item[];
   categories: Category[];
   initialFavoriteItemIds: string[];
-  initialFrequentItemIds: string[];
-  initialPopularItemIds: string[];
 }
 
-type BrowseMode = 'all' | 'favorites' | 'frequent' | 'low-stock' | 'popular' | 'new-arrivals';
+type BrowseMode = 'all' | 'favorites' | 'low-stock';
 
 export default function ItemListClient({
   items,
   categories,
   initialFavoriteItemIds,
-  initialFrequentItemIds,
-  initialPopularItemIds,
 }: Props) {
   const { locale } = useUserLocale();
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [browseMode, setBrowseMode] = useState<BrowseMode>('all');
   const [favoriteItemIds, setFavoriteItemIds] = useState(initialFavoriteItemIds);
-  const [frequentCandidateIds, setFrequentCandidateIds] = useState(initialFrequentItemIds);
-  const [popularCandidateIds, setPopularCandidateIds] = useState(initialPopularItemIds);
   const deferredQuery = useDeferredValue(query);
-  const itemMap = useMemo(() => new Map(items.map((item) => [item.id, item])), [items]);
   const favoriteItemIdSet = useMemo(() => new Set(favoriteItemIds), [favoriteItemIds]);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const loadHighlights = async () => {
-      try {
-        const res = await fetch('/api/home/highlights');
-        if (!res.ok) {
-          throw new Error('showcase fetch failed');
-        }
-        const data = await res.json();
-        if (!cancelled) {
-          setFrequentCandidateIds(Array.isArray(data.frequentItemIds) ? data.frequentItemIds : []);
-          setPopularCandidateIds(Array.isArray(data.popularItemIds) ? data.popularItemIds : []);
-        }
-      } catch {
-        // 初回表示を優先し、ハイライト取得失敗は無視する
-      }
-    };
-
-    void loadHighlights();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   const favoriteItems = useMemo(
     () => items.filter((item) => favoriteItemIdSet.has(item.id)),
     [favoriteItemIdSet, items]
-  );
-  const frequentItems = useMemo(
-    () =>
-      frequentCandidateIds
-        .map((itemId) => itemMap.get(itemId))
-        .filter((item): item is Item => Boolean(item)),
-    [frequentCandidateIds, itemMap]
-  );
-  const visibleFrequentItems = useMemo(
-    () => frequentItems.filter((item) => !favoriteItemIdSet.has(item.id)),
-    [favoriteItemIdSet, frequentItems]
   );
   const lowStockItems = useMemo(
     () =>
@@ -86,39 +41,17 @@ export default function ItemListClient({
       ),
     [items]
   );
-  const popularItems = useMemo(
-    () => pickShowcaseItems(items, popularCandidateIds, 'popular', 4),
-    [items, popularCandidateIds]
-  );
-  const newArrivalItems = useMemo(
-    () =>
-      pickShowcaseItems(
-        items,
-        [...items]
-          .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-          .map((item) => item.id),
-        'new_arrival',
-        4
-      ),
-    [items]
-  );
 
   const baseItems = useMemo(() => {
     switch (browseMode) {
-      case 'popular':
-        return popularItems;
-      case 'new-arrivals':
-        return newArrivalItems;
       case 'favorites':
         return favoriteItems;
-      case 'frequent':
-        return visibleFrequentItems;
       case 'low-stock':
         return lowStockItems;
       default:
         return items;
     }
-  }, [browseMode, favoriteItems, items, lowStockItems, newArrivalItems, popularItems, visibleFrequentItems]);
+  }, [browseMode, favoriteItems, items, lowStockItems]);
 
   const filtered = useMemo(
     () =>
@@ -162,10 +95,7 @@ export default function ItemListClient({
           searchPlaceholder: 'Search by product name',
           all: 'All',
           favorites: 'Favorites',
-          frequent: 'Frequent',
           lowStock: 'Low stock',
-          popular: 'Popular',
-          newArrivals: 'New',
           showing: 'Showing',
           search: 'Search',
           category: 'Category',
@@ -173,9 +103,6 @@ export default function ItemListClient({
           emptyTitle: 'No products found',
           emptyDescription: 'Try a different keyword or remove some filters.',
           quickSections: {
-            popular: { title: 'Popular', subtitle: 'Picked often lately' },
-            newArrivals: { title: 'New arrivals', subtitle: 'Recently added' },
-            frequent: { title: 'Buy again', subtitle: 'From recent history' },
             favorites: { title: 'Favorites', subtitle: 'Quick access' },
           },
         }
@@ -184,10 +111,7 @@ export default function ItemListClient({
           searchPlaceholder: '商品名で検索',
           all: 'すべて',
           favorites: 'お気に入り',
-          frequent: 'よく買う',
           lowStock: '残りわずか',
-          popular: '人気',
-          newArrivals: '新入荷',
           showing: '表示中',
           search: '検索',
           category: 'カテゴリ',
@@ -195,42 +119,15 @@ export default function ItemListClient({
           emptyTitle: '商品が見つかりませんでした',
           emptyDescription: '検索語を変えるか、絞り込みを外してみてください。',
           quickSections: {
-            popular: { title: '人気の商品', subtitle: '最近よく選ばれています' },
-            newArrivals: { title: '新入荷', subtitle: '新しく追加されました' },
-            frequent: { title: 'よく買う商品', subtitle: '直近の履歴' },
             favorites: { title: 'お気に入り', subtitle: 'すぐ追加' },
           },
         };
   const quickBrowseOptions = [
     { id: 'all' as const, label: copy.all, count: items.length },
-    { id: 'popular' as const, label: copy.popular, count: popularItems.length },
-    { id: 'new-arrivals' as const, label: copy.newArrivals, count: newArrivalItems.length },
     { id: 'favorites' as const, label: copy.favorites, count: favoriteItems.length },
-    { id: 'frequent' as const, label: copy.frequent, count: visibleFrequentItems.length },
     { id: 'low-stock' as const, label: copy.lowStock, count: lowStockItems.length },
   ];
   const quickSections = [
-    {
-      id: 'popular',
-      title: copy.quickSections.popular.title,
-      subtitle: copy.quickSections.popular.subtitle,
-      icon: Flame,
-      items: popularItems.slice(0, 2),
-    },
-    {
-      id: 'new-arrivals',
-      title: copy.quickSections.newArrivals.title,
-      subtitle: copy.quickSections.newArrivals.subtitle,
-      icon: Sparkles,
-      items: newArrivalItems.slice(0, 2),
-    },
-    {
-      id: 'frequent',
-      title: copy.quickSections.frequent.title,
-      subtitle: copy.quickSections.frequent.subtitle,
-      icon: Flame,
-      items: visibleFrequentItems.slice(0, 2),
-    },
     {
       id: 'favorites',
       title: copy.quickSections.favorites.title,
