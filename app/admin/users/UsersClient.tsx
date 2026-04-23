@@ -5,6 +5,7 @@ import { CheckCircle, UserX, Plus } from 'lucide-react';
 import { format } from 'date-fns';
 import { ja } from 'date-fns/locale';
 import toast from 'react-hot-toast';
+import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import type { User } from '@/types';
 
@@ -82,11 +83,21 @@ export default function UsersClient({ users }: { users: User[] }) {
       <td className="px-4 py-3 font-mono text-amber-400">
         {user.deferred_balance > 0 ? `¥${user.deferred_balance.toLocaleString()}` : '-'}
       </td>
+      <td className="px-4 py-3 font-mono text-sky-300">
+        {user.points_balance.toLocaleString()}pt
+      </td>
       <td className="px-4 py-3 text-gray-500 text-xs">
         {format(new Date(user.created_at), 'yyyy/M/d', { locale: ja })}
       </td>
       <td className="px-4 py-3">
         <div className="flex items-center gap-1">
+          <Link
+            href={`/admin/points?user=${user.id}`}
+            className="rounded-lg px-2 py-1 text-xs text-sky-300 transition-colors hover:bg-sky-500/15"
+            title="ポイントを調整"
+          >
+            pt
+          </Link>
           {/* 残高追加 */}
           {addBalanceUserId === user.id ? (
             <div className="flex items-center gap-1">
@@ -195,7 +206,7 @@ export default function UsersClient({ users }: { users: User[] }) {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-gray-800">
-              {['名前', 'メール', '残高', '後払い', '登録日', '操作'].map(h => (
+              {['名前', 'メール', '残高', '後払い', 'ポイント', '登録日', '操作'].map(h => (
                 <th key={h} className="px-4 py-3 text-left font-medium text-gray-500 text-xs">{h}</th>
               ))}
             </tr>
@@ -217,7 +228,7 @@ export default function UsersClient({ users }: { users: User[] }) {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-800">
-                {['名前', 'メール', '残高', '後払い', '登録日', '操作'].map(h => (
+                {['名前', 'メール', '残高', '後払い', 'ポイント', '登録日', '操作'].map(h => (
                   <th key={h} className="px-4 py-3 text-left font-medium text-gray-500 text-xs">{h}</th>
                 ))}
               </tr>

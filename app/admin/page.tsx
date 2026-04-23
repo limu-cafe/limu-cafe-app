@@ -252,6 +252,36 @@ export default async function AdminDashboard() {
         )}
       </section>
 
+      <section className="grid gap-4 xl:grid-cols-3">
+        {[
+          {
+            href: '/admin/products',
+            title: '商品・在庫',
+            description: '商品マスタ、入荷、価格確認をまとめて辿れます。',
+          },
+          {
+            href: '/admin/payments',
+            title: '注文・決済',
+            description: '注文確認、チャージ記録、後払い精算の入口です。',
+          },
+          {
+            href: '/admin/operations',
+            title: 'ユーザー・運営',
+            description: 'ユーザー管理、ポイント、要望、引き継ぎをまとめています。',
+          },
+        ].map((section) => (
+          <Link
+            key={section.href}
+            href={section.href}
+            className="rounded-2xl border border-gray-800 bg-gray-900 p-5 transition-colors hover:bg-gray-800/70"
+          >
+            <p className="text-xs font-medium uppercase tracking-[0.18em] text-gray-500">Hub</p>
+            <h2 className="mt-2 text-xl font-semibold text-white">{section.title}</h2>
+            <p className="mt-2 text-sm leading-6 text-gray-400">{section.description}</p>
+          </Link>
+        ))}
+      </section>
+
       <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
         <section className="rounded-2xl border border-gray-800 bg-gray-900 p-5">
           <div className="mb-4 flex items-center justify-between">
@@ -259,8 +289,8 @@ export default async function AdminDashboard() {
               <PackagePlus size={18} className="text-amber-300" />
               <h2 className="text-lg font-semibold text-white">買い出し・補充</h2>
             </div>
-            <Link href="/admin/stock" className="text-sm text-gray-400 hover:text-white">
-              在庫入力へ
+            <Link href="/admin/products" className="text-sm text-gray-400 hover:text-white">
+              商品・在庫ハブへ
             </Link>
           </div>
           {!lowStockItems || lowStockItems.length === 0 ? (
@@ -311,8 +341,8 @@ export default async function AdminDashboard() {
               <Receipt size={18} className="text-sky-300" />
               <h2 className="text-lg font-semibold text-white">精算・お金まわり</h2>
             </div>
-            <Link href="/admin/cashbox" className="text-sm text-gray-400 hover:text-white">
-              金庫管理へ
+            <Link href="/admin/payments" className="text-sm text-gray-400 hover:text-white">
+              注文・決済ハブへ
             </Link>
           </div>
           <div className="grid gap-3">
@@ -370,19 +400,19 @@ export default async function AdminDashboard() {
           <div className="grid gap-3 sm:grid-cols-2">
             {[
               {
-                href: '/admin/orders',
-                title: '注文一覧',
-                description: '過去の注文や現金受け取り履歴を見る',
+                href: '/admin/products',
+                title: '商品・在庫',
+                description: '商品マスタ編集や入荷入力へ進む',
               },
               {
-                href: '/admin/charge',
-                title: 'チャージ記録',
-                description: '反映済みのチャージ履歴を見る',
+                href: '/admin/payments',
+                title: '注文・決済',
+                description: '注文確認、チャージ、精算関連を見る',
               },
               {
-                href: '/admin/cashbox',
-                title: '金庫管理',
-                description: '現金出入りや精算の履歴を見る',
+                href: '/admin/operations',
+                title: 'ユーザー・運営',
+                description: 'ユーザー、ポイント、要望、旧データ移行を見る',
               },
               {
                 href: '/admin/audit',

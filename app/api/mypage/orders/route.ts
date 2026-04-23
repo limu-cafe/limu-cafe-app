@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import {
   isMissingDeferredSettlementMethodColumn,
+  isMissingOrderPointsColumn,
   ORDERS_SELECT_LEGACY,
   ORDERS_SELECT_WITH_DEFERRED,
 } from '@/lib/orders';
@@ -28,7 +29,10 @@ export async function GET(request: Request) {
     .order('created_at', { ascending: false })
     .range(offset, offset + fetchLimit - 1);
 
-  if (isMissingDeferredSettlementMethodColumn(orderQuery.error)) {
+  if (
+    isMissingDeferredSettlementMethodColumn(orderQuery.error) ||
+    isMissingOrderPointsColumn(orderQuery.error)
+  ) {
     orderQuery = await supabase
       .from('orders')
       .select(ORDERS_SELECT_LEGACY)

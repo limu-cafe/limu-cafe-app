@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
 import { createAdminClient, createClient } from '@/lib/supabase/server';
 import { notifyCashOrderPending, notifyNewOrder, notifyLowStock } from '@/lib/slack';
-import { isMissingDeferredSettlementMethodColumn } from '@/lib/orders';
+import { isMissingDeferredSettlementMethodColumn, isMissingOrderPointsColumn } from '@/lib/orders';
+import { clampPointsToUse } from '@/lib/points';
 
 interface OrderItemInput {
   item_id: string;
@@ -76,7 +77,8 @@ export async function POST(request: Request) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const { items, total_amount, payment_method, deferred_settlement_method } = await request.json();
+  const { items, total_amount, payment_method, deferred_settlement_method, points_used } =
+    await request.json();
 
   // ユーザー情報取得
   const { data: profile } = await supabase
@@ -86,14 +88,26 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Account not approved' }, { status: 403 });
   }
 
+  const requestedPointsUsed = clampPointsToUse(
+    Number(points_used ?? 0),
+    profile.points_balance ?? 0,
+    total_amount
+  );
+  const payableAmount = Math.max(0, total_amount - requestedPointsUsed);
+  const normalizedPaymentMethod =
+    payableAmount === 0 ? 'balance' : payment_method;
+
   // 残高確認（残高払いの場合）
-  if (payment_method === 'balance') {
-    if (profile.balance < total_amount) {
+  if (normalizedPaymentMethod === 'balance') {
+    if (profile.balance < payableAmount) {
       return NextResponse.json({ error: '残高が不足しています' }, { status: 400 });
     }
   }
 
-  if (payment_method === 'deferred' && !['cash', 'stripe'].includes(deferred_settlement_method)) {
+  if (
+    normalizedPaymentMethod === 'deferred' &&
+    !['cash', 'stripe'].includes(deferred_settlement_method)
+  ) {
     return NextResponse.json({ error: '後払い時の精算方法を選択してください' }, { status: 400 });
   }
 
@@ -114,23 +128,51 @@ export async function POST(request: Request) {
   const baseOrderPayload = {
     user_id: user.id,
     total_amount,
-    payment_method,
-    payment_status: payment_method === 'cash' ? 'pending' : 'completed',
+    points_used: requestedPointsUsed,
+    payment_method: normalizedPaymentMethod,
+    payment_status: normalizedPaymentMethod === 'cash' ? 'pending' : 'completed',
   };
 
   let orderInsert = await adminSupabase
     .from('orders')
     .insert({
       ...baseOrderPayload,
-      deferred_settlement_method: payment_method === 'deferred' ? deferred_settlement_method : null,
+      deferred_settlement_method:
+        normalizedPaymentMethod === 'deferred' ? deferred_settlement_method : null,
     })
     .select()
     .single();
 
-  if (isMissingDeferredSettlementMethodColumn(orderInsert.error)) {
+  if (isMissingDeferredSettlementMethodColumn(orderInsert.error) && isMissingOrderPointsColumn(orderInsert.error)) {
     orderInsert = await adminSupabase
       .from('orders')
-      .insert(baseOrderPayload)
+      .insert({
+        user_id: user.id,
+        total_amount,
+        payment_method: normalizedPaymentMethod,
+        payment_status: normalizedPaymentMethod === 'cash' ? 'pending' : 'completed',
+      })
+      .select()
+      .single();
+  } else if (isMissingDeferredSettlementMethodColumn(orderInsert.error)) {
+    orderInsert = await adminSupabase
+      .from('orders')
+      .insert({
+        ...baseOrderPayload,
+      })
+      .select()
+      .single();
+  } else if (isMissingOrderPointsColumn(orderInsert.error)) {
+    orderInsert = await adminSupabase
+      .from('orders')
+      .insert({
+        user_id: user.id,
+        total_amount,
+        payment_method: normalizedPaymentMethod,
+        payment_status: normalizedPaymentMethod === 'cash' ? 'pending' : 'completed',
+        deferred_settlement_method:
+          normalizedPaymentMethod === 'deferred' ? deferred_settlement_method : null,
+      })
       .select()
       .single();
   }
@@ -142,6 +184,7 @@ export async function POST(request: Request) {
   }
 
   const processedItems: Array<{ itemId: string; quantity: number }> = [];
+  let pointsDeducted = false;
 
   try {
     // 2. 注文明細作成
@@ -198,25 +241,44 @@ export async function POST(request: Request) {
       }
     }
 
-    // 4. 残高・後払い残高を更新
-    if (payment_method === 'balance') {
+    // 4. ポイントを使う
+    if (requestedPointsUsed > 0) {
+      const { error: pointUseError } = await adminSupabase.rpc('record_point_transaction', {
+        p_user_id: user.id,
+        p_delta: -requestedPointsUsed,
+        p_reason_type: 'order_use',
+        p_charge_request_id: null,
+        p_order_id: order.id,
+        p_note: `注文でポイント利用 ${requestedPointsUsed}pt`,
+        p_created_by: user.id,
+      });
+
+      if (pointUseError) {
+        throw pointUseError;
+      }
+
+      pointsDeducted = true;
+    }
+
+    // 5. 残高・後払い残高を更新
+    if (normalizedPaymentMethod === 'balance' && payableAmount > 0) {
       const { error: balanceUpdateError } = await adminSupabase.rpc(
         'decrement_user_balance_if_available',
         {
           p_user_id: user.id,
-          p_amount: total_amount,
+          p_amount: payableAmount,
         }
       );
 
       if (balanceUpdateError) {
         throw balanceUpdateError;
       }
-    } else if (payment_method === 'deferred') {
+    } else if (normalizedPaymentMethod === 'deferred' && payableAmount > 0) {
       const { error: deferredUpdateError } = await adminSupabase.rpc(
         'increment_user_deferred_balance',
         {
           p_user_id: user.id,
-          p_amount: total_amount,
+          p_amount: payableAmount,
         }
       );
 
@@ -225,6 +287,17 @@ export async function POST(request: Request) {
       }
     }
   } catch (error) {
+    if (pointsDeducted) {
+      await adminSupabase.rpc('record_point_transaction', {
+        p_user_id: user.id,
+        p_delta: requestedPointsUsed,
+        p_reason_type: 'order_refund',
+        p_charge_request_id: null,
+        p_order_id: order.id,
+        p_note: `注文失敗ロールバック ${requestedPointsUsed}pt`,
+        p_created_by: user.id,
+      });
+    }
     await rollbackOrder(adminSupabase, order.id, processedItems);
     console.error('[orders] failed to finalize order', error);
     return NextResponse.json({ error: '注文処理に失敗しました' }, { status: 500 });
@@ -235,7 +308,7 @@ export async function POST(request: Request) {
     userName: profile.name,
     items: items as OrderItemInput[],
     totalAmount: total_amount,
-    paymentMethod: payment_method,
+    paymentMethod: normalizedPaymentMethod,
   });
 
   revalidatePath('/mypage');

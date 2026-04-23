@@ -29,33 +29,50 @@ export async function POST(
     return NextResponse.json({ error: '申請が見つかりません' }, { status: 404 });
   }
 
-  await supabase
-    .from('charge_requests')
-    .update({
-      status: action === 'approve' ? 'approved' : 'rejected',
-      approved_at: new Date().toISOString(),
-      approved_by: user?.id ?? null,
-    })
-    .eq('id', id);
-
   if (action === 'approve') {
-    const { data: targetUser } = await supabase
-      .from('users').select('balance').eq('id', req.user_id).single();
-    await supabase
-      .from('users')
-      .update({ balance: (targetUser?.balance ?? 0) + req.amount })
-      .eq('id', req.user_id);
+    const { error: approveRpcError } = await supabase.rpc('approve_pending_charge_request', {
+      p_charge_request_id: id,
+      p_actor_id: user?.id ?? null,
+    });
 
-    if (req.method === 'cash') {
-      await insertCashboxEntry(supabase, {
-        entry_type: 'cash_charge',
-        direction: 'in',
-        amount: req.amount,
-        note: '現金チャージ申請の承認',
-        charge_request_id: req.id,
-        created_by: user?.id ?? null,
-      });
+    if (approveRpcError) {
+      await supabase
+        .from('charge_requests')
+        .update({
+          status: 'approved',
+          approved_at: new Date().toISOString(),
+          approved_by: user?.id ?? null,
+        })
+        .eq('id', id);
+
+      const { data: targetUser } = await supabase
+        .from('users').select('balance').eq('id', req.user_id).single();
+      await supabase
+        .from('users')
+        .update({ balance: (targetUser?.balance ?? 0) + req.amount })
+        .eq('id', req.user_id);
+
+      if (req.method === 'cash') {
+        await insertCashboxEntry(supabase, {
+          entry_type: 'cash_charge',
+          direction: 'in',
+          amount: req.amount,
+          note: '現金チャージ申請の承認',
+          charge_request_id: req.id,
+          created_by: user?.id ?? null,
+        });
+      }
+      console.warn('[admin charge approve] legacy fallback used', approveRpcError);
     }
+  } else {
+    await supabase
+      .from('charge_requests')
+      .update({
+        status: 'rejected',
+        approved_at: new Date().toISOString(),
+        approved_by: user?.id ?? null,
+      })
+      .eq('id', id);
   }
 
   await logAdminAction(supabase, {
@@ -72,6 +89,8 @@ export async function POST(
   });
 
   revalidatePath('/admin');
+  revalidatePath('/admin/payments');
+  revalidatePath('/admin/points');
   revalidatePath('/admin/charge');
   revalidatePath('/admin/users');
   revalidatePath('/admin/cashbox');

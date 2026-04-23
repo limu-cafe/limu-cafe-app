@@ -13,6 +13,13 @@ export type Platform = 'amazon' | 'rakuten' | 'yahoo' | 'other';
 export type ItemShowcaseOverride = 'auto' | 'show' | 'hide';
 export type PurchasePaymentSource = 'cashbox' | 'personal_advance';
 export type PurchaseReimbursementStatus = 'not_needed' | 'pending_reimbursement' | 'reimbursed';
+export type PointTransactionReason =
+  | 'charge_reward'
+  | 'manual_grant'
+  | 'manual_deduct'
+  | 'order_use'
+  | 'order_refund'
+  | 'charge_refund_reversal';
 
 export interface User {
   id: string;
@@ -23,6 +30,7 @@ export interface User {
   email?: string;
   balance: number;
   deferred_balance: number;
+  points_balance: number;
   role: UserRole;
   is_approved: boolean;
   is_active: boolean;
@@ -61,6 +69,7 @@ export interface Order {
   user_id: string;
   user?: User;
   total_amount: number;
+  points_used: number;
   payment_method: PaymentMethod;
   deferred_settlement_method?: DeferredSettlementMethod | null;
   payment_status: PaymentStatus;
@@ -234,6 +243,44 @@ export interface LegacyTransferRequest {
   rejection_reason?: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface PointSettings {
+  singleton: 'default';
+  is_enabled: boolean;
+  base_points_per_unit: number;
+  yen_per_point_unit: number;
+  updated_by?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PointCampaign {
+  id: string;
+  name: string;
+  multiplier: number;
+  starts_at?: string | null;
+  ends_at?: string | null;
+  is_enabled: boolean;
+  apply_immediately: boolean;
+  note?: string | null;
+  created_by?: string | null;
+  updated_by?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PointTransaction {
+  id: string;
+  user_id: string;
+  delta: number;
+  balance_after: number;
+  reason_type: PointTransactionReason;
+  charge_request_id?: string | null;
+  order_id?: string | null;
+  note?: string | null;
+  created_by?: string | null;
+  created_at: string;
 }
 
 // カート（クライアントサイドのみ）

@@ -11,6 +11,7 @@ import {
   CreditCard,
   ChevronRight,
   CheckCircle2,
+  Coins,
 } from 'lucide-react';
 import UserLayout from '@/components/layout/UserLayout';
 import { useCartStore } from '@/lib/store/cart';
@@ -18,6 +19,8 @@ import { createClient } from '@/lib/supabase/client';
 import type { DeferredSettlementMethod, User } from '@/types';
 import { useUserLocale } from '@/components/user/UserLocaleProvider';
 import { getItemDisplayName } from '@/lib/item-display';
+import { clampPointsToUse } from '@/lib/points';
+import { playSuccessSound } from '@/lib/ui-sounds';
 
 type PaymentTiming = 'balance' | 'deferred';
 
@@ -29,6 +32,7 @@ export default function CheckoutPage() {
   const [paymentTiming, setPaymentTiming] = useState<PaymentTiming>('balance');
   const [deferredSettlementMethod, setDeferredSettlementMethod] =
     useState<DeferredSettlementMethod>('cash');
+  const [pointsToUse, setPointsToUse] = useState(0);
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -42,26 +46,34 @@ export default function CheckoutPage() {
           orderDone: 'Order completed',
           heroKicker: 'Checkout',
           title: 'Confirm order',
-          subtitle: 'Choose when to pay, then review how the order will be settled.',
+          subtitle: 'Use points first if you want, then choose how to settle the remaining amount.',
           orderTotal: 'Order total',
           orderItems: 'Items',
           soldOut: 'Sold out',
           lowStock: 'Stock is getting low',
           total: 'Total',
+          availablePoints: 'Available points',
+          usePoints: 'Use points',
+          pointsPlaceholder: 'Points to use',
+          useAllPoints: 'Use all',
+          pointsWorth: '1pt = ¥1',
+          remainingAfterPoints: 'Remaining after points',
+          pointsCoverAll: 'Your points cover the full order.',
           paymentTiming: 'When to pay',
           balance: 'Use prepaid balance',
           balanceDescription: `Current balance: ¥${user?.balance?.toLocaleString() ?? 0}`,
           balanceShortage: 'Your balance is not enough',
           deferred: 'Pay later',
-          deferredDescription: 'Add this order to your deferred balance',
+          deferredDescription: 'Add the remaining amount to your deferred balance',
           settlementMethod: 'How you plan to settle it',
           cash: 'Cash',
           cashDescription: 'Settle later in cash',
           card: 'Card',
           cardDescription: 'Card settlement is coming soon. Please choose cash for now.',
           topUpBalance: 'Top up your balance',
-          balanceSummary: 'This order will be deducted from your prepaid balance immediately.',
-          deferredSummary: 'This order will be added to your deferred balance and settled later.',
+          balanceSummary: 'The remaining amount will be deducted from your prepaid balance immediately.',
+          pointsOnlySummary: 'This order will be completed using points only.',
+          deferredSummary: 'The remaining amount will be added to your deferred balance and settled later.',
           plannedSettlement: 'Planned settlement',
           confirmHeading: 'Confirmation',
           reviewButton: 'Open confirmation screen',
@@ -69,6 +81,7 @@ export default function CheckoutPage() {
           reviewSubtitle: 'Please check the payment timing and order details once more before placing the order.',
           backToCheckout: 'Go back',
           confirmButton: 'Confirm and place order',
+          pointsDeduction: 'Points used',
         }
       : {
           loadingCart: '注文内容を読み込んでいます...',
@@ -78,26 +91,35 @@ export default function CheckoutPage() {
           orderDone: '注文が完了しました',
           heroKicker: 'Checkout',
           title: '購入確認',
-          subtitle: '前払い残高を使うか、後払いにするかを選んだ上で、そのまま注文内容を確認できます。',
+          subtitle:
+            'まずポイントを使うか決めてから、残額を前払い残高にするか後払いにするかを選べます。',
           orderTotal: 'Order total',
           orderItems: '注文内容',
           soldOut: '在庫切れです',
           lowStock: '在庫が少なくなっています',
           total: '合計',
+          availablePoints: '利用可能ポイント',
+          usePoints: '使うポイント',
+          pointsPlaceholder: '使うポイント数',
+          useAllPoints: '全額使う',
+          pointsWorth: '1pt = 1円で利用できます',
+          remainingAfterPoints: 'ポイント適用後の残額',
+          pointsCoverAll: 'ポイントだけで支払えます。',
           paymentTiming: '支払いタイミング',
           balance: '前払い残高を使う',
           balanceDescription: `現在の残高: ¥${user?.balance?.toLocaleString() ?? 0}`,
           balanceShortage: '残高が不足しています',
           deferred: '後払い',
-          deferredDescription: '今回の注文を後払い残高に追加します',
+          deferredDescription: '残額を後払い残高に追加します',
           settlementMethod: 'あとでどう支払うか',
           cash: '現金',
           cashDescription: 'あとで現金で精算',
           card: 'クレカ',
           cardDescription: 'クレカ精算は今後実装予定です。今は現金を選んでください。',
           topUpBalance: '残高をチャージする',
-          balanceSummary: '今回の注文は前払い残高からすぐに差し引かれます。',
-          deferredSummary: '今回の注文は後払い残高に追加され、あとで精算します。',
+          balanceSummary: '今回の注文の残額は前払い残高からすぐに差し引かれます。',
+          pointsOnlySummary: '今回の注文はポイントだけで完了します。',
+          deferredSummary: '今回の注文の残額は後払い残高に追加され、あとで精算します。',
           plannedSettlement: '精算予定',
           confirmHeading: '決済内容の確認',
           reviewButton: '確認画面へ進む',
@@ -105,6 +127,7 @@ export default function CheckoutPage() {
           reviewSubtitle: '支払い方法と注文内容をもう一度確認してから、注文を確定してください。',
           backToCheckout: '戻って修正する',
           confirmButton: '内容を確認して注文する',
+          pointsDeduction: '利用ポイント',
         };
 
   useEffect(() => {
@@ -121,12 +144,26 @@ export default function CheckoutPage() {
   }, [router]);
 
   const orderTotal = total();
-  const hasEnoughBalance = user ? user.balance >= orderTotal : false;
+  const availablePoints = user?.points_balance ?? 0;
+  const safePointsToUse = clampPointsToUse(pointsToUse, availablePoints, orderTotal);
+  const remainingAfterPoints = Math.max(0, orderTotal - safePointsToUse);
+  const hasEnoughBalance = user ? user.balance >= remainingAfterPoints : false;
 
   useEffect(() => {
     if (!user) return;
-    setPaymentTiming(user.balance >= orderTotal ? 'balance' : 'deferred');
-  }, [user, orderTotal]);
+    setPaymentTiming(user.balance >= remainingAfterPoints ? 'balance' : 'deferred');
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+    if (remainingAfterPoints <= 0) {
+      setPaymentTiming('balance');
+      return;
+    }
+    if (paymentTiming === 'balance' && user.balance < remainingAfterPoints) {
+      setPaymentTiming('deferred');
+    }
+  }, [paymentTiming, remainingAfterPoints, user]);
 
   if (!hasHydrated) {
     return (
@@ -157,7 +194,7 @@ export default function CheckoutPage() {
       label: copy.balance,
       description: copy.balanceDescription,
       icon: Wallet,
-      disabled: !hasEnoughBalance,
+      disabled: !hasEnoughBalance && remainingAfterPoints > 0,
       disabledReason: copy.balanceShortage,
     },
     {
@@ -165,7 +202,8 @@ export default function CheckoutPage() {
       label: copy.deferred,
       description: copy.deferredDescription,
       icon: Clock,
-      disabled: false,
+      disabled: remainingAfterPoints <= 0,
+      disabledReason: copy.pointsCoverAll,
     },
   ];
 
@@ -190,7 +228,8 @@ export default function CheckoutPage() {
     if (!user) return;
     setLoading(true);
 
-    const paymentMethod = paymentTiming === 'balance' ? 'balance' : 'deferred';
+    const paymentMethod =
+      remainingAfterPoints <= 0 ? 'balance' : paymentTiming === 'balance' ? 'balance' : 'deferred';
 
     try {
       const res = await fetch('/api/orders', {
@@ -205,6 +244,7 @@ export default function CheckoutPage() {
             subtotal: item.price * quantity,
           })),
           total_amount: orderTotal,
+          points_used: safePointsToUse,
           payment_method: paymentMethod,
           deferred_settlement_method:
             paymentMethod === 'deferred' ? deferredSettlementMethod : null,
@@ -219,6 +259,7 @@ export default function CheckoutPage() {
       const payload = await res.json();
 
       clearCart();
+      void playSuccessSound();
       toast.success(copy.orderDone);
 
       const completeUrl = new URL('/order-complete', window.location.origin);
@@ -262,30 +303,75 @@ export default function CheckoutPage() {
           <h2 className="font-medium text-espresso">{copy.orderItems}</h2>
           {items.map(({ item, quantity }) => (
             <div key={item.id} className="flex justify-between gap-4 text-sm">
-              {(() => {
-                const displayName = getItemDisplayName(item, locale);
-                return (
-                  <>
-                    <div>
-                      <span className="text-espresso-600">
-                        {displayName}
-                        <span className="ml-1 text-espresso-400">× {quantity}</span>
-                      </span>
-                      {item.stock <= item.stock_alert_threshold && (
-                        <p className={`mt-1 text-xs ${item.stock === 0 ? 'text-red-600' : 'text-amber-600'}`}>
-                          {item.stock === 0 ? copy.soldOut : copy.lowStock}
-                        </p>
-                      )}
-                    </div>
-                    <span className="font-mono font-medium">¥{(item.price * quantity).toLocaleString()}</span>
-                  </>
-                );
-              })()}
+              <div>
+                <span className="text-espresso-600">
+                  {getItemDisplayName(item, locale)}
+                  <span className="ml-1 text-espresso-400">× {quantity}</span>
+                </span>
+                {item.stock <= item.stock_alert_threshold && (
+                  <p className={`mt-1 text-xs ${item.stock === 0 ? 'text-red-600' : 'text-amber-600'}`}>
+                    {item.stock === 0 ? copy.soldOut : copy.lowStock}
+                  </p>
+                )}
+              </div>
+              <span className="font-mono font-medium">¥{(item.price * quantity).toLocaleString()}</span>
             </div>
           ))}
           <div className="flex justify-between border-t border-cream-200 pt-3 font-bold">
             <span>{copy.total}</span>
             <span className="font-display text-xl">¥{orderTotal.toLocaleString()}</span>
+          </div>
+        </div>
+
+        <div className="card space-y-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="font-medium text-espresso">{copy.usePoints}</h2>
+              <p className="text-sm text-espresso-400">{copy.pointsWorth}</p>
+            </div>
+            <div className="inline-flex items-center gap-2 rounded-full bg-matcha/10 px-3 py-1.5 text-sm font-medium text-matcha-dark">
+              <Coins size={16} />
+              {availablePoints.toLocaleString()}pt
+            </div>
+          </div>
+          <div className="flex gap-3">
+            <input
+              type="number"
+              min={0}
+              max={Math.min(availablePoints, orderTotal)}
+              value={pointsToUse}
+              onChange={(event) => {
+                setPointsToUse(Number(event.target.value || 0));
+                setShowConfirmation(false);
+              }}
+              className="input flex-1"
+              placeholder={copy.pointsPlaceholder}
+            />
+            <button
+              type="button"
+              onClick={() => {
+                setPointsToUse(Math.min(availablePoints, orderTotal));
+                setShowConfirmation(false);
+              }}
+              className="rounded-2xl border border-cream-200 px-4 py-3 text-sm font-medium text-espresso transition-colors hover:bg-cream-50"
+            >
+              {copy.useAllPoints}
+            </button>
+          </div>
+          <div className="rounded-2xl border border-cream-200 bg-cream-50/70 px-4 py-3 text-sm text-espresso-500">
+            <div className="flex items-center justify-between gap-4">
+              <span>{copy.remainingAfterPoints}</span>
+              <span className="font-display text-2xl font-bold text-espresso">
+                ¥{remainingAfterPoints.toLocaleString()}
+              </span>
+            </div>
+            {safePointsToUse > 0 && (
+              <div className="mt-2 flex items-center justify-between gap-4 text-matcha-dark">
+                <span>{copy.pointsDeduction}</span>
+                <span>-{safePointsToUse.toLocaleString()}pt</span>
+              </div>
+            )}
+            {remainingAfterPoints === 0 && <p className="mt-2 text-matcha-dark">{copy.pointsCoverAll}</p>}
           </div>
         </div>
 
@@ -332,7 +418,7 @@ export default function CheckoutPage() {
             </button>
           ))}
 
-          {!hasEnoughBalance && (
+          {!hasEnoughBalance && remainingAfterPoints > 0 && (
             <Link
               href="/charge"
               className="flex items-center justify-between rounded-lg bg-matcha/5 p-3 text-sm text-matcha transition-colors hover:text-matcha-dark"
@@ -346,10 +432,10 @@ export default function CheckoutPage() {
           )}
         </div>
 
-        {paymentTiming === 'deferred' && (
+        {paymentTiming === 'deferred' && remainingAfterPoints > 0 && (
           <div className="space-y-3">
             <h2 className="font-medium text-espresso">{copy.settlementMethod}</h2>
-          {deferredOptions.map(({ id, label, description, icon: Icon, disabled }) => (
+            {deferredOptions.map(({ id, label, description, icon: Icon, disabled }) => (
               <button
                 key={id}
                 onClick={() => {
@@ -406,9 +492,13 @@ export default function CheckoutPage() {
             <span>{copy.confirmHeading}</span>
           </div>
           <p className="text-sm text-espresso-500">
-            {paymentTiming === 'balance' ? copy.balanceSummary : copy.deferredSummary}
+            {remainingAfterPoints <= 0
+              ? copy.pointsOnlySummary
+              : paymentTiming === 'balance'
+                ? copy.balanceSummary
+                : copy.deferredSummary}
           </p>
-          {paymentTiming === 'deferred' && (
+          {paymentTiming === 'deferred' && remainingAfterPoints > 0 && (
             <p className="text-sm text-espresso-500">
               {copy.plannedSettlement}: {deferredSettlementMethod === 'cash' ? copy.cash : copy.card}
             </p>
@@ -440,11 +530,20 @@ export default function CheckoutPage() {
                     <span>{copy.confirmHeading}</span>
                   </div>
                   <p className="mt-3 text-sm text-espresso-500">
-                    {paymentTiming === 'balance' ? copy.balanceSummary : copy.deferredSummary}
+                    {remainingAfterPoints <= 0
+                      ? copy.pointsOnlySummary
+                      : paymentTiming === 'balance'
+                        ? copy.balanceSummary
+                        : copy.deferredSummary}
                   </p>
-                  {paymentTiming === 'deferred' && (
+                  {paymentTiming === 'deferred' && remainingAfterPoints > 0 && (
                     <p className="mt-2 text-sm text-espresso-500">
                       {copy.plannedSettlement}: {deferredSettlementMethod === 'cash' ? copy.cash : copy.card}
+                    </p>
+                  )}
+                  {safePointsToUse > 0 && (
+                    <p className="mt-2 text-sm text-matcha-dark">
+                      {copy.pointsDeduction}: {safePointsToUse.toLocaleString()}pt
                     </p>
                   )}
                 </div>
@@ -466,6 +565,18 @@ export default function CheckoutPage() {
                     <span>{copy.total}</span>
                     <span className="font-display text-xl">¥{orderTotal.toLocaleString()}</span>
                   </div>
+                  {safePointsToUse > 0 && (
+                    <>
+                      <div className="mt-2 flex justify-between text-sm text-matcha-dark">
+                        <span>{copy.pointsDeduction}</span>
+                        <span>-{safePointsToUse.toLocaleString()}pt</span>
+                      </div>
+                      <div className="mt-2 flex justify-between border-t border-cream-200 pt-3 font-bold text-espresso">
+                        <span>{copy.remainingAfterPoints}</span>
+                        <span className="font-display text-xl">¥{remainingAfterPoints.toLocaleString()}</span>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
 
@@ -495,7 +606,6 @@ export default function CheckoutPage() {
             </div>
           </div>
         )}
-
       </div>
     </UserLayout>
   );

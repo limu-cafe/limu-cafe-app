@@ -6,6 +6,7 @@ import toast from 'react-hot-toast';
 import { Banknote, CreditCard, ChevronRight, CheckCircle2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useUserLocale } from '@/components/user/UserLocaleProvider';
+import { playSuccessSound } from '@/lib/ui-sounds';
 
 const PRESET_AMOUNTS = [500, 1000, 2000, 3000, 5000];
 
@@ -22,6 +23,7 @@ export default function ChargePage() {
           minAmount: 'Please enter at least ¥100',
           successCash: 'Top-up reflected. The amount was added to your deferred balance.',
           success: 'Top-up completed!',
+          rewardPoints: (points: number) => `${points}pt added as a charge reward.`,
           title: 'Top up balance',
           subtitle:
             'Your balance becomes available right away. Cash top-ups are settled later.',
@@ -46,6 +48,7 @@ export default function ChargePage() {
           minAmount: '100円以上で入力してください',
           successCash: 'チャージを反映しました。金額は後払い残高に追加され、定期精算で回収されます。',
           success: 'チャージが完了しました！',
+          rewardPoints: (points: number) => `チャージ特典として ${points}pt を付与しました。`,
           title: '残高チャージ',
           subtitle:
             'チャージした残高はすぐ使えます。代金は後払い残高に加算され、定期精算でお支払いします',
@@ -79,12 +82,17 @@ export default function ChargePage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ amount, method }),
       });
-      if (!res.ok) throw new Error((await res.json()).error);
+      const payload = await res.json();
+      if (!res.ok) throw new Error(payload.error);
+      void playSuccessSound();
       toast.success(
         method === 'cash'
           ? copy.successCash
           : copy.success
       );
+      if (payload.reward_points > 0) {
+        toast.success(copy.rewardPoints(payload.reward_points));
+      }
       router.push('/mypage');
     } catch (e: any) {
       toast.error(e.message);
