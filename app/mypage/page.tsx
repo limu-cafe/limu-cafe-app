@@ -6,6 +6,11 @@ import MyPageClient from './MyPageClient';
 import { Suspense } from 'react';
 import DeferredDataPlaceholder from '@/components/user/DeferredDataPlaceholder';
 import type { User as AuthUser } from '@supabase/supabase-js';
+import {
+  FAVORITE_ITEM_SELECT_ENHANCED,
+  FAVORITE_ITEM_SELECT_LEGACY,
+  isMissingItemEnhancementColumns,
+} from '@/lib/item-select';
 
 async function MyPageContent({ user }: { user: AuthUser }) {
   await syncUserProfile(user);
@@ -13,7 +18,7 @@ async function MyPageContent({ user }: { user: AuthUser }) {
 
   const [
     { data: profile },
-    { data: favorites },
+    initialFavoritesQuery,
     { data: legacyTransferRequests },
   ] = await Promise.all([
     adminClient
@@ -23,7 +28,7 @@ async function MyPageContent({ user }: { user: AuthUser }) {
       .single(),
     adminClient
       .from('favorite_items')
-      .select('item:items(id, name, english_name, price, stock, is_available)')
+      .select(FAVORITE_ITEM_SELECT_ENHANCED)
       .eq('user_id', user.id)
       .limit(6),
     adminClient
@@ -33,6 +38,18 @@ async function MyPageContent({ user }: { user: AuthUser }) {
       .order('created_at', { ascending: false })
       .limit(1),
   ]);
+
+  let favorites = initialFavoritesQuery.data;
+
+  if (isMissingItemEnhancementColumns(initialFavoritesQuery.error)) {
+    const legacyFavoritesQuery = await adminClient
+      .from('favorite_items')
+      .select(FAVORITE_ITEM_SELECT_LEGACY)
+      .eq('user_id', user.id)
+      .limit(6);
+
+    favorites = legacyFavoritesQuery.data;
+  }
 
   return (
     <MyPageClient
