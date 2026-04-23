@@ -56,13 +56,33 @@ async function callSlackApi(method: string, payload: object) {
   }
 }
 
+async function openSlackDirectMessageChannel(slackUserId: string) {
+  const openResult = await callSlackApi('conversations.open', {
+    users: slackUserId,
+    return_im: true,
+  });
+
+  const channelId =
+    typeof openResult?.channel?.id === 'string' ? openResult.channel.id : null;
+
+  if (!channelId) {
+    console.warn('[Slack] conversations.open did not return a DM channel id', {
+      slackUserId,
+    });
+  }
+
+  return channelId;
+}
+
 export async function sendSlackDirectMessage(params: {
   slackUserId: string;
   text: string;
   blocks?: any[];
 }) {
+  const openedChannelId = await openSlackDirectMessageChannel(params.slackUserId);
+
   return callSlackApi('chat.postMessage', {
-    channel: params.slackUserId,
+    channel: openedChannelId ?? params.slackUserId,
     text: params.text,
     blocks: params.blocks,
   });
