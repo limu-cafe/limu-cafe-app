@@ -403,6 +403,63 @@ export async function notifyLegacyTransferReviewed(params: {
   });
 }
 
+export async function notifyBotWelcome(params: {
+  slackUserId: string;
+  userName?: string | null;
+}) {
+  const greeting = params.userName?.trim() ? `${params.userName}さん` : 'こんにちは';
+
+  return sendSlackDirectMessage({
+    slackUserId: params.slackUserId,
+    text:
+      `👋 ${greeting}、LIMU喫茶botです。このDMで注文や要望のお知らせをお送りします。` +
+      (APP_BASE_URL ? `\nアプリ: ${APP_BASE_URL}` : '') +
+      `\n困ったときは再ログインするか、管理者に連絡してください。\n\n` +
+      `Hi! I'm the LIMU Cafe bot. I'll send order and request notifications in this DM.` +
+      (APP_BASE_URL ? `\nApp: ${APP_BASE_URL}` : '') +
+      `\nIf something looks wrong, please try logging in again or contact an admin.`,
+    blocks: [
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text:
+            `👋 *LIMU喫茶botです*\n` +
+            `このDMで注文や要望のお知らせをお送りします。\n` +
+            `困ったときは再ログインするか、管理者に連絡してください。`,
+        },
+      },
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text:
+            `👋 *Hi, I'm the LIMU Cafe bot.*\n` +
+            `I will send order and request notifications in this DM.\n` +
+            `If something looks wrong, please try logging in again or contact an admin.`,
+        },
+      },
+      ...(APP_BASE_URL
+        ? [
+            {
+              type: 'actions',
+              elements: [
+                {
+                  type: 'button',
+                  text: {
+                    type: 'plain_text',
+                    text: 'アプリを開く / Open app',
+                  },
+                  url: APP_BASE_URL,
+                },
+              ],
+            },
+          ]
+        : []),
+    ],
+  });
+}
+
 export async function openSlackRequestCommentModal(params: {
   triggerId: string;
   requestId: string;

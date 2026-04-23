@@ -1,17 +1,30 @@
 import Link from 'next/link';
 import { ClipboardList, MessageSquare, Sparkles, Users, type LucideIcon } from 'lucide-react';
 import { createAdminClient } from '@/lib/supabase/server';
+import BotIntroBroadcastCard from './BotIntroBroadcastCard';
 
 export const dynamic = 'force-dynamic';
 
 export default async function AdminOperationsHubPage() {
   const supabase = createAdminClient();
+  const allowedWorkspaceId = process.env.ALLOWED_SLACK_WORKSPACE_ID?.trim() || null;
+  let pendingBotIntroUsersQuery = supabase
+    .from('users')
+    .select('*', { count: 'exact', head: true })
+    .eq('is_active', true)
+    .not('slack_user_id', 'is', null)
+    .is('bot_intro_sent_at', null);
+
+  if (allowedWorkspaceId) {
+    pendingBotIntroUsersQuery = pendingBotIntroUsersQuery.eq('slack_workspace_id', allowedWorkspaceId);
+  }
 
   const [
     { count: pendingUsers },
     { count: pendingRequests },
     { count: pendingLegacyTransfers },
     { count: pointTransactionsToday },
+    { count: pendingBotIntroUsers },
   ] = await Promise.all([
     supabase
       .from('users')
@@ -30,6 +43,7 @@ export default async function AdminOperationsHubPage() {
       .from('point_transactions')
       .select('*', { count: 'exact', head: true })
       .gte('created_at', new Date(new Date().setHours(0, 0, 0, 0)).toISOString()),
+    pendingBotIntroUsersQuery,
   ]);
 
   return (
@@ -57,6 +71,7 @@ export default async function AdminOperationsHubPage() {
       </div>
 
       <div className="grid gap-4 xl:grid-cols-2">
+        <BotIntroBroadcastCard eligibleCount={pendingBotIntroUsers ?? 0} />
         <Link href="/admin/audit" className="rounded-2xl border border-gray-800 bg-gray-900 p-5 hover:bg-gray-800/70">
           <h2 className="text-lg font-semibold text-white">監査ログ</h2>
           <p className="mt-2 text-sm leading-6 text-gray-400">

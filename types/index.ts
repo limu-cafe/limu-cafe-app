@@ -25,6 +25,7 @@ export interface User {
   id: string;
   slack_user_id?: string;
   slack_workspace_id?: string;
+  bot_intro_sent_at?: string | null;
   name: string;
   avatar_url?: string;
   email?: string;
