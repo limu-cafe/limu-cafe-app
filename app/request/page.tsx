@@ -1,8 +1,11 @@
 import { redirect } from 'next/navigation';
 import UserLayout from '@/components/layout/UserLayout';
-import { createClient } from '@/lib/supabase/server';
-import RequestForm from './RequestForm';
-import RequestBoardClient from './RequestBoardClient';
+import { createAdminClient, createClient } from '@/lib/supabase/server';
+import { Suspense } from 'react';
+import DeferredDataPlaceholder from '@/components/user/DeferredDataPlaceholder';
+import RequestPageContent from './RequestPageContent';
+import { syncUserProfile } from '@/lib/supabase/sync-user';
+import type { User as AuthUser } from '@supabase/supabase-js';
 
 type RequestUser = {
   id: string;
@@ -25,15 +28,15 @@ type RequestListRow = {
   has_voted: boolean;
 };
 
-export default async function RequestPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+async function RequestPageData({
+  user,
+}: {
+  user: AuthUser;
+}) {
+  await syncUserProfile(user);
+  const adminClient = createAdminClient();
 
-  if (!user) redirect('/login');
-
-  const { data: requests } = await supabase
+  const { data: requests } = await adminClient
     .from('item_requests')
     .select(
       'id, user_id, item_name, reason, desired_price, status, admin_note, created_at, updated_at, user:users!item_requests_user_id_fkey(id, name, avatar_url)'
@@ -41,10 +44,10 @@ export default async function RequestPage() {
     .order('created_at', { ascending: false })
     .limit(24);
 
-  const requestIds = (requests ?? []).map((request) => request.id);
+  const requestIds = (requests ?? []).map((request: { id: string }) => request.id);
 
   const { data: votes } = requestIds.length
-    ? await supabase
+    ? await adminClient
         .from('item_request_votes')
         .select('request_id, user_id')
         .in('request_id', requestIds)
@@ -70,51 +73,28 @@ export default async function RequestPage() {
     };
   }) as RequestListRow[];
 
+  return <RequestPageContent requests={boardRequests} />;
+}
+
+export default async function RequestPage() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) redirect('/login');
+
+  const layoutUser = {
+    id: user.id,
+    name: user.user_metadata?.full_name ?? user.user_metadata?.name ?? user.email ?? 'LIMU Member',
+    balance: 0,
+  };
+
   return (
-    <UserLayout>
-      <div className="mx-auto max-w-7xl space-y-6 animate-fade-in">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <h1 className="font-display text-3xl font-bold text-espresso">商品の要望</h1>
-            <p className="mt-1 text-sm text-espresso-400">
-              欲しい商品を共有して、賛成やコメントを集められます。
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2 text-xs text-espresso-500">
-            <span className="rounded-full bg-white px-3 py-2 ring-1 ring-cream-200">
-              要望 {boardRequests.length}件
-            </span>
-            <span className="rounded-full bg-white px-3 py-2 ring-1 ring-cream-200">
-              検討中 {boardRequests.filter((request) => request.status === 'pending').length}件
-            </span>
-          </div>
-        </div>
-
-        <div className="grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
-          <aside className="space-y-4 xl:sticky xl:top-24 xl:self-start">
-            <RequestForm />
-
-            <div className="rounded-[28px] border border-cream-200 bg-white px-5 py-5 shadow-[0_18px_48px_-40px_rgba(44,26,14,0.28)]">
-              <h2 className="text-sm font-semibold text-espresso">使い方</h2>
-              <div className="mt-3 space-y-2 text-sm leading-6 text-espresso-500">
-                <p>商品名と理由を書いて要望を投稿できます。</p>
-                <p>他の要望に賛成したり、コメントで意見を追加できます。</p>
-                <p>採用された要望は購入候補として管理者に共有されます。</p>
-              </div>
-            </div>
-          </aside>
-
-          <section className="space-y-4">
-            <div className="rounded-[28px] border border-cream-200 bg-white px-5 py-5 shadow-[0_18px_48px_-40px_rgba(44,26,14,0.28)]">
-              <h2 className="font-medium text-espresso">みんなの要望</h2>
-              <p className="mt-1 text-sm text-espresso-400">
-                一覧では要点だけを表示しています。詳しい内容やコメントは詳細ページで確認できます。
-              </p>
-            </div>
-            <RequestBoardClient requests={boardRequests} />
-          </section>
-        </div>
-      </div>
+    <UserLayout initialUser={layoutUser}>
+      <Suspense fallback={<DeferredDataPlaceholder blocks={3} titleWidthClassName="w-44" />}>
+        <RequestPageData user={user} />
+      </Suspense>
     </UserLayout>
   );
 }

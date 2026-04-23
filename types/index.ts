@@ -1,8 +1,9 @@
 export type UserRole = 'member' | 'admin';
 export type PaymentMethod = 'balance' | 'deferred' | 'cash' | 'stripe';
+export type DeferredSettlementMethod = 'cash' | 'stripe';
 export type PaymentStatus = 'pending' | 'completed' | 'cancelled' | 'refunded';
 export type ChargeMethod = 'cash' | 'stripe';
-export type ChargeStatus = 'pending' | 'approved' | 'rejected' | 'cancelled';
+export type ChargeStatus = 'pending' | 'approved' | 'rejected' | 'cancelled' | 'refunded';
 export type ItemRequestStatus = 'pending' | 'approved' | 'rejected';
 export type ItemRequestVoteType = 'up';
 export type ItemRequestCommentSource = 'app' | 'slack';
@@ -40,6 +41,7 @@ export interface Category {
 export interface Item {
   id: string;
   name: string;
+  english_name?: string | null;
   description?: string;
   price: number;
   category_id?: string;
@@ -60,6 +62,7 @@ export interface Order {
   user?: User;
   total_amount: number;
   payment_method: PaymentMethod;
+  deferred_settlement_method?: DeferredSettlementMethod | null;
   payment_status: PaymentStatus;
   cash_confirmed_at?: string;
   cash_confirmed_by?: string;

@@ -10,6 +10,10 @@ import { useRouter, useSearchParams } from 'next/navigation';
 const METHOD_LABEL: Record<string, string> = {
   balance: '残高', deferred: '後払い', cash: '現金', stripe: 'クレカ',
 };
+const DEFERRED_SETTLEMENT_LABEL: Record<string, string> = {
+  cash: '現金で精算',
+  stripe: 'クレカで精算',
+};
 const STATUS_LABEL: Record<string, string> = {
   pending: '処理中', completed: '完了', cancelled: 'キャンセル', refunded: '返金済み',
 };
@@ -28,6 +32,10 @@ export default function OrdersClient({ orders }: { orders: any[] }) {
     searchParams.get('pending') === '1' ? 'cash_pending' : 'all'
   );
   const [loading, setLoading] = useState<string | null>(null);
+  const [confirmRefundOrderId, setConfirmRefundOrderId] = useState<string | null>(null);
+  const selectedRefundOrder = confirmRefundOrderId
+    ? orders.find((order) => order.id === confirmRefundOrderId) ?? null
+    : null;
 
   const filtered = orders.filter(o => {
     if (filter === 'cash_pending') return o.payment_method === 'cash' && o.payment_status === 'pending';
@@ -52,6 +60,20 @@ export default function OrdersClient({ orders }: { orders: any[] }) {
       const res = await fetch(`/api/admin/orders/${orderId}/cancel`, { method: 'POST' });
       if (!res.ok) throw new Error((await res.json()).error);
       toast.success('注文をキャンセルしました');
+      router.refresh();
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  const handleRefundOrder = async (orderId: string) => {
+    setLoading(orderId);
+    try {
+      const res = await fetch(`/api/admin/orders/${orderId}/refund`, { method: 'POST' });
+      if (!res.ok) throw new Error((await res.json()).error);
+      toast.success('返金処理を記録しました');
       router.refresh();
     } catch (e: any) {
       toast.error(e.message);
@@ -118,9 +140,11 @@ export default function OrdersClient({ orders }: { orders: any[] }) {
                   </span>
 
                   {/* 支払い方法 */}
-                  <span className="text-xs bg-gray-700 text-gray-300 px-2 py-0.5 rounded-full flex-shrink-0">
-                    {METHOD_LABEL[order.payment_method]}
-                  </span>
+                    <span className="text-xs bg-gray-700 text-gray-300 px-2 py-0.5 rounded-full flex-shrink-0">
+                      {order.payment_method === 'deferred' && order.deferred_settlement_method
+                        ? `${METHOD_LABEL[order.payment_method]} / ${DEFERRED_SETTLEMENT_LABEL[order.deferred_settlement_method] ?? order.deferred_settlement_method}`
+                        : METHOD_LABEL[order.payment_method]}
+                    </span>
 
                   {/* ステータス */}
                   <span className={`text-xs px-2 py-0.5 rounded-full flex-shrink-0 ${STATUS_COLOR[order.payment_status]}`}>
@@ -168,19 +192,45 @@ export default function OrdersClient({ orders }: { orders: any[] }) {
                       </button>
                     )}
 
-                    {['balance', 'deferred'].includes(order.payment_method) && order.payment_status === 'completed' && (
-                      <button
-                        onClick={(e) => { e.stopPropagation(); handleCancelOrder(order.id); }}
-                        disabled={loading === order.id}
-                        className="flex items-center gap-2 px-4 py-2 bg-red-500/15 text-red-300 hover:bg-red-500/25 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
-                      >
-                        {loading === order.id ? (
-                          <span className="animate-spin w-4 h-4 border border-red-300 border-t-transparent rounded-full" />
-                        ) : (
-                          <RotateCcw size={16} />
+                    {['balance', 'deferred', 'cash'].includes(order.payment_method) &&
+                      ['pending', 'completed'].includes(order.payment_status) && (
+                      <div className="flex flex-wrap gap-2">
+                        {order.payment_method === 'deferred' && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); router.push('/admin/settlement'); }}
+                            className="flex items-center gap-2 rounded-lg bg-sky-500/15 px-4 py-2 text-sm font-medium text-sky-300 transition-colors hover:bg-sky-500/25"
+                          >
+                            <CheckCircle size={16} />
+                            決済を確認する
+                          </button>
                         )}
-                        注文をキャンセル
-                      </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setConfirmRefundOrderId(order.id); }}
+                          disabled={loading === order.id}
+                          className="flex items-center gap-2 px-4 py-2 bg-sky-500/15 text-sky-300 hover:bg-sky-500/25 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                        >
+                          {loading === order.id ? (
+                            <span className="animate-spin w-4 h-4 border border-sky-300 border-t-transparent rounded-full" />
+                          ) : (
+                            <RotateCcw size={16} />
+                          )}
+                          返金処理
+                        </button>
+                        {['balance', 'deferred'].includes(order.payment_method) && order.payment_status === 'completed' && (
+                          <button
+                          onClick={(e) => { e.stopPropagation(); handleCancelOrder(order.id); }}
+                          disabled={loading === order.id}
+                          className="flex items-center gap-2 px-4 py-2 bg-red-500/15 text-red-300 hover:bg-red-500/25 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                        >
+                          {loading === order.id ? (
+                            <span className="animate-spin w-4 h-4 border border-red-300 border-t-transparent rounded-full" />
+                          ) : (
+                            <RotateCcw size={16} />
+                          )}
+                          注文をキャンセル
+                        </button>
+                        )}
+                      </div>
                     )}
                   </div>
                 )}
@@ -189,6 +239,69 @@ export default function OrdersClient({ orders }: { orders: any[] }) {
           </div>
         )}
       </div>
+
+      {selectedRefundOrder && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-4 sm:items-center">
+          <div className="w-full max-w-xl rounded-2xl border border-gray-800 bg-gray-900 p-6 shadow-2xl">
+            <h2 className="font-display text-2xl font-bold text-white">注文返金の確認</h2>
+            <p className="mt-2 text-sm text-gray-400">
+              この操作を行うと、在庫を戻し、支払い方法に応じて残高や後払い残高、必要なら金庫台帳も更新します。
+            </p>
+
+            <div className="mt-5 rounded-2xl border border-gray-800 bg-gray-950/60 p-4 text-sm">
+              <div className="flex items-center justify-between gap-4">
+                <span className="text-gray-400">ユーザー</span>
+                <span className="font-medium text-white">{selectedRefundOrder.user?.name ?? '不明'}</span>
+              </div>
+              <div className="mt-2 flex items-center justify-between gap-4">
+                <span className="text-gray-400">金額</span>
+                <span className="font-mono font-bold text-white">¥{selectedRefundOrder.total_amount.toLocaleString()}</span>
+              </div>
+              <div className="mt-2 flex items-center justify-between gap-4">
+                <span className="text-gray-400">支払い方法</span>
+                <span className="text-white">
+                  {selectedRefundOrder.payment_method === 'deferred' && selectedRefundOrder.deferred_settlement_method
+                    ? `${METHOD_LABEL[selectedRefundOrder.payment_method]} / ${DEFERRED_SETTLEMENT_LABEL[selectedRefundOrder.deferred_settlement_method] ?? selectedRefundOrder.deferred_settlement_method}`
+                    : METHOD_LABEL[selectedRefundOrder.payment_method]}
+                </span>
+              </div>
+              <div className="mt-3 border-t border-gray-800 pt-3 text-gray-300">
+                {(selectedRefundOrder.order_items ?? []).map((oi: any, index: number) => (
+                  <div key={index} className="flex items-center justify-between gap-4">
+                    <span>{oi.item_name} × {oi.quantity}</span>
+                    <span className="font-mono">¥{oi.subtotal.toLocaleString()}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+              <button
+                onClick={() => setConfirmRefundOrderId(null)}
+                disabled={loading === selectedRefundOrder.id}
+                className="flex-1 rounded-lg border border-gray-700 px-4 py-3 text-sm font-medium text-gray-300 transition hover:bg-gray-800 disabled:opacity-50"
+              >
+                戻る
+              </button>
+              <button
+                onClick={async () => {
+                  await handleRefundOrder(selectedRefundOrder.id);
+                  setConfirmRefundOrderId(null);
+                }}
+                disabled={loading === selectedRefundOrder.id}
+                className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-sky-500/15 px-4 py-3 text-sm font-medium text-sky-300 transition hover:bg-sky-500/25 disabled:opacity-50"
+              >
+                {loading === selectedRefundOrder.id ? (
+                  <span className="animate-spin w-4 h-4 border border-sky-300 border-t-transparent rounded-full" />
+                ) : (
+                  <RotateCcw size={16} />
+                )}
+                返金を確定する
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

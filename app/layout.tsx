@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Playfair_Display, Noto_Sans_JP, JetBrains_Mono } from 'next/font/google';
 import '@/styles/globals.css';
 import { Toaster } from 'react-hot-toast';
+import { UserLocaleProvider } from '@/components/user/UserLocaleProvider';
 
 const playfair = Playfair_Display({
   subsets: ['latin'],
@@ -45,18 +46,20 @@ export default function RootLayout({
   return (
     <html lang="ja" className={`${playfair.variable} ${noto.variable} ${jetbrains.variable}`}>
       <body className="texture-bg min-h-screen">
-        {children}
-        <Toaster
-          position="bottom-center"
-          toastOptions={{
-            style: {
-              background: '#2C1A0E',
-              color: '#FDFAF5',
-              borderRadius: '12px',
-              fontFamily: 'Noto Sans JP, sans-serif',
-            },
-          }}
-        />
+        <UserLocaleProvider>
+          {children}
+          <Toaster
+            position="bottom-center"
+            toastOptions={{
+              style: {
+                background: '#2C1A0E',
+                color: '#FDFAF5',
+                borderRadius: '12px',
+                fontFamily: 'Noto Sans JP, sans-serif',
+              },
+            }}
+          />
+        </UserLocaleProvider>
       </body>
     </html>
   );

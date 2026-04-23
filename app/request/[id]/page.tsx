@@ -1,27 +1,28 @@
 import { notFound, redirect } from 'next/navigation';
 import UserLayout from '@/components/layout/UserLayout';
-import { createClient } from '@/lib/supabase/server';
+import { createAdminClient, createClient } from '@/lib/supabase/server';
 import RequestDetailClient from './RequestDetailClient';
+import { Suspense } from 'react';
+import DeferredDataPlaceholder from '@/components/user/DeferredDataPlaceholder';
+import { syncUserProfile } from '@/lib/supabase/sync-user';
+import type { User as AuthUser } from '@supabase/supabase-js';
 
-export default async function RequestDetailPage({
-  params,
+async function RequestDetailData({
+  requestId,
+  user,
 }: {
-  params: Promise<{ id: string }>;
+  requestId: string;
+  user: AuthUser;
 }) {
-  const { id } = await params;
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  await syncUserProfile(user);
+  const adminClient = createAdminClient();
 
-  if (!user) redirect('/login');
-
-  const { data: requestItem } = await supabase
+  const { data: requestItem } = await adminClient
     .from('item_requests')
     .select(
       'id, user_id, item_name, reason, desired_price, status, admin_note, created_at, updated_at, user:users!item_requests_user_id_fkey(id, name, avatar_url), votes:item_request_votes(user_id), comments:item_request_comments(id, request_id, user_id, body, source, created_at, user:users!item_request_comments_user_id_fkey(id, name, avatar_url))'
     )
-    .eq('id', id)
+    .eq('id', requestId)
     .order('created_at', { ascending: true, foreignTable: 'comments' })
     .single();
 
@@ -37,10 +38,36 @@ export default async function RequestDetailPage({
   };
 
   return (
-    <UserLayout>
-      <div className="mx-auto max-w-5xl animate-fade-in">
-        <RequestDetailClient requestItem={normalizedRequest as any} currentUserId={user.id} />
-      </div>
+    <div className="mx-auto max-w-5xl animate-fade-in">
+      <RequestDetailClient requestItem={normalizedRequest as any} currentUserId={user.id} />
+    </div>
+  );
+}
+
+export default async function RequestDetailPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = await params;
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) redirect('/login');
+
+  const layoutUser = {
+    id: user.id,
+    name: user.user_metadata?.full_name ?? user.user_metadata?.name ?? user.email ?? 'LIMU Member',
+    balance: 0,
+  };
+
+  return (
+    <UserLayout initialUser={layoutUser}>
+      <Suspense fallback={<DeferredDataPlaceholder blocks={2} titleWidthClassName="w-52" />}>
+        <RequestDetailData requestId={id} user={user} />
+      </Suspense>
     </UserLayout>
   );
 }

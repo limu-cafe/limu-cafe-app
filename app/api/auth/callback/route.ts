@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import type { CookieOptions } from '@supabase/ssr';
-import { createAdminClient } from '@/lib/supabase/server';
 import { cookies } from 'next/headers';
+import { syncUserProfile } from '@/lib/supabase/sync-user';
 
 function getWorkspaceId(user: any) {
   return (
@@ -17,19 +17,6 @@ function getWorkspaceId(user: any) {
       ?.identity_data?.['https://slack.com/team_id'] ??
     user?.identities?.find((identity: any) => identity?.identity_data?.team_id)?.identity_data?.team_id ??
     user?.identities?.find((identity: any) => identity?.identity_data?.team?.id)?.identity_data?.team?.id ??
-    null
-  );
-}
-
-function getSlackUserId(user: any) {
-  return (
-    user?.user_metadata?.['https://slack.com/user_id'] ??
-    user?.user_metadata?.provider_id ??
-    user?.app_metadata?.['https://slack.com/user_id'] ??
-    user?.identities?.find((identity: any) => identity?.identity_data?.['https://slack.com/user_id'])
-      ?.identity_data?.['https://slack.com/user_id'] ??
-    user?.identities?.find((identity: any) => identity?.identity_data?.provider_id)?.identity_data?.provider_id ??
-    user?.identities?.[0]?.id ??
     null
   );
 }
@@ -82,23 +69,13 @@ export async function GET(request: Request) {
       return NextResponse.redirect(loginUrl.toString());
     }
 
-    const adminClient = createAdminClient();
-    const { data: existing } = await adminClient
-      .from('users').select('id').eq('id', data.user.id).single();
-
-    if (!existing) {
-      const m = data.user.user_metadata;
-      await adminClient.from('users').insert({
-        id: data.user.id,
-        slack_user_id: getSlackUserId(data.user),
-        slack_workspace_id: workspaceId,
-        name: m?.full_name ?? m?.name ?? data.user.email ?? '名無し',
-        avatar_url: m?.avatar_url ?? null,
-        email: data.user.email,
-        is_approved: true,
-        role: 'member',
-      });
-    }
+    await syncUserProfile({
+      ...data.user,
+      user_metadata: {
+        ...data.user.user_metadata,
+        workspace_id: workspaceId,
+      },
+    });
 
     return response;
   }

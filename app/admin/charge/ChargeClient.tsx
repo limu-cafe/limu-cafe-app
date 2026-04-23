@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { CheckCircle, XCircle } from 'lucide-react';
+import { CheckCircle, RotateCcw, XCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { ja } from 'date-fns/locale';
 import toast from 'react-hot-toast';
@@ -12,9 +12,11 @@ const STATUS_COLOR: Record<string, string> = {
   approved: 'bg-green-500/20 text-green-400',
   rejected: 'bg-red-500/20 text-red-400',
   cancelled: 'bg-gray-500/20 text-gray-400',
+  refunded: 'bg-sky-500/20 text-sky-300',
 };
 const STATUS_LABEL: Record<string, string> = {
   pending: '申請中', approved: '承認済み', rejected: '却下', cancelled: 'キャンセル',
+  refunded: '返金済み',
 };
 
 export default function ChargeClient({ requests }: { requests: any[] }) {
@@ -23,6 +25,7 @@ export default function ChargeClient({ requests }: { requests: any[] }) {
   const [loading, setLoading] = useState<string | null>(null);
   const [pendingOnly, setPendingOnly] = useState(searchParams.get('pending') === '1');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [confirmRefundId, setConfirmRefundId] = useState<string | null>(null);
 
   const pending = useMemo(() => requests.filter(r => r.status === 'pending'), [requests]);
   const done = useMemo(() => requests.filter(r => r.status !== 'pending'), [requests]);
@@ -31,6 +34,9 @@ export default function ChargeClient({ requests }: { requests: any[] }) {
     () => requests.filter((r) => r.status === 'approved').reduce((sum, r) => sum + r.amount, 0),
     [requests]
   );
+  const selectedRefundRequest = confirmRefundId
+    ? requests.find((request) => request.id === confirmRefundId) ?? null
+    : null;
 
   const handleAction = async (id: string, action: 'approve' | 'reject') => {
     setLoading(id + action);
@@ -71,6 +77,20 @@ export default function ChargeClient({ requests }: { requests: any[] }) {
       }
       toast.success(`${selectedIds.length}件を${action === 'approve' ? '承認' : '却下'}しました`);
       setSelectedIds([]);
+      router.refresh();
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  const handleRefund = async (id: string) => {
+    setLoading(id + 'refund');
+    try {
+      const res = await fetch(`/api/admin/charge/${id}/refund`, { method: 'POST' });
+      if (!res.ok) throw new Error((await res.json()).error);
+      toast.success('返金処理を記録しました');
       router.refresh();
     } catch (error: any) {
       toast.error(error.message);
@@ -219,7 +239,7 @@ export default function ChargeClient({ requests }: { requests: any[] }) {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-800">
-                  {['ユーザー', '金額', '方法', 'ステータス', '日時'].map(h => (
+                  {['ユーザー', '金額', '方法', 'ステータス', '日時', '操作'].map(h => (
                     <th key={h} className="px-4 py-3 text-left font-medium text-gray-400">{h}</th>
                   ))}
                 </tr>
@@ -238,6 +258,22 @@ export default function ChargeClient({ requests }: { requests: any[] }) {
                     <td className="px-4 py-3 text-gray-500 text-xs">
                       {format(new Date(req.created_at), 'M/d HH:mm', { locale: ja })}
                     </td>
+                    <td className="px-4 py-3 text-right">
+                      {req.status === 'approved' && (
+                        <button
+                          onClick={() => setConfirmRefundId(req.id)}
+                          disabled={!!loading}
+                          className="inline-flex items-center gap-2 rounded-lg bg-sky-500/15 px-3 py-2 text-xs font-medium text-sky-300 transition-colors hover:bg-sky-500/25 disabled:opacity-50"
+                        >
+                          {loading === req.id + 'refund' ? (
+                            <span className="block h-4 w-4 animate-spin rounded-full border border-sky-300 border-t-transparent" />
+                          ) : (
+                            <RotateCcw size={14} />
+                          )}
+                          返金処理
+                        </button>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -250,6 +286,57 @@ export default function ChargeClient({ requests }: { requests: any[] }) {
         <div className="text-center py-16 text-gray-500">
           <p className="text-4xl mb-3">✓</p>
           <p>チャージ申請はありません</p>
+        </div>
+      )}
+
+      {selectedRefundRequest && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-4 sm:items-center">
+          <div className="w-full max-w-lg rounded-2xl border border-gray-800 bg-gray-900 p-6 shadow-2xl">
+            <h2 className="font-display text-2xl font-bold text-white">チャージ返金の確認</h2>
+            <p className="mt-2 text-sm text-gray-400">
+              この操作を行うと、残高と後払い残高を戻し、必要に応じて金庫台帳にも返金を記録します。
+            </p>
+
+            <div className="mt-5 rounded-2xl border border-gray-800 bg-gray-950/60 p-4 text-sm">
+              <div className="flex items-center justify-between gap-4">
+                <span className="text-gray-400">ユーザー</span>
+                <span className="font-medium text-white">{selectedRefundRequest.user?.name ?? '不明'}</span>
+              </div>
+              <div className="mt-2 flex items-center justify-between gap-4">
+                <span className="text-gray-400">金額</span>
+                <span className="font-mono font-bold text-white">¥{selectedRefundRequest.amount.toLocaleString()}</span>
+              </div>
+              <div className="mt-2 flex items-center justify-between gap-4">
+                <span className="text-gray-400">方法</span>
+                <span className="text-white">{selectedRefundRequest.method === 'cash' ? '現金' : 'クレカ'}</span>
+              </div>
+            </div>
+
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+              <button
+                onClick={() => setConfirmRefundId(null)}
+                disabled={!!loading}
+                className="flex-1 rounded-lg border border-gray-700 px-4 py-3 text-sm font-medium text-gray-300 transition hover:bg-gray-800 disabled:opacity-50"
+              >
+                戻る
+              </button>
+              <button
+                onClick={async () => {
+                  await handleRefund(selectedRefundRequest.id);
+                  setConfirmRefundId(null);
+                }}
+                disabled={!!loading}
+                className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-sky-500/15 px-4 py-3 text-sm font-medium text-sky-300 transition hover:bg-sky-500/25 disabled:opacity-50"
+              >
+                {loading === selectedRefundRequest.id + 'refund' ? (
+                  <span className="block h-4 w-4 animate-spin rounded-full border border-sky-300 border-t-transparent" />
+                ) : (
+                  <RotateCcw size={16} />
+                )}
+                返金を確定する
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

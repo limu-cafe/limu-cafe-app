@@ -13,7 +13,7 @@ interface Props { items: Item[]; history: any[]; }
 type PurchaseDraft = {
   enabled: boolean;
   payment_source: 'cashbox' | 'personal_advance';
-  unit_price: string;
+  total_amount: string;
   vendor: string;
   note: string;
 };
@@ -23,6 +23,9 @@ export default function StockClient({ items, history }: Props) {
   const searchParams = useSearchParams();
   const [quantities, setQuantities] = useState<Record<string, string>>({});
   const [purchaseDrafts, setPurchaseDrafts] = useState<Record<string, PurchaseDraft>>({});
+  const [miscExpenseAmount, setMiscExpenseAmount] = useState<number | ''>('');
+  const [miscExpenseName, setMiscExpenseName] = useState('');
+  const [miscExpenseNote, setMiscExpenseNote] = useState('');
   const [loading, setLoading] = useState<string | null>(null);
   const [pendingOnly, setPendingOnly] = useState(searchParams.get('pending') === '1');
 
@@ -30,7 +33,7 @@ export default function StockClient({ items, history }: Props) {
     purchaseDrafts[itemId] ?? {
       enabled: false,
       payment_source: 'cashbox',
-      unit_price: '',
+      total_amount: '',
       vendor: '',
       note: '',
     };
@@ -49,8 +52,8 @@ export default function StockClient({ items, history }: Props) {
     const qty = Number(quantities[item.id]);
     if (!qty || qty <= 0) { toast.error('数量を入力してください'); return; }
     const draft = getDraft(item.id);
-    if (draft.enabled && draft.unit_price === '') {
-      toast.error('仕入れ単価を入力してください');
+    if (draft.enabled && draft.total_amount === '') {
+      toast.error('仕入れ合計額を入力してください');
       return;
     }
     setLoading(item.id);
@@ -66,7 +69,7 @@ export default function StockClient({ items, history }: Props) {
             ? {
                 record: true,
                 payment_source: draft.payment_source,
-                unit_price: Number(draft.unit_price),
+                total_amount: Number(draft.total_amount),
                 vendor: draft.vendor,
                 note: draft.note,
               }
@@ -85,7 +88,7 @@ export default function StockClient({ items, history }: Props) {
         [item.id]: {
           enabled: false,
           payment_source: 'cashbox',
-          unit_price: '',
+          total_amount: '',
           vendor: '',
           note: '',
         },
@@ -93,6 +96,45 @@ export default function StockClient({ items, history }: Props) {
       router.refresh();
     } catch (e: any) { toast.error(e.message); }
     finally { setLoading(null); }
+  };
+
+  const handleMiscExpense = async () => {
+    if (!miscExpenseAmount || miscExpenseAmount <= 0) {
+      toast.error('金額を入力してください');
+      return;
+    }
+
+    if (!miscExpenseName.trim()) {
+      toast.error('雑費名を入力してください');
+      return;
+    }
+
+    setLoading('misc');
+    try {
+      const res = await fetch('/api/admin/cashbox/misc-expenses', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount: miscExpenseAmount,
+          item_name: miscExpenseName,
+          note: miscExpenseNote,
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error((await res.json()).error);
+      }
+
+      toast.success('雑費を記録しました');
+      setMiscExpenseAmount('');
+      setMiscExpenseName('');
+      setMiscExpenseNote('');
+      router.refresh();
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setLoading(null);
+    }
   };
 
   const stockColor = (item: Item) => {
@@ -109,7 +151,62 @@ export default function StockClient({ items, history }: Props) {
     <div className="space-y-6">
       <div>
         <h1 className="font-display font-bold text-2xl text-white">在庫入力</h1>
-        <p className="text-gray-400 text-sm mt-1">入荷数に加えて、必要なら仕入れ費用と支払い元もその場で記録できます</p>
+        <p className="text-gray-400 text-sm mt-1">入荷・仕入れ・雑費をこの画面でまとめて入力できます</p>
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.9fr)]">
+        <div className="rounded-2xl border border-gray-800 bg-gray-900 p-5">
+          <div className="flex items-start gap-3">
+            <div className="rounded-xl bg-white/5 p-2 text-white">
+              <Receipt size={18} />
+            </div>
+            <div>
+              <h2 className="font-medium text-white">仕入れ入力の考え方</h2>
+              <p className="mt-1 text-sm text-gray-400">
+                商品ごとに追加個数を入れたうえで、必要なら「仕入れ記録」を開いて合計額と支払い元を記録してください。
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-gray-800 bg-gray-900 p-5 space-y-4">
+          <div>
+            <h2 className="font-medium text-white">雑費を記録</h2>
+            <p className="mt-1 text-sm text-gray-400">
+              ティッシュや紙コップなど、商品以外の支出もここでまとめて記録します
+            </p>
+          </div>
+
+          <input
+            type="text"
+            value={miscExpenseName}
+            onChange={(e) => setMiscExpenseName(e.target.value)}
+            placeholder="雑費名（例: ティッシュ、紙コップ）"
+            className="w-full rounded-lg border border-gray-700 bg-gray-800 px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-white/20"
+          />
+          <input
+            type="number"
+            min={1}
+            value={miscExpenseAmount}
+            onChange={(e) => setMiscExpenseAmount(e.target.value ? Number(e.target.value) : '')}
+            placeholder="金額"
+            className="w-full rounded-lg border border-gray-700 bg-gray-800 px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-white/20"
+          />
+          <textarea
+            value={miscExpenseNote}
+            onChange={(e) => setMiscExpenseNote(e.target.value)}
+            placeholder="補足（例: 研究室共有用、ドラッグストア購入）"
+            rows={3}
+            className="w-full resize-none rounded-lg border border-gray-700 bg-gray-800 px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-white/20"
+          />
+          <button
+            onClick={handleMiscExpense}
+            disabled={loading !== null}
+            className="w-full rounded-lg bg-rose-500/20 py-3 font-medium text-rose-200 transition-all hover:bg-rose-500/30 disabled:opacity-50"
+          >
+            {loading === 'misc' ? '記録中...' : '雑費を記録する'}
+          </button>
+        </div>
       </div>
 
       <label className="inline-flex items-center gap-2 text-sm text-gray-300">
@@ -136,8 +233,8 @@ export default function StockClient({ items, history }: Props) {
             {visibleItems.map((item) => {
               const draft = getDraft(item.id);
               const qty = Number(quantities[item.id] ?? 0);
-              const subtotal = draft.enabled && draft.unit_price !== ''
-                ? Number(draft.unit_price) * qty
+              const subtotal = draft.enabled && draft.total_amount !== ''
+                ? Number(draft.total_amount)
                 : 0;
 
               return (
@@ -218,15 +315,18 @@ export default function StockClient({ items, history }: Props) {
                           </div>
 
                           <div className="space-y-2">
-                            <label className="text-xs text-gray-400">1個あたりの仕入れ額</label>
+                            <label className="text-xs text-gray-400">仕入れ合計額</label>
                             <input
                               type="number"
                               min={0}
-                              placeholder="例: 120"
-                              value={draft.unit_price}
-                              onChange={(e) => updateDraft(item.id, { unit_price: e.target.value })}
+                              placeholder="例: 480"
+                              value={draft.total_amount}
+                              onChange={(e) => updateDraft(item.id, { total_amount: e.target.value })}
                               className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm font-mono text-white focus:outline-none focus:ring-2 focus:ring-white/20"
                             />
+                            <p className="text-[11px] text-gray-500">
+                              追加数量 {qty > 0 ? `${qty}個` : '未入力'} に対する合計額を入力します
+                            </p>
                           </div>
 
                           <div className="space-y-2">

@@ -10,7 +10,7 @@ interface Props { items: Item[]; categories: Category[]; }
 type StatusFilter = 'all' | 'selling' | 'sold-out' | 'stopped' | 'low-stock';
 
 const EMPTY_FORM = {
-  name: '', description: '', price: '', category_id: '',
+  name: '', english_name: '', description: '', price: '', category_id: '',
   stock: '', stock_alert_threshold: '3', image_url: '', is_available: true,
   popular_override: 'auto' as ItemShowcaseOverride,
   new_arrival_override: 'auto' as ItemShowcaseOverride,
@@ -44,7 +44,7 @@ export default function ItemsClient({ items, categories }: Props) {
   const openEdit = (item: Item) => {
     setEditing(item);
     setForm({
-      name: item.name, description: item.description ?? '',
+      name: item.name, english_name: item.english_name ?? '', description: item.description ?? '',
       price: String(item.price), category_id: item.category_id ?? '',
       stock: String(item.stock), stock_alert_threshold: String(item.stock_alert_threshold),
       image_url: item.image_url ?? '', is_available: item.is_available,
@@ -65,6 +65,7 @@ export default function ItemsClient({ items, categories }: Props) {
         stock_alert_threshold: Number(form.stock_alert_threshold),
         category_id: form.category_id || null,
         image_url: form.image_url || null,
+        english_name: form.english_name || null,
         description: form.description || null,
       };
       const res = await fetch(editing ? `/api/items/${editing.id}` : '/api/items', {
@@ -262,7 +263,12 @@ export default function ItemsClient({ items, categories }: Props) {
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-2">
                     <span className="text-xl">{item.category?.icon ?? '📦'}</span>
-                    <span className="text-white font-medium">{item.name}</span>
+                    <div>
+                      <span className="text-white font-medium">{item.name}</span>
+                      {item.english_name ? (
+                        <p className="text-xs text-gray-500">{item.english_name}</p>
+                      ) : null}
+                    </div>
                   </div>
                 </td>
                 <td className="px-4 py-3 text-gray-400">{item.category?.name ?? '-'}</td>
@@ -371,6 +377,7 @@ export default function ItemsClient({ items, categories }: Props) {
 
             {[
               { label: '商品名 *', key: 'name', type: 'text', placeholder: '例: コカコーラ' },
+              { label: '英語名', key: 'english_name', type: 'text', placeholder: 'Example: Coca-Cola' },
               { label: '説明', key: 'description', type: 'text', placeholder: '任意' },
               { label: '価格（円） *', key: 'price', type: 'number', placeholder: '150' },
               { label: '在庫数', key: 'stock', type: 'number', placeholder: '10' },

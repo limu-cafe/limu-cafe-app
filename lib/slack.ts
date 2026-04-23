@@ -1,4 +1,3 @@
-const WEBHOOK_ORDERS = process.env.SLACK_WEBHOOK_ORDERS!;
 const WEBHOOK_ADMIN = process.env.SLACK_WEBHOOK_ADMIN!;
 const REQUESTS_CHANNEL_ID = process.env.SLACK_REQUESTS_CHANNEL_ID ?? '';
 const APP_BASE_URL =
@@ -165,7 +164,7 @@ export async function notifyNewOrder(params: {
     stripe: 'クレカ',
   };
 
-  await sendWebhook(WEBHOOK_ORDERS, {
+  await sendWebhook(WEBHOOK_ADMIN, {
     text: `🛒 *新しい注文が入りました！*`,
     blocks: [
       {

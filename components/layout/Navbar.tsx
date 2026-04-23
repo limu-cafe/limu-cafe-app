@@ -2,11 +2,12 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ShoppingCart, User, Coffee, ClipboardList, LogOut, Shield } from 'lucide-react';
+import { ShoppingCart, User, Coffee, ClipboardList, LogOut, Shield, Languages } from 'lucide-react';
 import { useCartStore } from '@/lib/store/cart';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
+import { useUserLocale } from '@/components/user/UserLocaleProvider';
 
 type NavbarUser = {
   id: string;
@@ -14,20 +15,55 @@ type NavbarUser = {
   balance: number;
 };
 
-export default function Navbar() {
+export default function Navbar({ initialUser = null }: { initialUser?: NavbarUser | null }) {
   const pathname = usePathname();
   const router = useRouter();
+  const { locale, toggleLocale } = useUserLocale();
   const cartCount = useCartStore((s) => s.count());
   const hasHydrated = useCartStore((s) => s.hasHydrated);
-  const [user, setUser] = useState<NavbarUser | null>(null);
+  const [user, setUser] = useState<NavbarUser | null>(initialUser);
+  const copy =
+    locale === 'en'
+      ? {
+          appSubtitle: 'Lab purchase app',
+          balance: 'Balance',
+          login: 'Login',
+          logout: 'Logout',
+          admin: 'Admin',
+          cart: 'Cart',
+          localeLabel: '日本語',
+          mobileLocaleLabel: 'JA',
+          nav: {
+            home: 'Products',
+            mypage: 'My Page',
+            request: 'Requests',
+          },
+        }
+      : {
+          appSubtitle: '研究室向け購買アプリ',
+          balance: '残高',
+          login: 'ログイン',
+          logout: 'ログアウト',
+          admin: '管理者',
+          cart: 'カート',
+          localeLabel: 'English',
+          mobileLocaleLabel: 'EN',
+          nav: {
+            home: '商品一覧',
+            mypage: 'マイページ',
+            request: '要望',
+          },
+        };
 
   useEffect(() => {
-    const cachedUser = sessionStorage.getItem('limu-navbar-user');
-    if (cachedUser) {
-      try {
-        setUser(JSON.parse(cachedUser));
-      } catch {
-        sessionStorage.removeItem('limu-navbar-user');
+    if (typeof window !== 'undefined') {
+      const cachedUser = sessionStorage.getItem('limu-navbar-user');
+      if (cachedUser) {
+        try {
+          setUser(JSON.parse(cachedUser));
+        } catch {
+          sessionStorage.removeItem('limu-navbar-user');
+        }
       }
     }
 
@@ -39,16 +75,20 @@ export default function Navbar() {
           .select('id, name, balance')
           .eq('id', data.user.id)
           .single();
-        setUser(profile);
-        if (profile) {
-          sessionStorage.setItem('limu-navbar-user', JSON.stringify(profile));
-        }
+        const fallbackUser = {
+          id: data.user.id,
+          name: data.user.user_metadata?.full_name ?? data.user.user_metadata?.name ?? data.user.email ?? 'LIMU Member',
+          balance: 0,
+        };
+        const navbarUser = profile ?? fallbackUser;
+        setUser(navbarUser);
+        sessionStorage.setItem('limu-navbar-user', JSON.stringify(navbarUser));
       } else {
         setUser(null);
         sessionStorage.removeItem('limu-navbar-user');
       }
     });
-  }, []);
+  }, [initialUser]);
 
   const handleLogout = async () => {
     const supabase = createClient();
@@ -58,9 +98,9 @@ export default function Navbar() {
   };
 
   const navItems = [
-    { href: '/', label: '商品一覧', icon: Coffee },
-    { href: '/mypage', label: 'マイページ', icon: User },
-    { href: '/request', label: '要望', icon: ClipboardList },
+    { href: '/', label: copy.nav.home, icon: Coffee },
+    { href: '/mypage', label: copy.nav.mypage, icon: User },
+    { href: '/request', label: copy.nav.request, icon: ClipboardList },
   ];
 
   return (
@@ -75,18 +115,26 @@ export default function Navbar() {
               LIMU<span className="text-matcha">喫茶</span>
             </p>
             <p className="text-[10px] font-medium tracking-[0.12em] text-espresso-400">
-              研究室向け購買アプリ
+              {copy.appSubtitle}
             </p>
           </div>
         </Link>
 
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={toggleLocale}
+            className="rounded-2xl border border-cream-200 bg-white px-2.5 py-2 text-[11px] font-semibold text-espresso-500 transition-all duration-200 hover:bg-cream-50 hover:text-espresso"
+            aria-label={copy.localeLabel}
+          >
+            {copy.mobileLocaleLabel}
+          </button>
           {user && (
             <Link
               href="/charge"
               className="flex flex-col items-end rounded-xl border border-cream-200 bg-white px-3 py-2 transition-all duration-200 hover:bg-cream-50"
             >
-              <span className="text-[10px] tracking-[0.12em] text-espresso-400">残高</span>
+              <span className="text-[10px] tracking-[0.12em] text-espresso-400">{copy.balance}</span>
               <span className="font-mono text-xs font-semibold text-espresso">
                 ¥{user.balance.toLocaleString()}
               </span>
@@ -97,13 +145,13 @@ export default function Navbar() {
             <button
               onClick={handleLogout}
               className="rounded-2xl border border-cream-200 bg-white p-2.5 text-espresso-400 transition-all duration-200 hover:bg-cream-50 hover:text-espresso"
-              title="ログアウト"
+              title={copy.logout}
             >
               <LogOut size={18} />
             </button>
           ) : (
             <Link href="/login" className="btn-primary px-3 py-2 text-xs">
-              ログイン
+              {copy.login}
             </Link>
           )}
         </div>
@@ -120,7 +168,7 @@ export default function Navbar() {
               LIMU<span className="text-matcha">喫茶</span>
             </p>
             <p className="text-[11px] font-medium tracking-[0.16em] text-espresso-400">
-              研究室向け購買アプリ
+              {copy.appSubtitle}
             </p>
           </div>
         </Link>
@@ -145,12 +193,20 @@ export default function Navbar() {
 
         {/* 右側アクション */}
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={toggleLocale}
+            className="hidden items-center gap-1.5 rounded-full border border-cream-200 bg-white px-3 py-2 text-sm font-medium text-espresso-500 transition-all duration-200 hover:bg-cream-50 hover:text-espresso sm:flex"
+          >
+            <Languages size={16} />
+            {copy.localeLabel}
+          </button>
           <Link
             href="/admin/password"
             className="hidden items-center gap-1.5 rounded-full border border-cream-200 bg-white px-3 py-2 text-sm font-medium text-espresso-500 transition-all duration-200 hover:bg-cream-50 hover:text-espresso sm:flex"
           >
             <Shield size={16} />
-            管理者
+            {copy.admin}
           </Link>
 
           {/* 残高表示 */}
@@ -159,7 +215,7 @@ export default function Navbar() {
               href="/charge"
               className="hidden rounded-xl border border-cream-200 bg-white px-4 py-2 transition-all duration-200 hover:bg-cream-50 sm:flex sm:flex-col sm:items-end sm:gap-0"
             >
-              <span className="text-[11px] tracking-[0.16em] text-espresso-400">残高</span>
+              <span className="text-[11px] tracking-[0.16em] text-espresso-400">{copy.balance}</span>
               <span className="font-mono text-sm font-semibold text-espresso">
                 ¥{user.balance.toLocaleString()}
               </span>
@@ -184,13 +240,13 @@ export default function Navbar() {
             <button
               onClick={handleLogout}
               className="rounded-2xl border border-cream-200 bg-white p-2.5 text-espresso-400 transition-all duration-200 hover:bg-cream-50 hover:text-espresso"
-              title="ログアウト"
+              title={copy.logout}
             >
               <LogOut size={20} />
             </button>
           ) : (
             <Link href="/login" className="btn-primary px-4 py-2 text-sm">
-              ログイン
+              {copy.login}
             </Link>
           )}
         </div>
@@ -217,7 +273,7 @@ export default function Navbar() {
           }`}
         >
           <ShoppingCart size={20} />
-          カート
+          {copy.cart}
           {hasHydrated && cartCount > 0 && (
             <span className="absolute top-1 left-1/2 translate-x-1 w-4 h-4 bg-matcha text-white text-xs font-bold rounded-full flex items-center justify-center">
               {cartCount > 9 ? '9+' : cartCount}
@@ -229,7 +285,7 @@ export default function Navbar() {
           className="flex-1 flex flex-col items-center gap-0.5 py-2 text-xs font-medium text-espresso-400 transition-colors"
         >
           <Shield size={20} />
-          管理者
+          {copy.admin}
         </Link>
       </div>
     </nav>
