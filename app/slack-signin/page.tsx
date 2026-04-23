@@ -22,8 +22,8 @@ function SlackSigninGuideContent() {
             'If Slack is currently signed in to another workspace, the sign-in flow may stop with a Slack error page.',
           stepOneTitle: '1. Open Slack in your browser',
           stepOneBody:
-            'Sign in to the correct LIMU workspace in a separate tab. This page will stay open.',
-          webSlack: 'Open Slack sign-in',
+            'Open the LIMU workspace in a separate tab and sign in there first. This page will stay open.',
+          webSlack: 'Open LIMU Slack',
           stepTwoTitle: '2. Return here and continue',
           stepTwoBody:
             'After signing in to the correct workspace on web Slack, continue the app sign-in flow.',
@@ -38,8 +38,8 @@ function SlackSigninGuideContent() {
             'Slack が別のワークスペースに入ったままだと、このアプリのログイン中に Slack のエラー画面で止まることがあります。',
           stepOneTitle: '1. Slackのワークスペース選択画面を開く',
           stepOneBody:
-            '別タブで Slack を開き、一覧に LIMU のワークスペースがあればそこへ入ってください。このページは開いたまま使えます。',
-          webSlack: 'Slackのワークスペースを開く',
+            '別タブで LIMU の Slack を直接開いて、先にそこへサインインしてください。このページは開いたまま使えます。',
+          webSlack: 'LIMU の Slack を開く',
           stepTwoTitle: '2. このページに戻って続ける',
           stepTwoBody:
             '正しいワークスペースに入れたら、このアプリの Slack ログインを続けます。',
@@ -81,7 +81,7 @@ function SlackSigninGuideContent() {
               <p className="mt-1 text-sm text-espresso-400">{copy.stepOneBody}</p>
             </div>
             <a
-              href="https://slack.com/signin"
+              href="/api/slack/workspace-signin"
               target="_blank"
               rel="noreferrer"
               className="inline-flex items-center justify-center rounded-xl border border-cream-200 bg-white px-4 py-3 text-sm font-medium text-espresso transition-colors hover:bg-cream-50"
