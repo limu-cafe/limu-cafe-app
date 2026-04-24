@@ -1,26 +1,31 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { Plus, Pencil, Trash2 } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Pencil, Plus, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useRouter } from 'next/navigation';
-import type { Item, Category, ItemShowcaseOverride } from '@/types';
+import type { Category, Item } from '@/types';
 
-interface Props { items: Item[]; categories: Category[]; }
-type StatusFilter = 'all' | 'selling' | 'sold-out' | 'stopped' | 'low-stock';
+interface Props {
+  items: Item[];
+  categories: Category[];
+}
+
+type StatusFilter = 'all' | 'selling' | 'low-stock' | 'stopped';
 
 const EMPTY_FORM = {
-  name: '', english_name: '', description: '', price: '', category_id: '',
-  stock: '', stock_alert_threshold: '3', image_url: '', is_available: true,
-  popular_override: 'auto' as ItemShowcaseOverride,
-  new_arrival_override: 'auto' as ItemShowcaseOverride,
+  name: '',
+  english_name: '',
+  description: '',
+  price: '',
+  category_id: '',
+  stock_alert_threshold: '3',
+  image_url: '',
+  is_available: true,
 };
 
-const OVERRIDE_OPTIONS: { value: ItemShowcaseOverride; label: string }[] = [
-  { value: 'auto', label: '自動' },
-  { value: 'show', label: '表示' },
-  { value: 'hide', label: '非表示' },
-];
+const FIELD_CLASS =
+  'w-full rounded-xl border border-gray-700 bg-gray-800 px-4 py-3 text-sm text-white placeholder:text-gray-500 focus:outline-none';
 
 export default function ItemsClient({ items, categories }: Props) {
   const router = useRouter();
@@ -28,8 +33,10 @@ export default function ItemsClient({ items, categories }: Props) {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Item | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [search, setSearch] = useState('');
+  const [stockInputs, setStockInputs] = useState<Record<string, string>>({});
 
   useEffect(() => {
     setLocalItems(items);
@@ -40,431 +47,472 @@ export default function ItemsClient({ items, categories }: Props) {
     category: categories.find((category) => category.id === item.category_id),
   });
 
-  const openCreate = () => { setEditing(null); setForm(EMPTY_FORM); setShowForm(true); };
+  const openCreate = () => {
+    setEditing(null);
+    setForm(EMPTY_FORM);
+    setShowForm(true);
+  };
+
   const openEdit = (item: Item) => {
     setEditing(item);
     setForm({
-      name: item.name, english_name: item.english_name ?? '', description: item.description ?? '',
-      price: String(item.price), category_id: item.category_id ?? '',
-      stock: String(item.stock), stock_alert_threshold: String(item.stock_alert_threshold),
-      image_url: item.image_url ?? '', is_available: item.is_available,
-      popular_override: item.popular_override,
-      new_arrival_override: item.new_arrival_override,
+      name: item.name,
+      english_name: item.english_name ?? '',
+      description: item.description ?? '',
+      price: String(item.price),
+      category_id: item.category_id ?? '',
+      stock_alert_threshold: String(item.stock_alert_threshold),
+      image_url: item.image_url ?? '',
+      is_available: item.is_available,
     });
     setShowForm(true);
   };
 
   const handleSubmit = async () => {
-    if (!form.name || !form.price) { toast.error('商品名と価格は必須です'); return; }
-    setLoading(true);
+    if (!form.name.trim() || !form.price) {
+      toast.error('商品名と価格を入力してください');
+      return;
+    }
+
+    setLoading('item-form');
     try {
       const body = {
-        ...form,
+        name: form.name.trim(),
+        english_name: form.english_name.trim() || null,
+        description: form.description.trim() || null,
         price: Number(form.price),
-        stock: Number(form.stock),
-        stock_alert_threshold: Number(form.stock_alert_threshold),
         category_id: form.category_id || null,
-        image_url: form.image_url || null,
-        english_name: form.english_name || null,
-        description: form.description || null,
+        stock: editing?.stock ?? 0,
+        stock_alert_threshold: Number(form.stock_alert_threshold || 0),
+        image_url: form.image_url.trim() || null,
+        is_available: form.is_available,
       };
+
       const res = await fetch(editing ? `/api/items/${editing.id}` : '/api/items', {
         method: editing ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
-      if (!res.ok) throw new Error((await res.json()).error);
-      const savedItem = attachCategory(await res.json());
 
-      setLocalItems((current) => {
-        if (editing) {
-          return current.map((item) => (item.id === savedItem.id ? savedItem : item));
-        }
-        return [savedItem, ...current];
-      });
+      const payload = await res.json();
+      if (!res.ok) throw new Error(payload.error ?? '保存に失敗しました');
 
-      toast.success(editing ? '商品を更新しました' : '商品を登録しました');
+      const savedItem = attachCategory(payload);
+      setLocalItems((current) =>
+        editing
+          ? current.map((item) => (item.id === savedItem.id ? savedItem : item))
+          : [savedItem, ...current]
+      );
       setShowForm(false);
+      toast.success(editing ? '商品情報を更新しました' : '商品を追加しました');
       router.refresh();
-    } catch (e: any) { toast.error(e.message); }
-    finally { setLoading(false); }
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setLoading(null);
+    }
   };
 
-  const handleDelete = async (id: string, name: string) => {
-    if (!confirm(`「${name}」を削除しますか？`)) return;
-    const res = await fetch(`/api/items/${id}`, { method: 'DELETE' });
-    if (res.ok) {
-      setLocalItems((current) => current.filter((item) => item.id !== id));
+  const handleDelete = async (item: Item) => {
+    if (!confirm(`「${item.name}」を削除しますか？`)) return;
+
+    setLoading(`delete:${item.id}`);
+    try {
+      const res = await fetch(`/api/items/${item.id}`, { method: 'DELETE' });
+      const payload = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(payload?.error ?? '削除に失敗しました');
+
+      setLocalItems((current) => current.filter((currentItem) => currentItem.id !== item.id));
       toast.success('削除しました');
       router.refresh();
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setLoading(null);
     }
-    else toast.error('削除に失敗しました');
   };
 
-  const handleToggle = async (item: Item) => {
-    const res = await fetch(`/api/items/${item.id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ is_available: !item.is_available }),
-    });
-    if (res.ok) {
-      const updatedItem = attachCategory(await res.json());
-      setLocalItems((current) => current.map((currentItem) => (
-        currentItem.id === updatedItem.id ? updatedItem : currentItem
-      )));
+  const handleToggleAvailability = async (item: Item) => {
+    setLoading(`toggle:${item.id}`);
+    try {
+      const res = await fetch(`/api/items/${item.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_available: !item.is_available }),
+      });
+      const payload = await res.json();
+      if (!res.ok) throw new Error(payload.error ?? '更新に失敗しました');
+
+      const updatedItem = attachCategory(payload);
+      setLocalItems((current) =>
+        current.map((currentItem) => (currentItem.id === updatedItem.id ? updatedItem : currentItem))
+      );
+      toast.success(updatedItem.is_available ? '販売中にしました' : '販売停止にしました');
       router.refresh();
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setLoading(null);
     }
   };
 
-  const handleQuickUpdate = async (
-    item: Item,
-    patch: Partial<Item>,
-    successMessage: string
-  ) => {
-    const res = await fetch(`/api/items/${item.id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(patch),
-    });
-
-    if (!res.ok) {
-      toast.error('商品の更新に失敗しました');
+  const handleAddStock = async (item: Item) => {
+    const quantity = Number(stockInputs[item.id] || 0);
+    if (!quantity || quantity <= 0) {
+      toast.error('追加数を入力してください');
       return;
     }
 
-    const updatedItem = attachCategory(await res.json());
-    setLocalItems((current) =>
-      current.map((currentItem) => (currentItem.id === updatedItem.id ? updatedItem : currentItem))
-    );
-    toast.success(successMessage);
-    router.refresh();
+    setLoading(`stock:${item.id}`);
+    try {
+      const res = await fetch('/api/admin/stock', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          item_id: item.id,
+          quantity,
+          note: '在庫追加',
+          purchase: null,
+        }),
+      });
+
+      const payload = await res.json();
+      if (!res.ok) throw new Error(payload.error ?? '在庫追加に失敗しました');
+
+      setLocalItems((current) =>
+        current.map((currentItem) =>
+          currentItem.id === item.id
+            ? { ...currentItem, stock: currentItem.stock + quantity }
+            : currentItem
+        )
+      );
+      setStockInputs((current) => ({ ...current, [item.id]: '' }));
+      toast.success(`${item.name} の在庫を追加しました`);
+      router.refresh();
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setLoading(null);
+    }
   };
-
-  const handleShowcaseOverride = async (
-    item: Item,
-    key: 'popular_override' | 'new_arrival_override',
-    value: ItemShowcaseOverride
-  ) => {
-    const res = await fetch(`/api/items/${item.id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ [key]: value }),
-    });
-
-    if (!res.ok) {
-      toast.error('表示設定の更新に失敗しました');
-      return;
-    }
-
-    const updatedItem = attachCategory(await res.json());
-    setLocalItems((current) =>
-      current.map((currentItem) => (currentItem.id === updatedItem.id ? updatedItem : currentItem))
-    );
-    toast.success('表示設定を更新しました');
-    router.refresh();
-  };
-
-  const getStatusMeta = (item: Item) => {
-    if (!item.is_available) {
-      return {
-        label: '販売停止',
-        className: 'bg-gray-500/20 text-gray-300',
-      };
-    }
-
-    if (item.stock === 0) {
-      return {
-        label: '売り切れ',
-        className: 'bg-red-500/20 text-red-300',
-      };
-    }
-
-    if (item.stock <= item.stock_alert_threshold) {
-      return {
-        label: '残り少なめ',
-        className: 'bg-amber-500/20 text-amber-300',
-      };
-    }
-
-    return {
-      label: '販売中',
-      className: 'bg-green-500/20 text-green-300',
-    };
-  };
-
-  const filteredItems = localItems.filter((item) => {
-    switch (statusFilter) {
-      case 'selling':
-        return item.is_available && item.stock > 0;
-      case 'sold-out':
-        return item.is_available && item.stock === 0;
-      case 'stopped':
-        return !item.is_available;
-      case 'low-stock':
-        return item.is_available && item.stock > 0 && item.stock <= item.stock_alert_threshold;
-      default:
-        return true;
-    }
-  });
 
   const statusOptions = [
-    { key: 'all' as const, label: 'すべて', count: localItems.length },
-    { key: 'selling' as const, label: '販売中', count: localItems.filter((item) => item.is_available && item.stock > 0).length },
-    { key: 'sold-out' as const, label: '売り切れ', count: localItems.filter((item) => item.is_available && item.stock === 0).length },
-    { key: 'stopped' as const, label: '販売停止', count: localItems.filter((item) => !item.is_available).length },
-    { key: 'low-stock' as const, label: '要補充', count: localItems.filter((item) => item.is_available && item.stock > 0 && item.stock <= item.stock_alert_threshold).length },
+    { id: 'all' as const, label: 'すべて' },
+    { id: 'selling' as const, label: '販売中' },
+    { id: 'low-stock' as const, label: '要補充' },
+    { id: 'stopped' as const, label: '停止中' },
   ];
 
+  const filteredItems = useMemo(() => {
+    const keyword = search.trim().toLowerCase();
+
+    return localItems.filter((item) => {
+      const matchesSearch =
+        !keyword ||
+        item.name.toLowerCase().includes(keyword) ||
+        (item.english_name ?? '').toLowerCase().includes(keyword);
+
+      if (!matchesSearch) return false;
+
+      switch (statusFilter) {
+        case 'selling':
+          return item.is_available;
+        case 'low-stock':
+          return item.is_available && item.stock <= item.stock_alert_threshold;
+        case 'stopped':
+          return !item.is_available;
+        default:
+          return true;
+      }
+    });
+  }, [localItems, search, statusFilter]);
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-5">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="font-display font-bold text-2xl text-white">商品管理</h1>
-          <p className="text-gray-400 text-sm mt-1">{localItems.length}件の商品</p>
+          <h1 className="font-display text-2xl font-bold text-white">商品管理</h1>
         </div>
-        <button onClick={openCreate} className="flex items-center gap-2 bg-white text-gray-950 px-4 py-2 rounded-lg font-medium text-sm hover:bg-gray-100 active:scale-95 transition-all">
-          <Plus size={16} /> 商品を追加
+        <button
+          onClick={openCreate}
+          className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-medium text-gray-950 transition hover:bg-gray-100"
+        >
+          <Plus size={16} />
+          新商品追加
         </button>
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        {statusOptions.map((option) => (
-          <button
-            key={option.key}
-            type="button"
-            onClick={() => setStatusFilter(option.key)}
-            className={`rounded-full px-3 py-2 text-xs font-medium transition-colors ${
-              statusFilter === option.key
-                ? 'bg-white text-gray-950'
-                : 'bg-gray-900 text-gray-300 hover:bg-gray-800'
-            }`}
-          >
-            {option.label} {option.count}
-          </button>
-        ))}
+      <div className="flex flex-col gap-3 rounded-2xl border border-gray-800 bg-gray-900 p-4 md:flex-row md:items-center">
+        <input
+          type="text"
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          placeholder="商品名で検索"
+          className="w-full rounded-xl border border-gray-700 bg-gray-800 px-4 py-3 text-sm text-white placeholder:text-gray-500 focus:outline-none"
+        />
+        <div className="flex flex-wrap gap-2">
+          {statusOptions.map((option) => (
+            <button
+              key={option.id}
+              onClick={() => setStatusFilter(option.id)}
+              className={`rounded-full px-3 py-2 text-xs font-medium transition-colors ${
+                statusFilter === option.id
+                  ? 'bg-white text-gray-950'
+                  : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+              }`}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {/* 商品テーブル */}
-      <div className="bg-gray-900 rounded-2xl border border-gray-800 overflow-hidden">
-        <table className="w-full text-sm">
+      <div className="overflow-hidden rounded-2xl border border-gray-800 bg-gray-900">
+        <table className="w-full min-w-[980px] text-sm">
           <thead>
-            <tr className="border-b border-gray-800">
-              {['商品名', 'カテゴリ', '価格', '在庫', '状態', '販売操作', '人気表示', '新入荷表示', '編集'].map(h => (
-                <th key={h} className="px-4 py-3 text-left font-medium text-gray-400">{h}</th>
-              ))}
+            <tr className="border-b border-gray-800 text-left text-xs text-gray-500">
+              <th className="px-4 py-3 font-medium">商品</th>
+              <th className="px-4 py-3 font-medium">カテゴリ</th>
+              <th className="px-4 py-3 font-medium">価格</th>
+              <th className="px-4 py-3 font-medium">在庫</th>
+              <th className="px-4 py-3 font-medium">追加</th>
+              <th className="px-4 py-3 font-medium">状態</th>
+              <th className="px-4 py-3 font-medium">操作</th>
             </tr>
           </thead>
           <tbody>
             {filteredItems.map((item) => {
-              const statusMeta = getStatusMeta(item);
-
+              const isLowStock = item.stock <= item.stock_alert_threshold;
               return (
-              <tr key={item.id} className="border-b border-gray-800/50 hover:bg-gray-800/30 transition-colors">
-                <td className="px-4 py-3">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xl">{item.category?.icon ?? '📦'}</span>
-                    <div>
-                      <span className="text-white font-medium">{item.name}</span>
-                      {item.english_name ? (
-                        <p className="text-xs text-gray-500">{item.english_name}</p>
-                      ) : null}
+                <tr key={item.id} className="border-b border-gray-800/60 align-top">
+                  <td className="px-4 py-4">
+                    <div className="space-y-1">
+                      <p className="font-medium text-white">{item.name}</p>
+                      {item.english_name && <p className="text-xs text-gray-500">{item.english_name}</p>}
                     </div>
-                  </div>
-                </td>
-                <td className="px-4 py-3 text-gray-400">{item.category?.name ?? '-'}</td>
-                <td className="px-4 py-3 text-white font-mono">¥{item.price.toLocaleString()}</td>
-                <td className="px-4 py-3">
-                  <span className={`font-mono ${
-                    item.stock === 0 ? 'text-red-400' :
-                    item.stock <= item.stock_alert_threshold ? 'text-amber-400' : 'text-green-400'
-                  }`}>
-                    {item.stock}
-                  </span>
-                  <span className="text-gray-600 text-xs ml-1">/ アラート{item.stock_alert_threshold}</span>
-                </td>
-                <td className="px-4 py-3">
-                  <span className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${statusMeta.className}`}>
-                    {statusMeta.label}
-                  </span>
-                </td>
-                <td className="px-4 py-3">
-                  <div className="flex flex-wrap gap-2">
-                    {item.is_available ? (
-                      <button
-                        onClick={() => handleToggle(item)}
-                        className="rounded-lg bg-gray-800 px-2.5 py-1.5 text-xs font-medium text-gray-200 transition-colors hover:bg-gray-700"
-                      >
-                        販売停止
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => handleToggle(item)}
-                        className="rounded-lg bg-emerald-500/20 px-2.5 py-1.5 text-xs font-medium text-emerald-300 transition-colors hover:bg-emerald-500/30"
-                      >
-                        販売再開
-                      </button>
-                    )}
-                    {item.stock > 0 && (
-                      <button
-                        onClick={() => handleQuickUpdate(item, { stock: 0 }, '売り切れ状態にしました')}
-                        className="rounded-lg bg-red-500/20 px-2.5 py-1.5 text-xs font-medium text-red-300 transition-colors hover:bg-red-500/30"
-                      >
-                        売り切れにする
-                      </button>
-                    )}
-                  </div>
-                </td>
-                <td className="px-4 py-3">
-                  <div className="inline-flex rounded-lg border border-gray-800 bg-gray-950 p-1">
-                    {OVERRIDE_OPTIONS.map((option) => (
-                      <button
-                        key={`popular-${option.value}`}
-                        onClick={() => handleShowcaseOverride(item, 'popular_override', option.value)}
-                        className={`rounded-md px-2 py-1 text-xs transition-colors ${
-                          item.popular_override === option.value
-                            ? 'bg-white text-gray-950'
-                            : 'text-gray-400 hover:text-white'
+                  </td>
+                  <td className="px-4 py-4 text-gray-300">
+                    {item.category?.icon ?? '📦'} {item.category?.name ?? '未設定'}
+                  </td>
+                  <td className="px-4 py-4 font-mono text-white">¥{item.price.toLocaleString()}</td>
+                  <td className="px-4 py-4">
+                    <div className="space-y-1">
+                      <p
+                        className={`font-mono text-lg font-bold ${
+                          item.stock === 0
+                            ? 'text-red-400'
+                            : isLowStock
+                              ? 'text-amber-400'
+                              : 'text-green-400'
                         }`}
                       >
-                        {option.label}
-                      </button>
-                    ))}
-                  </div>
-                </td>
-                <td className="px-4 py-3">
-                  <div className="inline-flex rounded-lg border border-gray-800 bg-gray-950 p-1">
-                    {OVERRIDE_OPTIONS.map((option) => (
+                        {item.stock}
+                      </p>
+                      <p className="text-xs text-gray-500">警戒値 {item.stock_alert_threshold}</p>
+                    </div>
+                  </td>
+                  <td className="px-4 py-4">
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        min={1}
+                        value={stockInputs[item.id] ?? ''}
+                        onChange={(event) =>
+                          setStockInputs((current) => ({
+                            ...current,
+                            [item.id]: event.target.value,
+                          }))
+                        }
+                        placeholder="個数"
+                        className="w-24 rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:outline-none"
+                      />
                       <button
-                        key={`new-${option.value}`}
-                        onClick={() => handleShowcaseOverride(item, 'new_arrival_override', option.value)}
-                        className={`rounded-md px-2 py-1 text-xs transition-colors ${
-                          item.new_arrival_override === option.value
-                            ? 'bg-white text-gray-950'
-                            : 'text-gray-400 hover:text-white'
-                        }`}
+                        onClick={() => handleAddStock(item)}
+                        disabled={loading === `stock:${item.id}`}
+                        className="rounded-lg bg-white/10 px-3 py-2 text-xs font-medium text-white transition hover:bg-white/20 disabled:opacity-50"
                       >
-                        {option.label}
+                        {loading === `stock:${item.id}` ? '追加中...' : '在庫追加'}
                       </button>
-                    ))}
-                  </div>
-                </td>
-                <td className="px-4 py-3">
-                  <div className="flex items-center gap-1">
-                    <button onClick={() => openEdit(item)} className="p-1.5 rounded-lg hover:bg-gray-700 text-gray-400 hover:text-white transition-colors">
-                      <Pencil size={14} />
+                    </div>
+                  </td>
+                  <td className="px-4 py-4">
+                    <button
+                      onClick={() => handleToggleAvailability(item)}
+                      disabled={loading === `toggle:${item.id}`}
+                      className={`rounded-full px-3 py-1 text-xs font-medium ${
+                        item.is_available
+                          ? 'bg-green-500/15 text-green-300'
+                          : 'bg-gray-700 text-gray-300'
+                      }`}
+                    >
+                      {item.is_available ? '販売中' : '停止中'}
                     </button>
-                    <button onClick={() => handleDelete(item.id, item.name)} className="p-1.5 rounded-lg hover:bg-red-500/20 text-gray-400 hover:text-red-400 transition-colors">
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            )})}
+                  </td>
+                  <td className="px-4 py-4">
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => openEdit(item)}
+                        className="rounded-lg p-2 text-gray-300 transition hover:bg-gray-800 hover:text-white"
+                        title="編集"
+                      >
+                        <Pencil size={15} />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(item)}
+                        disabled={loading === `delete:${item.id}`}
+                        className="rounded-lg p-2 text-gray-400 transition hover:bg-red-500/15 hover:text-red-300 disabled:opacity-50"
+                        title="削除"
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
+
         {filteredItems.length === 0 && (
-          <div className="text-center py-12 text-gray-500">該当する商品がありません</div>
+          <div className="px-6 py-16 text-center text-sm text-gray-500">商品がありません</div>
         )}
       </div>
 
-      {/* フォームモーダル */}
       {showForm && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-          <div className="bg-gray-900 rounded-2xl border border-gray-700 w-full max-w-md p-6 space-y-4 max-h-[90vh] overflow-y-auto">
-            <h2 className="font-display font-bold text-xl text-white">
-              {editing ? '商品を編集' : '商品を追加'}
-            </h2>
-
-            {[
-              { label: '商品名 *', key: 'name', type: 'text', placeholder: '例: コカコーラ' },
-              { label: '英語名', key: 'english_name', type: 'text', placeholder: 'Example: Coca-Cola' },
-              { label: '説明', key: 'description', type: 'text', placeholder: '任意' },
-              { label: '価格（円） *', key: 'price', type: 'number', placeholder: '150' },
-              { label: '在庫数', key: 'stock', type: 'number', placeholder: '10' },
-              { label: 'アラート閾値', key: 'stock_alert_threshold', type: 'number', placeholder: '3' },
-              { label: '画像URL', key: 'image_url', type: 'text', placeholder: 'https://...' },
-            ].map(({ label, key, type, placeholder }) => (
-              <div key={key} className="space-y-1">
-                <label className="text-sm text-gray-400">{label}</label>
-                <input
-                  type={type}
-                  placeholder={placeholder}
-                  value={(form as any)[key]}
-                  onChange={(e) => setForm({ ...form, [key]: e.target.value })}
-                  className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-white/20 placeholder:text-gray-600"
-                />
-              </div>
-            ))}
-
-            <div className="space-y-1">
-              <label className="text-sm text-gray-400">カテゴリ</label>
-              <select
-                value={form.category_id}
-                onChange={(e) => setForm({ ...form, category_id: e.target.value })}
-                className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2.5 focus:outline-none"
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-2xl rounded-3xl border border-gray-800 bg-gray-900 p-6 shadow-2xl">
+            <div className="flex items-center justify-between">
+              <h2 className="font-display text-2xl font-bold text-white">
+                {editing ? '商品情報編集' : '新商品追加'}
+              </h2>
+              <button
+                onClick={() => setShowForm(false)}
+                className="rounded-full p-2 text-gray-400 transition hover:bg-gray-800 hover:text-white"
               >
-                <option value="">未分類</option>
-                {categories.map(c => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}
-              </select>
+                ✕
+              </button>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <label className="text-sm text-gray-400">人気商品への表示</label>
-                <select
-                  value={form.popular_override}
-                  onChange={(e) =>
-                    setForm({ ...form, popular_override: e.target.value as ItemShowcaseOverride })
+            <div className="mt-5 grid gap-4 md:grid-cols-2">
+              <Field label="商品名">
+                <input
+                  value={form.name}
+                  onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
+                  className={FIELD_CLASS}
+                />
+              </Field>
+              <Field label="英語名">
+                <input
+                  value={form.english_name}
+                  onChange={(event) =>
+                    setForm((current) => ({ ...current, english_name: event.target.value }))
                   }
-                  className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2.5 focus:outline-none"
+                  className={FIELD_CLASS}
+                />
+              </Field>
+              <Field label="カテゴリ">
+                <select
+                  value={form.category_id}
+                  onChange={(event) =>
+                    setForm((current) => ({ ...current, category_id: event.target.value }))
+                  }
+                  className={FIELD_CLASS}
                 >
-                  {OVERRIDE_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
+                  <option value="">未設定</option>
+                  {categories.map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.icon ?? '📦'} {category.name}
                     </option>
                   ))}
                 </select>
-              </div>
-              <div className="space-y-1">
-                <label className="text-sm text-gray-400">新入荷への表示</label>
-                <select
-                  value={form.new_arrival_override}
-                  onChange={(e) =>
-                    setForm({ ...form, new_arrival_override: e.target.value as ItemShowcaseOverride })
+              </Field>
+              <Field label="価格">
+                <input
+                  type="number"
+                  min={0}
+                  value={form.price}
+                  onChange={(event) => setForm((current) => ({ ...current, price: event.target.value }))}
+                  className={FIELD_CLASS}
+                />
+              </Field>
+              <Field label="警戒在庫">
+                <input
+                  type="number"
+                  min={0}
+                  value={form.stock_alert_threshold}
+                  onChange={(event) =>
+                    setForm((current) => ({ ...current, stock_alert_threshold: event.target.value }))
                   }
-                  className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2.5 focus:outline-none"
-                >
-                  {OVERRIDE_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
+                  className={FIELD_CLASS}
+                />
+              </Field>
+              <Field label="画像URL">
+                <input
+                  value={form.image_url}
+                  onChange={(event) =>
+                    setForm((current) => ({ ...current, image_url: event.target.value }))
+                  }
+                  className={FIELD_CLASS}
+                />
+              </Field>
+              <Field label="説明" className="md:col-span-2">
+                <textarea
+                  rows={4}
+                  value={form.description}
+                  onChange={(event) =>
+                    setForm((current) => ({ ...current, description: event.target.value }))
+                  }
+                  className={`${FIELD_CLASS} resize-none`}
+                />
+              </Field>
+              <label className="inline-flex items-center gap-2 text-sm text-gray-300 md:col-span-2">
+                <input
+                  type="checkbox"
+                  checked={form.is_available}
+                  onChange={(event) =>
+                    setForm((current) => ({ ...current, is_available: event.target.checked }))
+                  }
+                  className="rounded border-gray-700 bg-gray-900 text-white"
+                />
+                販売中にする
+              </label>
             </div>
 
-            <div className="flex items-center gap-3">
-              <input
-                type="checkbox"
-                id="is_available"
-                checked={form.is_available}
-                onChange={(e) => setForm({ ...form, is_available: e.target.checked })}
-                className="w-4 h-4"
-              />
-              <label htmlFor="is_available" className="text-sm text-gray-300">販売中</label>
-            </div>
-
-            <div className="flex gap-3 pt-2">
-              <button onClick={() => setShowForm(false)} className="flex-1 py-2.5 rounded-lg border border-gray-700 text-gray-300 hover:bg-gray-800 transition-colors">
+            <div className="mt-6 flex items-center justify-end gap-3">
+              <button
+                onClick={() => setShowForm(false)}
+                className="rounded-xl border border-gray-700 px-4 py-2 text-sm font-medium text-gray-300 transition hover:bg-gray-800"
+              >
                 キャンセル
               </button>
-              <button onClick={handleSubmit} disabled={loading} className="flex-1 py-2.5 rounded-lg bg-white text-gray-950 font-medium hover:bg-gray-100 disabled:opacity-50 transition-colors">
-                {loading ? '保存中...' : editing ? '更新' : '追加'}
+              <button
+                onClick={handleSubmit}
+                disabled={loading === 'item-form'}
+                className="rounded-xl bg-white px-4 py-2 text-sm font-medium text-gray-950 transition hover:bg-gray-100 disabled:opacity-50"
+              >
+                {loading === 'item-form' ? '保存中...' : editing ? '更新する' : '追加する'}
               </button>
             </div>
           </div>
         </div>
       )}
     </div>
+  );
+}
+
+function Field({
+  label,
+  children,
+  className = '',
+}: {
+  label: string;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <label className={`space-y-2 ${className}`}>
+      <span className="block text-sm text-gray-400">{label}</span>
+      {children}
+    </label>
   );
 }

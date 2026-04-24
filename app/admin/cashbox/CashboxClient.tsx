@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { format } from 'date-fns';
 import { ja } from 'date-fns/locale';
-import { ArrowDownLeft, ArrowUpRight, Calculator, CircleDollarSign, Scale, ShoppingBasket, Wallet } from 'lucide-react';
+import { ArrowDownLeft, ArrowUpRight, Calculator, Scale, Wallet } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { cashboxEntryLabels } from '@/lib/cashbox';
 
@@ -30,15 +30,6 @@ type Count = {
   counted_by_user?: { name?: string | null } | null;
 };
 
-type BackfillRun = {
-  id: string;
-  inserted_orders: number;
-  inserted_charges: number;
-  inserted_settlements: number;
-  note: string | null;
-  ran_at: string;
-};
-
 type PendingPurchaseRun = {
   id: string;
   total_amount: number;
@@ -49,69 +40,46 @@ type PendingPurchaseRun = {
   purchase_run_items?: Array<{ item_name: string; quantity: number }>;
 };
 
-type MiscExpense = {
-  id: string;
-  amount: number;
-  note: string | null;
-  created_at: string;
-  created_by_user?: { name?: string | null } | null;
-};
-
 export default function CashboxClient({
   expectedAmount,
-  projectedAmount,
   pendingCashOrderAmount,
   pendingCashOrdersCount,
   deferredReceivableAmount,
-  pendingCashChargeAmount,
   unreimbursedAdvanceAmount,
-  monthlyPurchaseAmount,
-  monthlyCashboxPurchaseAmount,
-  monthlyMiscExpenseAmount,
-  recentMiscExpenses,
   unreimbursedPurchaseRuns,
   latestCount,
   entries,
   counts,
-  latestBackfillRun,
-  hasLegacyBaseline,
 }: {
   expectedAmount: number;
-  projectedAmount: number;
   pendingCashOrderAmount: number;
   pendingCashOrdersCount: number;
   deferredReceivableAmount: number;
-  pendingCashChargeAmount: number;
   unreimbursedAdvanceAmount: number;
-  monthlyPurchaseAmount: number;
-  monthlyCashboxPurchaseAmount: number;
-  monthlyMiscExpenseAmount: number;
-  recentMiscExpenses: MiscExpense[];
   unreimbursedPurchaseRuns: PendingPurchaseRun[];
   latestCount: Count | null;
   entries: Entry[];
   counts: Count[];
-  latestBackfillRun: BackfillRun | null;
-  hasLegacyBaseline: boolean;
 }) {
   const router = useRouter();
-  const [adjustmentAmount, setAdjustmentAmount] = useState<number | ''>('');
+  const [adjustmentAmount, setAdjustmentAmount] = useState('');
   const [adjustmentNote, setAdjustmentNote] = useState('');
   const [adjustmentDirection, setAdjustmentDirection] = useState<'in' | 'out'>('in');
-  const [actualAmount, setActualAmount] = useState<number | ''>('');
+  const [actualAmount, setActualAmount] = useState('');
   const [countNote, setCountNote] = useState('');
-  const [denominationCounts, setDenominationCounts] = useState<Record<string, number>>(
-    Object.fromEntries(DENOMINATIONS.map((denomination) => [String(denomination), 0]))
+  const [denominationCounts, setDenominationCounts] = useState<Record<string, string>>(
+    Object.fromEntries(DENOMINATIONS.map((denomination) => [String(denomination), '']))
   );
   const [loading, setLoading] = useState<'adjustment' | 'count' | `reimburse:${string}` | null>(null);
 
   const latestDifference = latestCount?.difference_amount ?? 0;
   const denominationTotal = DENOMINATIONS.reduce((sum, denomination) => {
-    return sum + denomination * (denominationCounts[String(denomination)] ?? 0);
+    return sum + denomination * Number(denominationCounts[String(denomination)] || 0);
   }, 0);
 
   const handleAdjustment = async () => {
-    if (!adjustmentAmount || adjustmentAmount <= 0) {
+    const parsedAmount = Number(adjustmentAmount || 0);
+    if (!parsedAmount || parsedAmount <= 0) {
       toast.error('金額を入力してください');
       return;
     }
@@ -122,7 +90,7 @@ export default function CashboxClient({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          amount: adjustmentAmount,
+          amount: parsedAmount,
           direction: adjustmentDirection,
           note: adjustmentNote,
         }),
@@ -145,14 +113,23 @@ export default function CashboxClient({
 
   const handleCount = async () => {
     const hasDenominationInput = DENOMINATIONS.some(
-      (denomination) => (denominationCounts[String(denomination)] ?? 0) > 0
+      (denomination) => Number(denominationCounts[String(denomination)] || 0) > 0
     );
-    const finalActualAmount = hasDenominationInput ? denominationTotal : actualAmount;
+    const finalActualAmount = hasDenominationInput ? denominationTotal : Number(actualAmount || 0);
 
-    if (finalActualAmount === '' || finalActualAmount < 0) {
+    if ((!hasDenominationInput && actualAmount === '') || finalActualAmount < 0) {
       toast.error('実測金額を入力してください');
       return;
     }
+
+    const parsedDenominationCounts = hasDenominationInput
+      ? Object.fromEntries(
+          DENOMINATIONS.map((denomination) => [
+            String(denomination),
+            Number(denominationCounts[String(denomination)] || 0),
+          ])
+        )
+      : null;
 
     setLoading('count');
     try {
@@ -161,7 +138,7 @@ export default function CashboxClient({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           actual_amount: finalActualAmount,
-          denomination_counts: hasDenominationInput ? denominationCounts : null,
+          denomination_counts: parsedDenominationCounts,
           note: countNote,
         }),
       });
@@ -174,7 +151,7 @@ export default function CashboxClient({
       setActualAmount('');
       setCountNote('');
       setDenominationCounts(
-        Object.fromEntries(DENOMINATIONS.map((denomination) => [String(denomination), 0]))
+        Object.fromEntries(DENOMINATIONS.map((denomination) => [String(denomination), '']))
       );
       router.refresh();
     } catch (e: any) {
@@ -208,45 +185,9 @@ export default function CashboxClient({
     <div className="space-y-6">
       <div>
         <h1 className="font-display font-bold text-2xl text-white">金庫管理</h1>
-        <p className="text-gray-400 text-sm mt-1">
-          現在の金庫見込みと、未回収売上まで含めた最終着地見込み、実際に数えた金額を並べて管理します
-        </p>
       </div>
 
-      <div className="grid gap-3">
-        {latestBackfillRun ? (
-          <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-5 py-4 text-sm text-emerald-100">
-            <p className="font-medium">現システム内の過去現金履歴はバックフィル済みです</p>
-            <p className="mt-1 text-emerald-200/80">
-              {format(new Date(latestBackfillRun.ran_at), 'yyyy/M/d HH:mm', { locale: ja })} 実行
-              ・ 注文 {latestBackfillRun.inserted_orders}件
-              ・ チャージ {latestBackfillRun.inserted_charges}件
-              ・ 精算 {latestBackfillRun.inserted_settlements}件
-            </p>
-          </div>
-        ) : (
-          <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-5 py-4 text-sm text-amber-100">
-            <p className="font-medium">まだ現システム分のバックフィルが実行されていません</p>
-            <p className="mt-1 text-amber-200/80">
-              <code className="rounded bg-black/20 px-1.5 py-0.5 text-xs">
-                supabase/migrations/004_cashbox_backfill.sql
-              </code>{' '}
-              を SQL Editor で1回実行してください。
-            </p>
-          </div>
-        )}
-
-        {!hasLegacyBaseline && (
-          <div className="rounded-2xl border border-sky-500/20 bg-sky-500/10 px-5 py-4 text-sm text-sky-100">
-            <p className="font-medium">旧システム分の初期残高はまだ入力されていません</p>
-            <p className="mt-1 text-sky-200/80">
-              旧システムから引き継ぐ現金がある場合は、下の「手動調整」から1件の初期値として入力してください。
-            </p>
-          </div>
-        )}
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3 xl:grid-cols-6">
         <div className="bg-gray-900 rounded-2xl border border-gray-800 p-5">
           <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center mb-3">
             <Calculator size={20} className="text-emerald-400" />
@@ -255,30 +196,45 @@ export default function CashboxClient({
           <p className="font-display font-bold text-2xl text-emerald-400">
             ¥{expectedAmount.toLocaleString()}
           </p>
-          <p className="mt-2 text-xs text-gray-500">
-            現金注文受領・現金精算・手動調整の合計です
-          </p>
-        </div>
-
-        <div className="bg-gray-900 rounded-2xl border border-gray-800 p-5">
-          <div className="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center mb-3">
-            <CircleDollarSign size={20} className="text-purple-400" />
-          </div>
-          <p className="text-gray-400 text-xs mb-1">すべて精算した場合の着地見込み</p>
-          <p className="font-display font-bold text-2xl text-purple-400">
-            ¥{projectedAmount.toLocaleString()}
-          </p>
-          <p className="mt-2 text-xs text-gray-500">
-            現在見込み + 未回収の現金注文 + 後払い残高 - 未精算の立替
-          </p>
         </div>
 
         <div className="bg-gray-900 rounded-2xl border border-gray-800 p-5">
           <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center mb-3">
             <Wallet size={20} className="text-blue-400" />
           </div>
-          <p className="text-gray-400 text-xs mb-1">最新の実測金額</p>
+          <p className="text-gray-400 text-xs mb-1">未回収の現金注文</p>
           <p className="font-display font-bold text-2xl text-blue-400">
+            ¥{pendingCashOrderAmount.toLocaleString()}
+          </p>
+          <p className="mt-1 text-xs text-gray-500">{pendingCashOrdersCount}件</p>
+        </div>
+
+        <div className="bg-gray-900 rounded-2xl border border-gray-800 p-5">
+          <div className="w-10 h-10 rounded-xl bg-sky-500/10 flex items-center justify-center mb-3">
+            <Wallet size={20} className="text-sky-400" />
+          </div>
+          <p className="text-gray-400 text-xs mb-1">未回収の後払い</p>
+          <p className="font-display font-bold text-2xl text-sky-400">
+            ¥{deferredReceivableAmount.toLocaleString()}
+          </p>
+        </div>
+
+        <div className="bg-gray-900 rounded-2xl border border-gray-800 p-5">
+          <div className="w-10 h-10 rounded-xl bg-cyan-500/10 flex items-center justify-center mb-3">
+            <Wallet size={20} className="text-cyan-400" />
+          </div>
+          <p className="text-gray-400 text-xs mb-1">未精算の立替</p>
+          <p className="font-display font-bold text-2xl text-cyan-400">
+            ¥{unreimbursedAdvanceAmount.toLocaleString()}
+          </p>
+        </div>
+
+        <div className="bg-gray-900 rounded-2xl border border-gray-800 p-5">
+          <div className="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center mb-3">
+            <Wallet size={20} className="text-indigo-400" />
+          </div>
+          <p className="text-gray-400 text-xs mb-1">最新の実測金額</p>
+          <p className="font-display font-bold text-2xl text-indigo-400">
             ¥{(latestCount?.actual_amount ?? 0).toLocaleString()}
           </p>
         </div>
@@ -290,80 +246,6 @@ export default function CashboxClient({
           <p className="text-gray-400 text-xs mb-1">最新差額</p>
           <p className={`font-display font-bold text-2xl ${latestDifference === 0 ? 'text-green-400' : latestDifference > 0 ? 'text-sky-400' : 'text-red-400'}`}>
             {latestDifference > 0 ? '+' : ''}¥{latestDifference.toLocaleString()}
-          </p>
-        </div>
-      </div>
-
-      <div className="grid gap-4 lg:grid-cols-4">
-        <div className="rounded-2xl border border-gray-800 bg-gray-900 p-5">
-          <p className="text-xs text-gray-400">未回収の現金注文</p>
-          <p className="mt-1 font-display text-2xl font-bold text-amber-400">
-            ¥{pendingCashOrderAmount.toLocaleString()}
-          </p>
-          <p className="mt-2 text-xs text-gray-500">
-            確認待ち {pendingCashOrdersCount}件
-          </p>
-        </div>
-
-        <div className="rounded-2xl border border-gray-800 bg-gray-900 p-5">
-          <p className="text-xs text-gray-400">未回収の後払い残高</p>
-          <p className="mt-1 font-display text-2xl font-bold text-sky-400">
-            ¥{deferredReceivableAmount.toLocaleString()}
-          </p>
-          <p className="mt-2 text-xs text-gray-500">
-            今後現金精算される見込みの金額です
-          </p>
-        </div>
-
-        <div className="rounded-2xl border border-gray-800 bg-gray-900 p-5">
-          <p className="text-xs text-gray-400">今月反映したチャージ</p>
-          <p className="mt-1 font-display text-2xl font-bold text-gray-200">
-            ¥{pendingCashChargeAmount.toLocaleString()}
-          </p>
-          <p className="mt-2 text-xs text-gray-500">
-            残高には反映済みで、回収は定期精算で行います
-          </p>
-        </div>
-      </div>
-
-      <div className="grid gap-4 lg:grid-cols-4">
-        <div className="rounded-2xl border border-gray-800 bg-gray-900 p-5">
-          <p className="text-xs text-gray-400">未精算の立替総額</p>
-          <p className="mt-1 font-display text-2xl font-bold text-sky-400">
-            ¥{unreimbursedAdvanceAmount.toLocaleString()}
-          </p>
-          <p className="mt-2 text-xs text-gray-500">
-            後で金庫から返す必要がある金額です
-          </p>
-        </div>
-
-        <div className="rounded-2xl border border-gray-800 bg-gray-900 p-5">
-          <p className="text-xs text-gray-400">今月の仕入れ総額</p>
-          <p className="mt-1 font-display text-2xl font-bold text-white">
-            ¥{monthlyPurchaseAmount.toLocaleString()}
-          </p>
-          <p className="mt-2 text-xs text-gray-500">
-            金庫払いと個人立替を合計した仕入れ額です
-          </p>
-        </div>
-
-        <div className="rounded-2xl border border-gray-800 bg-gray-900 p-5">
-          <p className="text-xs text-gray-400">今月の金庫支出仕入れ額</p>
-          <p className="mt-1 font-display text-2xl font-bold text-red-300">
-            ¥{monthlyCashboxPurchaseAmount.toLocaleString()}
-          </p>
-          <p className="mt-2 text-xs text-gray-500">
-            金庫から直接支払った仕入れ分です
-          </p>
-        </div>
-
-        <div className="rounded-2xl border border-gray-800 bg-gray-900 p-5">
-          <p className="text-xs text-gray-400">今月の雑費</p>
-          <p className="mt-1 font-display text-2xl font-bold text-rose-300">
-            ¥{monthlyMiscExpenseAmount.toLocaleString()}
-          </p>
-          <p className="mt-2 text-xs text-gray-500">
-            ティッシュなど無料提供品の支出です
           </p>
         </div>
       </div>
@@ -420,9 +302,6 @@ export default function CashboxClient({
         <div className="bg-gray-900 rounded-2xl border border-gray-800 p-5 space-y-4">
           <div>
             <h2 className="font-medium text-white">手動調整</h2>
-            <p className="text-sm text-gray-400 mt-1">
-              金庫への入金・出金があった場合に台帳へ記録します
-            </p>
           </div>
 
           <div className="grid grid-cols-2 gap-2">
@@ -452,7 +331,7 @@ export default function CashboxClient({
             type="number"
             min={1}
             value={adjustmentAmount}
-            onChange={(e) => setAdjustmentAmount(e.target.value ? Number(e.target.value) : '')}
+            onChange={(e) => setAdjustmentAmount(e.target.value)}
             placeholder="金額"
             className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-white/20"
           />
@@ -475,9 +354,6 @@ export default function CashboxClient({
         <div className="bg-gray-900 rounded-2xl border border-gray-800 p-5 space-y-4">
           <div>
             <h2 className="font-medium text-white">金庫確認</h2>
-            <p className="text-sm text-gray-400 mt-1">
-              枚数を入れるだけで合計を計算し、理論残高との差を残します
-            </p>
           </div>
 
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
@@ -490,11 +366,11 @@ export default function CashboxClient({
                 <input
                   type="number"
                   min={0}
-                  value={denominationCounts[String(denomination)] ?? 0}
+                  value={denominationCounts[String(denomination)] ?? ''}
                   onChange={(e) =>
                     setDenominationCounts((current) => ({
                       ...current,
-                      [String(denomination)]: e.target.value ? Number(e.target.value) : 0,
+                      [String(denomination)]: e.target.value,
                     }))
                   }
                   className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-white/20"
@@ -514,7 +390,7 @@ export default function CashboxClient({
             type="number"
             min={0}
             value={actualAmount}
-            onChange={(e) => setActualAmount(e.target.value ? Number(e.target.value) : '')}
+            onChange={(e) => setActualAmount(e.target.value)}
             placeholder="実測金額（枚数を使わない場合のみ）"
             className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-white/20"
           />
@@ -533,33 +409,6 @@ export default function CashboxClient({
             {loading === 'count' ? '記録中...' : '確認結果を保存する'}
           </button>
         </div>
-      </div>
-
-      <div className="bg-gray-900 rounded-2xl border border-gray-800 overflow-hidden">
-        <div className="px-5 py-4 border-b border-gray-800 flex items-center gap-2">
-          <ShoppingBasket size={16} className="text-rose-300" />
-          <h2 className="font-medium text-white">最近の雑費</h2>
-        </div>
-        {recentMiscExpenses.length === 0 ? (
-          <p className="px-5 py-10 text-sm text-gray-500 text-center">雑費の記録はまだありません</p>
-        ) : (
-          <div className="divide-y divide-gray-800">
-            {recentMiscExpenses.map((expense) => (
-              <div key={expense.id} className="px-5 py-4 flex items-start justify-between gap-4">
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-white">{expense.note || '雑費'}</p>
-                  <p className="text-xs text-gray-500 mt-2">
-                    {format(new Date(expense.created_at), 'M/d HH:mm', { locale: ja })}
-                    {expense.created_by_user?.name ? ` ・ ${expense.created_by_user.name}` : ''}
-                  </p>
-                </div>
-                <div className="font-mono font-bold text-sm text-rose-300">
-                  -¥{expense.amount.toLocaleString()}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
       </div>
 
       <div className="grid xl:grid-cols-2 gap-6">

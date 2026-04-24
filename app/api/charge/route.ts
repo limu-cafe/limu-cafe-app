@@ -78,6 +78,7 @@ export async function POST(request: Request) {
   revalidatePath('/admin/payments');
   revalidatePath('/admin/charge');
   revalidatePath('/admin/settlement');
+  revalidatePath('/admin/transactions');
   revalidatePath('/admin/points');
   revalidatePath('/admin/users');
   revalidatePath('/admin/cashbox');

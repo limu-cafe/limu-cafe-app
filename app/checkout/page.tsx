@@ -32,7 +32,7 @@ export default function CheckoutPage() {
   const [paymentTiming, setPaymentTiming] = useState<PaymentTiming>('balance');
   const [deferredSettlementMethod, setDeferredSettlementMethod] =
     useState<DeferredSettlementMethod>('cash');
-  const [pointsToUse, setPointsToUse] = useState(0);
+  const [pointsToUse, setPointsToUse] = useState('');
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -145,14 +145,15 @@ export default function CheckoutPage() {
 
   const orderTotal = total();
   const availablePoints = user?.points_balance ?? 0;
-  const safePointsToUse = clampPointsToUse(pointsToUse, availablePoints, orderTotal);
+  const requestedPoints = Number(pointsToUse || 0);
+  const safePointsToUse = clampPointsToUse(requestedPoints, availablePoints, orderTotal);
   const remainingAfterPoints = Math.max(0, orderTotal - safePointsToUse);
   const hasEnoughBalance = user ? user.balance >= remainingAfterPoints : false;
 
   useEffect(() => {
     if (!user) return;
     setPaymentTiming(user.balance >= remainingAfterPoints ? 'balance' : 'deferred');
-  }, [user]);
+  }, [user, remainingAfterPoints]);
 
   useEffect(() => {
     if (!user) return;
@@ -341,7 +342,7 @@ export default function CheckoutPage() {
               max={Math.min(availablePoints, orderTotal)}
               value={pointsToUse}
               onChange={(event) => {
-                setPointsToUse(Number(event.target.value || 0));
+                setPointsToUse(event.target.value);
                 setShowConfirmation(false);
               }}
               className="input flex-1"
@@ -350,7 +351,7 @@ export default function CheckoutPage() {
             <button
               type="button"
               onClick={() => {
-                setPointsToUse(Math.min(availablePoints, orderTotal));
+                setPointsToUse(String(Math.min(availablePoints, orderTotal)));
                 setShowConfirmation(false);
               }}
               className="rounded-2xl border border-cream-200 px-4 py-3 text-sm font-medium text-espresso transition-colors hover:bg-cream-50"

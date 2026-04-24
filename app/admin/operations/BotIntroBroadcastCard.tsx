@@ -30,18 +30,14 @@ export default function BotIntroBroadcastCard({ eligibleCount }: { eligibleCount
   };
 
   return (
-    <section className="rounded-2xl border border-gray-800 bg-gray-900 p-5">
-      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-        <div>
-          <h2 className="text-lg font-semibold text-white">Bot案内を一括送信</h2>
-          <p className="mt-2 text-sm leading-6 text-gray-400">
-            Slack 上で LIMU喫茶bot を見つけやすくするため、未送信ユーザーへ Welcome DM を一度だけ送ります。
-          </p>
-          <p className="mt-3 text-sm text-amber-300">
-            現在の未送信ユーザー: <span className="font-semibold">{eligibleCount}人</span>
-          </p>
+    <section className="rounded-2xl border border-gray-800 bg-gray-900 p-4">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div className="flex items-center gap-3">
+          <h2 className="text-sm font-semibold text-white">Bot案内</h2>
+          <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-xs font-semibold text-amber-300">
+            {eligibleCount}人
+          </span>
         </div>
-
         <button
           type="button"
           onClick={sendBotIntro}
