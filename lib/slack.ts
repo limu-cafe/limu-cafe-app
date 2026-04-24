@@ -56,13 +56,33 @@ async function callSlackApi(method: string, payload: object) {
   }
 }
 
+async function openSlackDirectMessageChannel(slackUserId: string) {
+  const openResult = await callSlackApi('conversations.open', {
+    users: slackUserId,
+    return_im: true,
+  });
+
+  const channelId =
+    typeof openResult?.channel?.id === 'string' ? openResult.channel.id : null;
+
+  if (!channelId) {
+    console.warn('[Slack] conversations.open did not return a DM channel id', {
+      slackUserId,
+    });
+  }
+
+  return channelId;
+}
+
 export async function sendSlackDirectMessage(params: {
   slackUserId: string;
   text: string;
   blocks?: any[];
 }) {
+  const openedChannelId = await openSlackDirectMessageChannel(params.slackUserId);
+
   return callSlackApi('chat.postMessage', {
-    channel: params.slackUserId,
+    channel: openedChannelId ?? params.slackUserId,
     text: params.text,
     blocks: params.blocks,
   });
@@ -403,6 +423,63 @@ export async function notifyLegacyTransferReviewed(params: {
   });
 }
 
+export async function notifyBotWelcome(params: {
+  slackUserId: string;
+  userName?: string | null;
+}) {
+  const greeting = params.userName?.trim() ? `${params.userName}さん` : 'こんにちは';
+
+  return sendSlackDirectMessage({
+    slackUserId: params.slackUserId,
+    text:
+      `👋 ${greeting}、LIMU喫茶botです。このDMで注文や要望のお知らせをお送りします。` +
+      (APP_BASE_URL ? `\nアプリ: ${APP_BASE_URL}` : '') +
+      `\n困ったときは再ログインするか、管理者に連絡してください。\n\n` +
+      `Hi! I'm the LIMU Cafe bot. I'll send order and request notifications in this DM.` +
+      (APP_BASE_URL ? `\nApp: ${APP_BASE_URL}` : '') +
+      `\nIf something looks wrong, please try logging in again or contact an admin.`,
+    blocks: [
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text:
+            `👋 *LIMU喫茶botです*\n` +
+            `このDMで注文や要望のお知らせをお送りします。\n` +
+            `困ったときは再ログインするか、管理者に連絡してください。`,
+        },
+      },
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text:
+            `👋 *Hi, I'm the LIMU Cafe bot.*\n` +
+            `I will send order and request notifications in this DM.\n` +
+            `If something looks wrong, please try logging in again or contact an admin.`,
+        },
+      },
+      ...(APP_BASE_URL
+        ? [
+            {
+              type: 'actions',
+              elements: [
+                {
+                  type: 'button',
+                  text: {
+                    type: 'plain_text',
+                    text: 'アプリを開く / Open app',
+                  },
+                  url: APP_BASE_URL,
+                },
+              ],
+            },
+          ]
+        : []),
+    ],
+  });
+}
+
 export async function openSlackRequestCommentModal(params: {
   triggerId: string;
   requestId: string;
@@ -470,14 +547,28 @@ export async function sendSlackEphemeralMessage(params: {
 
 // 定期精算リマインド
 export async function notifyMonthlySettlement(params: {
-  users: { slackUserId: string; name: string; amount: number }[];
+  users: {
+    slackUserId: string;
+    name: string;
+    amount: number;
+    deferredAmount?: number;
+    subscriptionAmount?: number;
+  }[];
 }) {
   for (const user of params.users) {
+    const deferredAmount = user.deferredAmount ?? user.amount;
+    const subscriptionAmount = user.subscriptionAmount ?? 0;
+    const hasSubscriptionAmount = subscriptionAmount > 0;
+
     await sendSlackDirectMessage({
       slackUserId: user.slackUserId,
       text:
         `📅 定期精算のお知らせ\n` +
-        `${user.name}さんの現在の後払い残高は ¥${user.amount.toLocaleString()} です。\n` +
+        `${user.name}さんの現在の精算予定額は ¥${user.amount.toLocaleString()} です。\n` +
+        `後払い残高: ¥${deferredAmount.toLocaleString()}\n` +
+        (hasSubscriptionAmount
+          ? `サブスク未精算: ¥${subscriptionAmount.toLocaleString()}\n`
+          : '') +
         `LIMU喫茶で精算をお願いします。\n` +
         (APP_BASE_URL ? `${APP_BASE_URL}/mypage` : ''),
     });

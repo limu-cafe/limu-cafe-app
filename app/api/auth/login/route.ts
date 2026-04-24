@@ -7,7 +7,6 @@ export async function GET(request: Request) {
   const { origin, searchParams } = new URL(request.url);
   const next = searchParams.get('next');
   const nextPath = next && next.startsWith('/') ? next : '/';
-  const allowedWorkspaceId = process.env.ALLOWED_SLACK_WORKSPACE_ID?.trim() || null;
   const cookieStore = await cookies();
 
   const supabase = createServerClient(
@@ -37,7 +36,9 @@ export async function GET(request: Request) {
       redirectTo: callbackUrl.toString(),
       scopes: 'openid profile email',
       skipBrowserRedirect: true,
-      queryParams: allowedWorkspaceId ? { team: allowedWorkspaceId } : undefined,
+      // We validate the workspace after callback, instead of forcing Slack's
+      // `team` param here. That avoids Slack-side `invalid_team_for_non_distributed_app`
+      // errors and lets users complete the normal sign-in flow.
     },
   });
 

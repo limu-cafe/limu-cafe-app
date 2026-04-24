@@ -177,6 +177,12 @@ export default function OrdersClient({ orders }: { orders: any[] }) {
                       ))}
                     </div>
 
+                    {order.points_used > 0 && (
+                      <div className="rounded-lg border border-sky-500/20 bg-sky-500/10 px-3 py-2 text-sm text-sky-200">
+                        利用ポイント: {order.points_used.toLocaleString()}pt
+                      </div>
+                    )}
+
                     {order.payment_method === 'cash' && order.payment_status === 'pending' && (
                       <button
                         onClick={(e) => { e.stopPropagation(); handleConfirmCash(order.id); }}

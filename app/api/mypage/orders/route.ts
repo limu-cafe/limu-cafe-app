@@ -2,8 +2,12 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import {
   isMissingDeferredSettlementMethodColumn,
+  isMissingOrderPointsColumn,
+  needsLegacyOrderSelect,
   ORDERS_SELECT_LEGACY,
+  ORDERS_SELECT_FULL_LEGACY,
   ORDERS_SELECT_WITH_DEFERRED,
+  ORDERS_SELECT_WITH_DEFERRED_LEGACY_ITEMS,
 } from '@/lib/orders';
 
 export async function GET(request: Request) {
@@ -28,10 +32,29 @@ export async function GET(request: Request) {
     .order('created_at', { ascending: false })
     .range(offset, offset + fetchLimit - 1);
 
-  if (isMissingDeferredSettlementMethodColumn(orderQuery.error)) {
+  if (isMissingDeferredSettlementMethodColumn(orderQuery.error) || isMissingOrderPointsColumn(orderQuery.error)) {
     orderQuery = await supabase
       .from('orders')
       .select(ORDERS_SELECT_LEGACY)
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .range(offset, offset + fetchLimit - 1);
+  } else if (needsLegacyOrderSelect(orderQuery.error)) {
+    orderQuery = await supabase
+      .from('orders')
+      .select(ORDERS_SELECT_WITH_DEFERRED_LEGACY_ITEMS)
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .range(offset, offset + fetchLimit - 1);
+  }
+
+  if (
+    orderQuery.error &&
+    (isMissingDeferredSettlementMethodColumn(orderQuery.error) || isMissingOrderPointsColumn(orderQuery.error))
+  ) {
+    orderQuery = await supabase
+      .from('orders')
+      .select(ORDERS_SELECT_FULL_LEGACY)
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
       .range(offset, offset + fetchLimit - 1);

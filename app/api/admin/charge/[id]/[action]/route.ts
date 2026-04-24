@@ -1,16 +1,32 @@
 import { NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
-import { createAdminClient, createClient } from '@/lib/supabase/server';
-import { insertCashboxEntry } from '@/lib/cashbox';
+import { createAdminClient } from '@/lib/supabase/server';
 import { logAdminAction } from '@/lib/admin-audit';
+import { requireAdminSession } from '@/lib/admin-session';
 import { notifyChargeReviewed } from '@/lib/slack';
+
+type PointSettingsRow = {
+  is_enabled: boolean;
+  yen_per_point_unit: number;
+  base_points_per_unit: number;
+};
+
+type PointCampaignRow = {
+  apply_immediately: boolean;
+  starts_at: string | null;
+  ends_at: string | null;
+  multiplier: number;
+};
 
 export async function POST(
   _request: Request,
   { params }: { params: { id: string; action: string } }
 ) {
-  const sessionClient = await createClient();
-  const { data: { user } } = await sessionClient.auth.getUser();
+  const adminSession = await requireAdminSession();
+  if (!adminSession.user) {
+    return NextResponse.json({ error: adminSession.error }, { status: adminSession.status });
+  }
+
   const supabase = createAdminClient();
   const { id, action } = params;
 
@@ -29,37 +45,109 @@ export async function POST(
     return NextResponse.json({ error: '申請が見つかりません' }, { status: 404 });
   }
 
-  await supabase
-    .from('charge_requests')
-    .update({
-      status: action === 'approve' ? 'approved' : 'rejected',
-      approved_at: new Date().toISOString(),
-      approved_by: user?.id ?? null,
-    })
-    .eq('id', id);
-
   if (action === 'approve') {
-    const { data: targetUser } = await supabase
-      .from('users').select('balance').eq('id', req.user_id).single();
-    await supabase
+    const [{ data: targetUser, error: targetUserError }, settingsResponse, campaignsResponse] =
+      await Promise.all([
+        supabase.from('users').select('balance, deferred_balance').eq('id', req.user_id).single(),
+        supabase.from('point_settings').select('*').eq('singleton', 'default').maybeSingle(),
+        supabase.from('point_campaigns').select('*').eq('is_enabled', true),
+      ]);
+
+    if (targetUserError || !targetUser) {
+      return NextResponse.json(
+        { error: targetUserError?.message ?? 'ユーザーが見つかりません' },
+        { status: 404 }
+      );
+    }
+
+    const nextBalance = (targetUser.balance ?? 0) + req.amount;
+    const nextDeferredBalance = (targetUser.deferred_balance ?? 0) + req.amount;
+
+    const { error: approveError } = await supabase
+      .from('charge_requests')
+      .update({
+        status: 'approved',
+        approved_at: new Date().toISOString(),
+        approved_by: adminSession.user.id,
+      })
+      .eq('id', id);
+
+    if (approveError) {
+      return NextResponse.json({ error: approveError.message }, { status: 500 });
+    }
+
+    const { error: balanceError } = await supabase
       .from('users')
-      .update({ balance: (targetUser?.balance ?? 0) + req.amount })
+      .update({
+        balance: nextBalance,
+        deferred_balance: nextDeferredBalance,
+      })
       .eq('id', req.user_id);
 
-    if (req.method === 'cash') {
-      await insertCashboxEntry(supabase, {
-        entry_type: 'cash_charge',
-        direction: 'in',
-        amount: req.amount,
-        note: '現金チャージ申請の承認',
-        charge_request_id: req.id,
-        created_by: user?.id ?? null,
-      });
+    if (balanceError) {
+      return NextResponse.json({ error: balanceError.message }, { status: 500 });
+    }
+
+    const pointSettings =
+      settingsResponse.data && (settingsResponse.data as PointSettingsRow).is_enabled
+        ? (settingsResponse.data as PointSettingsRow)
+        : null;
+
+    if (pointSettings) {
+      const now = new Date();
+      const activeCampaign =
+        ((campaignsResponse.data ?? []) as PointCampaignRow[])
+          .filter((campaign: PointCampaignRow) => {
+            if (campaign.apply_immediately) return true;
+            if (!campaign.starts_at) return false;
+
+            const startsAt = new Date(campaign.starts_at).getTime();
+            const endsAt = campaign.ends_at ? new Date(campaign.ends_at).getTime() : null;
+            const nowTime = now.getTime();
+
+            return startsAt <= nowTime && (endsAt === null || endsAt >= nowTime);
+          })
+          .sort((left: PointCampaignRow, right: PointCampaignRow) => right.multiplier - left.multiplier)[0] ?? null;
+
+      const multiplier = activeCampaign?.multiplier ?? 1;
+      const rewardPoints = Math.floor(
+        (req.amount / pointSettings.yen_per_point_unit) * pointSettings.base_points_per_unit * multiplier
+      );
+
+      if (rewardPoints > 0) {
+        const { error: rewardError } = await supabase.rpc('record_point_transaction', {
+          p_user_id: req.user_id,
+          p_delta: rewardPoints,
+          p_reason_type: 'charge_reward',
+          p_charge_request_id: req.id,
+          p_order_id: null,
+          p_note: `チャージ特典 ${rewardPoints}pt`,
+          p_created_by: adminSession.user.id,
+          p_subscription_payment_id: null,
+        });
+
+        if (rewardError) {
+          console.error('[admin charge approve] point reward record failed', rewardError);
+        }
+      }
+    }
+  } else {
+    const { error: rejectError } = await supabase
+      .from('charge_requests')
+      .update({
+        status: 'rejected',
+        approved_at: new Date().toISOString(),
+        approved_by: adminSession.user.id,
+      })
+      .eq('id', id);
+
+    if (rejectError) {
+      return NextResponse.json({ error: rejectError.message }, { status: 500 });
     }
   }
 
   await logAdminAction(supabase, {
-    actor_id: user?.id ?? null,
+    actor_id: adminSession.user.id,
     action_type: action === 'approve' ? 'charge_approved' : 'charge_rejected',
     target_type: 'charge_request',
     target_id: req.id,
@@ -72,7 +160,10 @@ export async function POST(
   });
 
   revalidatePath('/admin');
+  revalidatePath('/admin/payments');
+  revalidatePath('/admin/points');
   revalidatePath('/admin/charge');
+  revalidatePath('/admin/transactions');
   revalidatePath('/admin/users');
   revalidatePath('/admin/cashbox');
   revalidatePath('/admin/audit');

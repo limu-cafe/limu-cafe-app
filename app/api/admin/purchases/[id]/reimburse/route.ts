@@ -66,6 +66,7 @@ export async function POST(
 
   revalidatePath('/admin');
   revalidatePath('/admin/stock');
+  revalidatePath('/admin/reimbursements');
   revalidatePath('/admin/cashbox');
   revalidatePath('/admin/audit');
 

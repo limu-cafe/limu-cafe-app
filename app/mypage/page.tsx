@@ -7,55 +7,28 @@ import { Suspense } from 'react';
 import DeferredDataPlaceholder from '@/components/user/DeferredDataPlaceholder';
 import type { User as AuthUser } from '@supabase/supabase-js';
 import {
-  isMissingDeferredSettlementMethodColumn,
-  ORDERS_SELECT_LEGACY,
-  ORDERS_SELECT_WITH_DEFERRED,
-} from '@/lib/orders';
-
-const PAGE_SIZE = 3;
+  FAVORITE_ITEM_SELECT_ENHANCED,
+  FAVORITE_ITEM_SELECT_LEGACY,
+  isMissingItemEnhancementColumns,
+} from '@/lib/item-select';
 
 async function MyPageContent({ user }: { user: AuthUser }) {
   await syncUserProfile(user);
   const adminClient = createAdminClient();
 
-  let ordersQuery: any = await adminClient
-    .from('orders')
-    .select(ORDERS_SELECT_WITH_DEFERRED)
-    .eq('user_id', user.id)
-    .order('created_at', { ascending: false })
-    .limit(PAGE_SIZE + 1);
-
-  if (isMissingDeferredSettlementMethodColumn(ordersQuery.error)) {
-    ordersQuery = await adminClient
-      .from('orders')
-      .select(ORDERS_SELECT_LEGACY)
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false })
-      .limit(PAGE_SIZE + 1);
-  }
-
   const [
     { data: profile },
-    { data: orders },
-    { data: chargeRequests },
-    { data: favorites },
+    initialFavoritesQuery,
     { data: legacyTransferRequests },
   ] = await Promise.all([
     adminClient
       .from('users')
-      .select('name, email, avatar_url, balance, deferred_balance')
+      .select('name, email, avatar_url, balance, deferred_balance, points_balance')
       .eq('id', user.id)
       .single(),
-    ordersQuery,
-    adminClient
-      .from('charge_requests')
-      .select('id, amount, method, status, created_at')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false })
-      .limit(PAGE_SIZE + 1),
     adminClient
       .from('favorite_items')
-      .select('item:items(id, name, english_name, price, stock, is_available)')
+      .select(FAVORITE_ITEM_SELECT_ENHANCED)
       .eq('user_id', user.id)
       .limit(6),
     adminClient
@@ -66,15 +39,21 @@ async function MyPageContent({ user }: { user: AuthUser }) {
       .limit(1),
   ]);
 
-  const initialOrders = (orders ?? []) as any[];
-  const initialCharges = (chargeRequests ?? []) as any[];
+  let favorites = initialFavoritesQuery.data;
+
+  if (isMissingItemEnhancementColumns(initialFavoritesQuery.error)) {
+    const legacyFavoritesQuery = await adminClient
+      .from('favorite_items')
+      .select(FAVORITE_ITEM_SELECT_LEGACY)
+      .eq('user_id', user.id)
+      .limit(6);
+
+    favorites = legacyFavoritesQuery.data;
+  }
+
   return (
     <MyPageClient
       profile={profile}
-      initialOrders={initialOrders.slice(0, PAGE_SIZE)}
-      initialCharges={initialCharges.slice(0, PAGE_SIZE)}
-      initialHasMoreOrders={initialOrders.length > PAGE_SIZE}
-      initialHasMoreCharges={initialCharges.length > PAGE_SIZE}
       favorites={(favorites ?? []) as any}
       latestLegacyTransferRequest={
         legacyTransferRequests?.[0]
@@ -97,10 +76,22 @@ export default async function MyPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect('/login');
 
+  const adminClient = createAdminClient();
+  const { data: profile } = await adminClient
+    .from('users')
+    .select('name, balance')
+    .eq('id', user.id)
+    .single();
+
   const layoutUser = {
     id: user.id,
-    name: user.user_metadata?.full_name ?? user.user_metadata?.name ?? user.email ?? 'LIMU Member',
-    balance: 0,
+    name:
+      profile?.name ??
+      user.user_metadata?.full_name ??
+      user.user_metadata?.name ??
+      user.email ??
+      'LIMU Member',
+    balance: profile?.balance ?? 0,
   };
 
   return (

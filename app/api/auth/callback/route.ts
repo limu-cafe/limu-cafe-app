@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import type { CookieOptions } from '@supabase/ssr';
 import { cookies } from 'next/headers';
+import { notifyBotWelcome } from '@/lib/slack';
+import { createAdminClient } from '@/lib/supabase/server';
 import { syncUserProfile } from '@/lib/supabase/sync-user';
 
 function getWorkspaceId(user: any) {
@@ -76,6 +78,41 @@ export async function GET(request: Request) {
         workspace_id: workspaceId,
       },
     });
+
+    if (workspaceId && (!allowedWorkspaceId || workspaceId === allowedWorkspaceId)) {
+      const adminClient = createAdminClient();
+      const { data: userRecord, error: userError } = await adminClient
+        .from('users')
+        .select('id, name, slack_user_id, slack_workspace_id, bot_intro_sent_at')
+        .eq('id', data.user.id)
+        .maybeSingle();
+
+      if (userError) {
+        console.error('failed to load user for bot intro', userError);
+      } else if (
+        userRecord?.slack_user_id &&
+        userRecord.slack_workspace_id === workspaceId &&
+        !userRecord.bot_intro_sent_at
+      ) {
+        const dmResult = await notifyBotWelcome({
+          slackUserId: userRecord.slack_user_id,
+          userName: userRecord.name,
+        });
+
+        if (dmResult) {
+          const { error: updateError } = await adminClient
+            .from('users')
+            .update({ bot_intro_sent_at: new Date().toISOString() })
+            .eq('id', userRecord.id);
+
+          if (updateError) {
+            console.error('failed to store bot intro timestamp', updateError);
+          }
+        } else {
+          console.error('failed to send bot intro DM', { userId: userRecord.id });
+        }
+      }
+    }
 
     return response;
   }

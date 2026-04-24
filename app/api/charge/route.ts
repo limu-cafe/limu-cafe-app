@@ -30,6 +30,20 @@ export async function POST(request: Request) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
+  let rewardPoints = 0;
+  const { data: calculatedPoints, error: rewardCalcError } = await adminSupabase.rpc(
+    'calculate_charge_reward_points',
+    {
+      p_amount: amount,
+    }
+  );
+
+  if (!rewardCalcError && typeof calculatedPoints === 'number') {
+    rewardPoints = calculatedPoints;
+  } else if (rewardCalcError) {
+    console.warn('[charge] point reward calculation skipped', rewardCalcError);
+  }
+
   const { error: applyError } = await adminSupabase.rpc(
     'apply_immediate_charge_to_deferred',
     {
@@ -43,12 +57,32 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: applyError.message }, { status: 500 });
   }
 
+  if (rewardPoints > 0) {
+    const { error: rewardRecordError } = await adminSupabase.rpc('record_point_transaction', {
+      p_user_id: user.id,
+      p_delta: rewardPoints,
+      p_reason_type: 'charge_reward',
+      p_charge_request_id: req.id,
+      p_order_id: null,
+      p_note: `チャージ特典 ${rewardPoints}pt`,
+      p_created_by: user.id,
+      p_subscription_payment_id: null,
+    });
+
+    if (rewardRecordError) {
+      console.error('[charge] point reward record failed', rewardRecordError);
+    }
+  }
+
   revalidatePath('/mypage');
   revalidatePath('/admin');
+  revalidatePath('/admin/payments');
   revalidatePath('/admin/charge');
   revalidatePath('/admin/settlement');
+  revalidatePath('/admin/transactions');
+  revalidatePath('/admin/points');
   revalidatePath('/admin/users');
   revalidatePath('/admin/cashbox');
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, reward_points: rewardPoints });
 }

@@ -63,7 +63,7 @@ function LoginContent() {
 
   const handleSlackLogin = async () => {
     setLoading(true);
-    const loginUrl = new URL('/api/auth/login', window.location.origin);
+    const loginUrl = new URL('/slack-signin', window.location.origin);
     if (next?.startsWith('/')) {
       loginUrl.searchParams.set('next', next);
     }

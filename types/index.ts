@@ -13,16 +13,32 @@ export type Platform = 'amazon' | 'rakuten' | 'yahoo' | 'other';
 export type ItemShowcaseOverride = 'auto' | 'show' | 'hide';
 export type PurchasePaymentSource = 'cashbox' | 'personal_advance';
 export type PurchaseReimbursementStatus = 'not_needed' | 'pending_reimbursement' | 'reimbursed';
+export type PointTransactionReason =
+  | 'charge_reward'
+  | 'manual_grant'
+  | 'manual_deduct'
+  | 'order_use'
+  | 'order_refund'
+  | 'charge_refund_reversal'
+  | 'subscription_use'
+  | 'subscription_refund';
+export type SubscriptionBillingIntervalUnit = 'day' | 'week' | 'month';
+export type SubscriptionStatus = 'active' | 'cancel_at_period_end' | 'expired';
+export type SubscriptionPaymentMethod = 'points' | 'balance' | 'cash' | 'mixed';
+export type SubscriptionPaymentStatus = 'pending_cash_settlement' | 'completed' | 'cancelled';
+export type SubscriptionPaymentPriority = 'points' | 'balance' | 'cash';
 
 export interface User {
   id: string;
   slack_user_id?: string;
   slack_workspace_id?: string;
+  bot_intro_sent_at?: string | null;
   name: string;
   avatar_url?: string;
   email?: string;
   balance: number;
   deferred_balance: number;
+  points_balance: number;
   role: UserRole;
   is_approved: boolean;
   is_active: boolean;
@@ -61,6 +77,7 @@ export interface Order {
   user_id: string;
   user?: User;
   total_amount: number;
+  points_used: number;
   payment_method: PaymentMethod;
   deferred_settlement_method?: DeferredSettlementMethod | null;
   payment_status: PaymentStatus;
@@ -232,6 +249,98 @@ export interface LegacyTransferRequest {
   reviewed_by?: string | null;
   reviewed_at?: string | null;
   rejection_reason?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PointSettings {
+  singleton: 'default';
+  is_enabled: boolean;
+  base_points_per_unit: number;
+  yen_per_point_unit: number;
+  updated_by?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PointCampaign {
+  id: string;
+  name: string;
+  multiplier: number;
+  starts_at?: string | null;
+  ends_at?: string | null;
+  is_enabled: boolean;
+  apply_immediately: boolean;
+  note?: string | null;
+  created_by?: string | null;
+  updated_by?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PointTransaction {
+  id: string;
+  user_id: string;
+  delta: number;
+  balance_after: number;
+  reason_type: PointTransactionReason;
+  charge_request_id?: string | null;
+  order_id?: string | null;
+  subscription_payment_id?: string | null;
+  note?: string | null;
+  created_by?: string | null;
+  created_at: string;
+}
+
+export interface SubscriptionProduct {
+  id: string;
+  name: string;
+  english_name?: string | null;
+  description?: string | null;
+  price: number;
+  billing_interval_count: number;
+  billing_interval_unit: SubscriptionBillingIntervalUnit;
+  points_enabled: boolean;
+  balance_enabled: boolean;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface UserSubscription {
+  id: string;
+  user_id: string;
+  subscription_product_id: string;
+  subscription_product?: SubscriptionProduct | null;
+  status: SubscriptionStatus;
+  billing_anchor_at: string;
+  current_period_start_at?: string | null;
+  current_period_end_at?: string | null;
+  next_billing_at?: string | null;
+  end_month: string;
+  payment_priority: SubscriptionPaymentPriority[];
+  allow_partial_payment: boolean;
+  cancelled_at?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SubscriptionPayment {
+  id: string;
+  user_subscription_id: string;
+  user_id: string;
+  subscription_product_id: string;
+  subscription_product?: SubscriptionProduct | null;
+  user_subscription?: UserSubscription | null;
+  amount: number;
+  billing_period_start_at: string;
+  billing_period_end_at: string;
+  due_at: string;
+  payment_method: SubscriptionPaymentMethod;
+  payment_status: SubscriptionPaymentStatus;
+  points_used: number;
+  balance_used: number;
+  cash_due_amount: number;
   created_at: string;
   updated_at: string;
 }
