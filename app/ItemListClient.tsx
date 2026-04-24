@@ -223,7 +223,10 @@ export default function ItemListClient({
                   <Sparkles size={12} />
                   {copy.sectionKicker}
                 </div>
-                <p className="text-sm text-espresso-400">{filtered.length}件</p>
+                <p className="text-sm text-espresso-400">
+                  {filtered.length}
+                  {locale === 'en' ? '' : '件'}
+                </p>
               </div>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
                 {filtered.map((item, i) => (
