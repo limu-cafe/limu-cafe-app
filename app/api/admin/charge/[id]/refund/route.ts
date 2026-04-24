@@ -99,6 +99,7 @@ export async function POST(
       p_order_id: null,
       p_note: `チャージ返金によるポイント取消 ${rewardPoints}pt`,
       p_created_by: adminSession.user.id,
+      p_subscription_payment_id: null,
     });
 
     if (rewardError) {

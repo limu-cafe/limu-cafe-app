@@ -34,6 +34,7 @@ export async function POST(request: Request) {
     p_order_id: null,
     p_note: note.trim(),
     p_created_by: adminSession.user.id,
+    p_subscription_payment_id: null,
   });
 
   if (error) {

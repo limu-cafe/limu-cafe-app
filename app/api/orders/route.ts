@@ -251,6 +251,7 @@ export async function POST(request: Request) {
         p_order_id: order.id,
         p_note: `注文でポイント利用 ${requestedPointsUsed}pt`,
         p_created_by: user.id,
+        p_subscription_payment_id: null,
       });
 
       if (pointUseError) {
@@ -296,6 +297,7 @@ export async function POST(request: Request) {
         p_order_id: order.id,
         p_note: `注文失敗ロールバック ${requestedPointsUsed}pt`,
         p_created_by: user.id,
+        p_subscription_payment_id: null,
       });
     }
     await rollbackOrder(adminSupabase, order.id, processedItems);

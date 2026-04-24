@@ -66,6 +66,7 @@ export async function POST(request: Request) {
       p_order_id: null,
       p_note: `チャージ特典 ${rewardPoints}pt`,
       p_created_by: user.id,
+      p_subscription_payment_id: null,
     });
 
     if (rewardRecordError) {
