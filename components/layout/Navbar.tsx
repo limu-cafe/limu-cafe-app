@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ShoppingCart, User, Coffee, ClipboardList, LogOut, Shield, Languages } from 'lucide-react';
+import { ShoppingCart, User, Coffee, ClipboardList, LogOut, Shield, Languages, Repeat2 } from 'lucide-react';
 import { useCartStore } from '@/lib/store/cart';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
@@ -35,6 +35,7 @@ export default function Navbar({ initialUser = null }: { initialUser?: NavbarUse
           mobileLocaleLabel: 'JA',
           nav: {
             home: 'Products',
+            subscriptions: 'Subscriptions',
             mypage: 'My Page',
             request: 'Requests',
           },
@@ -50,6 +51,7 @@ export default function Navbar({ initialUser = null }: { initialUser?: NavbarUse
           mobileLocaleLabel: 'EN',
           nav: {
             home: '商品一覧',
+            subscriptions: 'サブスク',
             mypage: 'マイページ',
             request: '要望',
           },
@@ -99,6 +101,7 @@ export default function Navbar({ initialUser = null }: { initialUser?: NavbarUse
 
   const navItems = [
     { href: '/', label: copy.nav.home, icon: Coffee },
+    { href: '/subscriptions', label: copy.nav.subscriptions, icon: Repeat2 },
     { href: '/mypage', label: copy.nav.mypage, icon: User },
     { href: '/request', label: copy.nav.request, icon: ClipboardList },
   ];

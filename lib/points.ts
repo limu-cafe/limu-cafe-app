@@ -17,6 +17,8 @@ export const POINT_REASON_LABELS: Record<PointTransactionReason, string> = {
   order_use: '注文利用',
   order_refund: '注文返却',
   charge_refund_reversal: 'チャージ返金取消',
+  subscription_use: 'サブスク利用',
+  subscription_refund: 'サブスク返却',
 };
 
 export function getActivePointCampaign(

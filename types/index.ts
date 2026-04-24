@@ -19,7 +19,14 @@ export type PointTransactionReason =
   | 'manual_deduct'
   | 'order_use'
   | 'order_refund'
-  | 'charge_refund_reversal';
+  | 'charge_refund_reversal'
+  | 'subscription_use'
+  | 'subscription_refund';
+export type SubscriptionBillingIntervalUnit = 'day' | 'week' | 'month';
+export type SubscriptionStatus = 'active' | 'cancel_at_period_end' | 'expired';
+export type SubscriptionPaymentMethod = 'points' | 'balance' | 'cash' | 'mixed';
+export type SubscriptionPaymentStatus = 'pending_cash_settlement' | 'completed' | 'cancelled';
+export type SubscriptionPaymentPriority = 'points' | 'balance' | 'cash';
 
 export interface User {
   id: string;
@@ -279,9 +286,63 @@ export interface PointTransaction {
   reason_type: PointTransactionReason;
   charge_request_id?: string | null;
   order_id?: string | null;
+  subscription_payment_id?: string | null;
   note?: string | null;
   created_by?: string | null;
   created_at: string;
+}
+
+export interface SubscriptionProduct {
+  id: string;
+  name: string;
+  english_name?: string | null;
+  description?: string | null;
+  price: number;
+  billing_interval_count: number;
+  billing_interval_unit: SubscriptionBillingIntervalUnit;
+  points_enabled: boolean;
+  balance_enabled: boolean;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface UserSubscription {
+  id: string;
+  user_id: string;
+  subscription_product_id: string;
+  subscription_product?: SubscriptionProduct | null;
+  status: SubscriptionStatus;
+  billing_anchor_at: string;
+  current_period_start_at?: string | null;
+  current_period_end_at?: string | null;
+  next_billing_at?: string | null;
+  end_month: string;
+  payment_priority: SubscriptionPaymentPriority[];
+  allow_partial_payment: boolean;
+  cancelled_at?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SubscriptionPayment {
+  id: string;
+  user_subscription_id: string;
+  user_id: string;
+  subscription_product_id: string;
+  subscription_product?: SubscriptionProduct | null;
+  user_subscription?: UserSubscription | null;
+  amount: number;
+  billing_period_start_at: string;
+  billing_period_end_at: string;
+  due_at: string;
+  payment_method: SubscriptionPaymentMethod;
+  payment_status: SubscriptionPaymentStatus;
+  points_used: number;
+  balance_used: number;
+  cash_due_amount: number;
+  created_at: string;
+  updated_at: string;
 }
 
 // カート（クライアントサイドのみ）

@@ -5,10 +5,8 @@ import { Wallet, Clock, ChevronDown, ChevronRight, Coins } from 'lucide-react';
 import Link from 'next/link';
 import { format } from 'date-fns';
 import { enUS, ja } from 'date-fns/locale';
-import ReorderButton from '@/components/user/ReorderButton';
 import LegacyTransferRequestCard from './LegacyTransferRequestCard';
 import type {
-  ChargeRequest,
   LegacyTransferRequest,
   PointTransaction,
   User,
@@ -28,39 +26,23 @@ type FavoriteCard = {
   };
 };
 
-type MyOrder = {
+type UnifiedPaymentEntry = {
   id: string;
-  total_amount: number;
-  points_used?: number;
-  payment_method: string;
-  deferred_settlement_method?: 'cash' | 'stripe' | null;
-  payment_status: string;
+  kind: 'order' | 'charge' | 'settlement' | 'subscription';
   created_at: string;
-  order_items?: Array<{
-    item_name: string;
-    quantity: number;
-    item?: {
-      id: string;
-      name: string;
-      english_name?: string | null;
-      price: number;
-      stock: number;
-      is_available: boolean;
-      stock_alert_threshold: number;
-      category_id?: string | null;
-      image_url?: string | null;
-      description?: string | null;
-      popular_override?: 'auto' | 'show' | 'hide';
-      new_arrival_override?: 'auto' | 'show' | 'hide';
-      created_at?: string;
-      updated_at?: string;
-    } | null;
-  }>;
+  amount: number;
+  status: string;
+  payment_method: string;
+  title: string;
+  detail: string;
+  points_used?: number;
+  balance_used?: number;
+  cash_due_amount?: number;
 };
 
 const PAGE_SIZE = 5;
 
-type HistorySection = 'orders' | 'charges' | 'points';
+type HistorySection = 'payments' | 'points';
 
 export default function MyPageClient({
   profile,
@@ -73,27 +55,20 @@ export default function MyPageClient({
 }) {
   const { locale } = useUserLocale();
   const dateLocale = locale === 'en' ? enUS : ja;
-  const [orders, setOrders] = useState<MyOrder[]>([]);
-  const [charges, setCharges] = useState<
-    Pick<ChargeRequest, 'id' | 'amount' | 'method' | 'status' | 'created_at'>[]
-  >([]);
+  const [payments, setPayments] = useState<UnifiedPaymentEntry[]>([]);
   const [pointTransactions, setPointTransactions] = useState<PointTransaction[]>([]);
-  const [hasMoreOrders, setHasMoreOrders] = useState(false);
-  const [hasMoreCharges, setHasMoreCharges] = useState(false);
+  const [hasMorePayments, setHasMorePayments] = useState(false);
   const [hasMorePoints, setHasMorePoints] = useState(false);
   const [loadedSections, setLoadedSections] = useState<Record<HistorySection, boolean>>({
-    orders: false,
-    charges: false,
+    payments: false,
     points: false,
   });
   const [openSections, setOpenSections] = useState<Record<HistorySection, boolean>>({
-    orders: false,
-    charges: false,
+    payments: false,
     points: false,
   });
   const [loadingSections, setLoadingSections] = useState<Record<HistorySection, boolean>>({
-    orders: false,
-    charges: false,
+    payments: false,
     points: false,
   });
 
@@ -106,21 +81,33 @@ export default function MyPageClient({
             cash: 'Cash',
             stripe: 'Card',
           } as Record<string, string>,
+          subscriptionPaymentMethodLabel: {
+            points: 'Points',
+            balance: 'Balance',
+            cash: 'Cash',
+            mixed: 'Mixed',
+          } as Record<string, string>,
           statusLabel: {
             pending: 'Pending',
             completed: 'Completed',
             cancelled: 'Cancelled',
             refunded: 'Refunded',
           } as Record<string, string>,
-          chargeMethodLabel: {
-            cash: 'Cash',
-            stripe: 'Card',
-          } as Record<string, string>,
           chargeStatusLabel: {
             approved: 'Applied',
             pending: 'Pending',
             rejected: 'Rejected',
             refunded: 'Refunded',
+            cancelled: 'Cancelled',
+          } as Record<string, string>,
+          settlementStatusLabel: {
+            pending: 'Pending',
+            completed: 'Completed',
+          } as Record<string, string>,
+          subscriptionStatusLabel: {
+            pending_cash_settlement: 'Awaiting cash settlement',
+            completed: 'Applied',
+            cancelled: 'Cancelled',
           } as Record<string, string>,
           fallbackName: 'LIMU Member',
           balance: 'Balance',
@@ -129,23 +116,27 @@ export default function MyPageClient({
           deferredNote: 'Paid on the settlement schedule',
           points: 'Points',
           pointsNote: '1pt = ¥1 when ordering',
-          purchaseHistory: 'Purchase history',
-          chargeHistory: 'Top-up history',
+          paymentHistory: 'Payment history',
           pointHistory: 'Point history',
           favorites: 'Favorites',
+          subscriptions: 'Subscriptions',
           backToProducts: 'Back to products',
           available: 'Available now',
           unavailable: 'Unavailable now',
-          recent: 'Recent',
           load: 'Show',
           hide: 'Hide',
           collapsedHint: 'Loaded only when you open this section.',
-          loadMore: 'Load more',
           loading: 'Loading...',
-          noOrders: 'No purchase history yet',
-          noCharges: 'No top-up history yet',
+          noPayments: 'No payment history yet',
           noPoints: 'No point history yet',
           pointsUsed: 'Points used',
+          balanceUsed: 'Balance used',
+          cashDue: 'Cash due',
+          charge: 'Top-up',
+          order: 'Order',
+          settlement: 'Settlement',
+          subscription: 'Subscription',
+          chargeAmount: 'Top-up amount',
         }
       : {
           paymentMethodLabel: {
@@ -154,21 +145,33 @@ export default function MyPageClient({
             cash: '現金',
             stripe: 'クレカ',
           } as Record<string, string>,
+          subscriptionPaymentMethodLabel: {
+            points: 'ポイント',
+            balance: '残高',
+            cash: '現金',
+            mixed: '複合',
+          } as Record<string, string>,
           statusLabel: {
             pending: '処理中',
             completed: '完了',
             cancelled: 'キャンセル',
             refunded: '返金済み',
           } as Record<string, string>,
-          chargeMethodLabel: {
-            cash: '現金',
-            stripe: 'クレカ',
-          } as Record<string, string>,
           chargeStatusLabel: {
             approved: '反映済み',
             pending: '未処理',
             rejected: '却下',
             refunded: '返金済み',
+            cancelled: '取消',
+          } as Record<string, string>,
+          settlementStatusLabel: {
+            pending: '未精算',
+            completed: '精算済み',
+          } as Record<string, string>,
+          subscriptionStatusLabel: {
+            pending_cash_settlement: '現金精算待ち',
+            completed: '反映済み',
+            cancelled: 'キャンセル',
           } as Record<string, string>,
           fallbackName: 'LIMUメンバー',
           balance: '残高',
@@ -177,40 +180,35 @@ export default function MyPageClient({
           deferredNote: '定期精算でお支払い',
           points: 'ポイント',
           pointsNote: '注文時に 1pt = 1円で使えます',
-          purchaseHistory: '購入履歴',
-          chargeHistory: 'チャージ履歴',
+          paymentHistory: '支払履歴',
           pointHistory: 'ポイント履歴',
           favorites: 'お気に入り商品',
+          subscriptions: 'サブスク',
           backToProducts: '商品一覧へ',
           available: '購入可能',
           unavailable: '現在は購入不可',
-          recent: '直近',
           load: '表示する',
           hide: '閉じる',
           collapsedHint: '開いたときだけ読み込みます。',
-          loadMore: 'もっと見る',
           loading: '読み込み中...',
-          noOrders: '購入履歴がありません',
-          noCharges: 'チャージ履歴がありません',
+          noPayments: '支払履歴がありません',
           noPoints: 'ポイント履歴がありません',
           pointsUsed: '利用ポイント',
+          balanceUsed: '残高利用',
+          cashDue: '現金精算',
+          charge: 'チャージ',
+          order: '商品購入',
+          settlement: '精算',
+          subscription: 'サブスク',
+          chargeAmount: 'チャージ額',
         };
 
-  const fetchOrders = async (offset = 0) => {
-    const res = await fetch(`/api/mypage/orders?offset=${offset}&limit=${PAGE_SIZE}`);
-    const data = await res.json();
-    if (!res.ok) {
-      throw new Error(data.error ?? (locale === 'en' ? 'Failed to load orders' : '購入履歴の取得に失敗しました'));
-    }
-    return data;
-  };
-
-  const fetchCharges = async (offset = 0) => {
-    const res = await fetch(`/api/mypage/charges?offset=${offset}&limit=${PAGE_SIZE}`);
+  const fetchPayments = async (offset = 0) => {
+    const res = await fetch(`/api/mypage/payments?offset=${offset}&limit=${PAGE_SIZE}`);
     const data = await res.json();
     if (!res.ok) {
       throw new Error(
-        data.error ?? (locale === 'en' ? 'Failed to load top-up history' : 'チャージ履歴の取得に失敗しました')
+        data.error ?? (locale === 'en' ? 'Failed to load payment history' : '支払履歴の取得に失敗しました')
       );
     }
     return data;
@@ -230,14 +228,10 @@ export default function MyPageClient({
   const loadSection = async (section: HistorySection) => {
     setLoadingSections((current) => ({ ...current, [section]: true }));
     try {
-      if (section === 'orders') {
-        const data = await fetchOrders();
-        setOrders(data.orders ?? []);
-        setHasMoreOrders(Boolean(data.hasMore));
-      } else if (section === 'charges') {
-        const data = await fetchCharges();
-        setCharges(data.chargeRequests ?? []);
-        setHasMoreCharges(Boolean(data.hasMore));
+      if (section === 'payments') {
+        const data = await fetchPayments();
+        setPayments(data.payments ?? []);
+        setHasMorePayments(Boolean(data.hasMore));
       } else {
         const data = await fetchPoints();
         setPointTransactions(data.pointTransactions ?? []);
@@ -257,25 +251,14 @@ export default function MyPageClient({
     }
   };
 
-  const loadMoreOrders = async () => {
-    setLoadingSections((current) => ({ ...current, orders: true }));
+  const loadMorePayments = async () => {
+    setLoadingSections((current) => ({ ...current, payments: true }));
     try {
-      const data = await fetchOrders(orders.length);
-      setOrders((current) => [...current, ...(data.orders ?? [])]);
-      setHasMoreOrders(Boolean(data.hasMore));
+      const data = await fetchPayments(payments.length);
+      setPayments((current) => [...current, ...(data.payments ?? [])]);
+      setHasMorePayments(Boolean(data.hasMore));
     } finally {
-      setLoadingSections((current) => ({ ...current, orders: false }));
-    }
-  };
-
-  const loadMoreCharges = async () => {
-    setLoadingSections((current) => ({ ...current, charges: true }));
-    try {
-      const data = await fetchCharges(charges.length);
-      setCharges((current) => [...current, ...(data.chargeRequests ?? [])]);
-      setHasMoreCharges(Boolean(data.hasMore));
-    } finally {
-      setLoadingSections((current) => ({ ...current, charges: false }));
+      setLoadingSections((current) => ({ ...current, payments: false }));
     }
   };
 
@@ -287,6 +270,45 @@ export default function MyPageClient({
       setHasMorePoints(Boolean(data.hasMore));
     } finally {
       setLoadingSections((current) => ({ ...current, points: false }));
+    }
+  };
+
+  const formatPaymentMethod = (entry: UnifiedPaymentEntry) => {
+    if (entry.kind === 'subscription') {
+      return copy.subscriptionPaymentMethodLabel[entry.payment_method] ?? entry.payment_method;
+    }
+
+    if (entry.payment_method.startsWith('deferred:')) {
+      const [, settlementMethod] = entry.payment_method.split(':');
+      return `${copy.paymentMethodLabel.deferred} / ${copy.paymentMethodLabel[settlementMethod] ?? settlementMethod}`;
+    }
+
+    return copy.paymentMethodLabel[entry.payment_method] ?? entry.payment_method;
+  };
+
+  const formatPaymentStatus = (entry: UnifiedPaymentEntry) => {
+    if (entry.kind === 'charge') {
+      return copy.chargeStatusLabel[entry.status] ?? entry.status;
+    }
+    if (entry.kind === 'settlement') {
+      return copy.settlementStatusLabel[entry.status] ?? entry.status;
+    }
+    if (entry.kind === 'subscription') {
+      return copy.subscriptionStatusLabel[entry.status] ?? entry.status;
+    }
+    return copy.statusLabel[entry.status] ?? entry.status;
+  };
+
+  const kindBadgeLabel = (entry: UnifiedPaymentEntry) => {
+    switch (entry.kind) {
+      case 'charge':
+        return copy.charge;
+      case 'settlement':
+        return copy.settlement;
+      case 'subscription':
+        return copy.subscription;
+      default:
+        return copy.order;
     }
   };
 
@@ -343,79 +365,86 @@ export default function MyPageClient({
       </div>
 
       <HistorySectionCard
-        title={copy.purchaseHistory}
-        isOpen={openSections.orders}
-        isLoaded={loadedSections.orders}
-        isLoading={loadingSections.orders}
-        onToggle={() => toggleSection('orders')}
+        title={copy.paymentHistory}
+        isOpen={openSections.payments}
+        isLoaded={loadedSections.payments}
+        isLoading={loadingSections.payments}
+        onToggle={() => toggleSection('payments')}
         loadLabel={copy.load}
         hideLabel={copy.hide}
         collapsedHint={copy.collapsedHint}
         loadingLabel={copy.loading}
       >
-        {!loadedSections.orders || loadingSections.orders ? (
+        {!loadedSections.payments || loadingSections.payments ? (
           <p className="py-6 text-sm text-espresso-400">{copy.loading}</p>
-        ) : orders.length === 0 ? (
-          <p className="py-6 text-sm text-espresso-400">{copy.noOrders}</p>
+        ) : payments.length === 0 ? (
+          <p className="py-6 text-sm text-espresso-400">{copy.noPayments}</p>
         ) : (
           <div className="space-y-3">
-            {orders.map((order) => (
-              <div key={order.id} className="space-y-2 rounded-xl border border-cream-200 p-4">
-                <div className="flex items-center justify-between">
+            {payments.map((entry) => (
+              <div key={`${entry.kind}:${entry.id}`} className="space-y-2 rounded-xl border border-cream-200 p-4">
+                <div className="flex items-center justify-between gap-3">
                   <span className="text-xs text-espresso-400">
-                    {format(new Date(order.created_at), locale === 'en' ? 'MMM d HH:mm' : 'M月d日 HH:mm', {
+                    {format(new Date(entry.created_at), locale === 'en' ? 'MMM d HH:mm' : 'M月d日 HH:mm', {
                       locale: dateLocale,
                     })}
                   </span>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <span className="rounded-full bg-cream-100 px-2 py-0.5 text-xs text-espresso-600">
-                      {order.payment_method === 'deferred' && order.deferred_settlement_method
-                        ? `${copy.paymentMethodLabel[order.payment_method]} / ${copy.paymentMethodLabel[order.deferred_settlement_method]}`
-                        : copy.paymentMethodLabel[order.payment_method]}
+                      {kindBadgeLabel(entry)}
+                    </span>
+                    <span className="rounded-full bg-cream-100 px-2 py-0.5 text-xs text-espresso-600">
+                      {formatPaymentMethod(entry)}
                     </span>
                     <span
                       className={`rounded-full px-2 py-0.5 text-xs ${
-                        order.payment_status === 'completed'
+                        ['completed', 'approved'].includes(entry.status)
                           ? 'bg-green-100 text-green-700'
-                          : order.payment_status === 'pending'
+                          : ['pending', 'pending_cash_settlement'].includes(entry.status)
                             ? 'bg-amber-100 text-amber-700'
                             : 'bg-red-100 text-red-700'
                       }`}
                     >
-                      {copy.statusLabel[order.payment_status]}
+                      {formatPaymentStatus(entry)}
                     </span>
                   </div>
                 </div>
-                <div className="text-sm text-espresso-600">
-                  {order.order_items
-                    ?.map((oi) =>
-                      oi.item ? getItemDisplayName(oi.item, locale) : oi.item_name
-                    )
-                    .join(locale === 'en' ? ', ' : '、')}
+                <div>
+                  <p className="text-sm font-medium text-espresso">{entry.title}</p>
+                  <p className="mt-1 text-sm text-espresso-500">{entry.detail}</p>
                 </div>
-                <div className="flex items-center justify-between gap-3">
-                  <div className="space-y-1">
-                    <ReorderButton orderItems={(order.order_items ?? []) as any} />
-                    {order.points_used ? (
-                      <p className="text-xs text-matcha-dark">
-                        {copy.pointsUsed}: {order.points_used.toLocaleString()}pt
-                      </p>
-                    ) : null}
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex flex-wrap gap-2 text-xs">
+                    {(entry.points_used ?? 0) > 0 && (
+                      <span className="rounded-full bg-matcha/10 px-2.5 py-1 text-matcha-dark">
+                        {copy.pointsUsed}: {entry.points_used}pt
+                      </span>
+                    )}
+                    {(entry.balance_used ?? 0) > 0 && (
+                      <span className="rounded-full bg-sky-100 px-2.5 py-1 text-sky-700">
+                        {copy.balanceUsed}: ¥{entry.balance_used?.toLocaleString()}
+                      </span>
+                    )}
+                    {(entry.cash_due_amount ?? 0) > 0 && (
+                      <span className="rounded-full bg-amber-cafe/10 px-2.5 py-1 text-amber-cafe">
+                        {copy.cashDue}: ¥{entry.cash_due_amount?.toLocaleString()}
+                      </span>
+                    )}
                   </div>
                   <span className="font-display font-bold text-espresso">
-                    ¥{order.total_amount.toLocaleString()}
+                    {entry.kind === 'charge' ? '+' : ''}¥{entry.amount.toLocaleString()}
                   </span>
                 </div>
               </div>
             ))}
-            {hasMoreOrders && (
+            {hasMorePayments && (
               <button
                 type="button"
-                onClick={loadMoreOrders}
-                disabled={loadingSections.orders}
+                onClick={loadMorePayments}
+                disabled={loadingSections.payments}
                 className="w-full rounded-2xl border border-cream-200 bg-white px-4 py-3 text-sm font-medium text-espresso transition-colors hover:bg-cream-50 disabled:opacity-60"
               >
-                {loadingSections.orders ? copy.loading : copy.loadMore}
+                {loadingSections.payments ? copy.loading : copy.load}
               </button>
             )}
           </div>
@@ -426,12 +455,20 @@ export default function MyPageClient({
         <div className="card space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="font-medium text-espresso">{copy.favorites}</h2>
-            <Link
-              href="/"
-              className="inline-flex items-center gap-1 text-xs text-espresso-400 transition-colors hover:text-espresso-600"
-            >
-              {copy.backToProducts} <ChevronRight size={12} />
-            </Link>
+            <div className="flex items-center gap-2">
+              <Link
+                href="/subscriptions"
+                className="inline-flex items-center gap-1 text-xs text-espresso-400 transition-colors hover:text-espresso-600"
+              >
+                {copy.subscriptions} <ChevronRight size={12} />
+              </Link>
+              <Link
+                href="/"
+                className="inline-flex items-center gap-1 text-xs text-espresso-400 transition-colors hover:text-espresso-600"
+              >
+                {copy.backToProducts} <ChevronRight size={12} />
+              </Link>
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             {favorites.map((favorite) => (
@@ -448,63 +485,6 @@ export default function MyPageClient({
       )}
 
       <LegacyTransferRequestCard latestRequest={latestLegacyTransferRequest as any} />
-
-      <HistorySectionCard
-        title={copy.chargeHistory}
-        isOpen={openSections.charges}
-        isLoaded={loadedSections.charges}
-        isLoading={loadingSections.charges}
-        onToggle={() => toggleSection('charges')}
-        loadLabel={copy.load}
-        hideLabel={copy.hide}
-        collapsedHint={copy.collapsedHint}
-        loadingLabel={copy.loading}
-      >
-        {!loadedSections.charges || loadingSections.charges ? (
-          <p className="py-6 text-sm text-espresso-400">{copy.loading}</p>
-        ) : charges.length === 0 ? (
-          <p className="py-6 text-sm text-espresso-400">{copy.noCharges}</p>
-        ) : (
-          <div className="space-y-2">
-            {charges.map((req) => (
-              <div key={req.id} className="flex items-center justify-between text-sm">
-                <span className="text-espresso-400">
-                  {format(new Date(req.created_at), locale === 'en' ? 'MMM d' : 'M月d日', {
-                    locale: dateLocale,
-                  })}
-                  <span className="ml-2 rounded-full bg-cream-100 px-2 py-0.5 text-xs">
-                    {copy.chargeMethodLabel[req.method]}
-                  </span>
-                </span>
-                <div className="flex items-center gap-2">
-                  <span
-                    className={`rounded-full px-2 py-0.5 text-xs ${
-                      req.status === 'approved'
-                        ? 'bg-green-100 text-green-700'
-                        : req.status === 'pending'
-                          ? 'bg-amber-100 text-amber-700'
-                          : 'bg-red-100 text-red-700'
-                    }`}
-                  >
-                    {copy.chargeStatusLabel[req.status]}
-                  </span>
-                  <span className="font-mono font-medium">+¥{req.amount.toLocaleString()}</span>
-                </div>
-              </div>
-            ))}
-            {hasMoreCharges && (
-              <button
-                type="button"
-                onClick={loadMoreCharges}
-                disabled={loadingSections.charges}
-                className="w-full rounded-2xl border border-cream-200 bg-white px-4 py-3 text-sm font-medium text-espresso transition-colors hover:bg-cream-50 disabled:opacity-60"
-              >
-                {loadingSections.charges ? copy.loading : copy.loadMore}
-              </button>
-            )}
-          </div>
-        )}
-      </HistorySectionCard>
 
       <HistorySectionCard
         title={copy.pointHistory}
@@ -529,11 +509,7 @@ export default function MyPageClient({
                 className="flex items-center justify-between gap-4 rounded-xl border border-cream-200 px-4 py-3 text-sm"
               >
                 <div>
-                  <p className="font-medium text-espresso">
-                    {locale === 'en'
-                      ? POINT_REASON_LABELS[transaction.reason_type]
-                      : POINT_REASON_LABELS[transaction.reason_type]}
-                  </p>
+                  <p className="font-medium text-espresso">{POINT_REASON_LABELS[transaction.reason_type]}</p>
                   <p className="text-xs text-espresso-400">
                     {format(
                       new Date(transaction.created_at),
@@ -541,9 +517,7 @@ export default function MyPageClient({
                       { locale: dateLocale }
                     )}
                   </p>
-                  {transaction.note ? (
-                    <p className="mt-1 text-xs text-espresso-400">{transaction.note}</p>
-                  ) : null}
+                  {transaction.note ? <p className="mt-1 text-xs text-espresso-400">{transaction.note}</p> : null}
                 </div>
                 <div className="text-right">
                   <p
@@ -554,9 +528,7 @@ export default function MyPageClient({
                     {transaction.delta >= 0 ? '+' : ''}
                     {transaction.delta.toLocaleString()}pt
                   </p>
-                  <p className="text-xs text-espresso-400">
-                    {transaction.balance_after.toLocaleString()}pt
-                  </p>
+                  <p className="text-xs text-espresso-400">{transaction.balance_after.toLocaleString()}pt</p>
                 </div>
               </div>
             ))}
@@ -567,7 +539,7 @@ export default function MyPageClient({
                 disabled={loadingSections.points}
                 className="w-full rounded-2xl border border-cream-200 bg-white px-4 py-3 text-sm font-medium text-espresso transition-colors hover:bg-cream-50 disabled:opacity-60"
               >
-                {loadingSections.points ? copy.loading : copy.loadMore}
+                {loadingSections.points ? copy.loading : copy.load}
               </button>
             )}
           </div>
@@ -609,15 +581,11 @@ function HistorySectionCard({
           onClick={onToggle}
           className="inline-flex items-center gap-1 rounded-full border border-cream-200 px-3 py-1.5 text-xs font-medium text-espresso-500 transition-colors hover:bg-cream-50 hover:text-espresso"
         >
-          {isOpen ? hideLabel : isLoaded ? loadLabel : loadLabel}
+          {isOpen ? hideLabel : loadLabel}
           <ChevronDown size={14} className={isOpen ? 'rotate-180 transition-transform' : 'transition-transform'} />
         </button>
       </div>
-      {isOpen ? children : (
-        <p className="text-sm text-espresso-400">
-          {isLoading ? loadingLabel : collapsedHint}
-        </p>
-      )}
+      {isOpen ? children : <p className="text-sm text-espresso-400">{isLoading ? loadingLabel : collapsedHint}</p>}
     </div>
   );
 }

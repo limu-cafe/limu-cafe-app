@@ -4,6 +4,7 @@ import {
   Coins,
   MessageSquare,
   Package,
+  Repeat2,
   Receipt,
   ScrollText,
   Users,
@@ -38,7 +39,9 @@ export default async function AdminDashboard() {
     { count: pendingReimbursements },
     { count: pendingCashOrders },
     { count: pendingCharges },
+    { count: pendingSubscriptionCashPayments },
     { count: deferredUsers },
+    { count: activeSubscriptions },
     { count: pendingUsers },
     { count: pendingRequests },
     { count: pendingLegacyTransfers },
@@ -63,10 +66,18 @@ export default async function AdminDashboard() {
       .select('*', { count: 'exact', head: true })
       .eq('status', 'pending'),
     supabase
+      .from('subscription_payments')
+      .select('*', { count: 'exact', head: true })
+      .eq('payment_status', 'pending_cash_settlement'),
+    supabase
       .from('users')
       .select('*', { count: 'exact', head: true })
       .gt('deferred_balance', 0)
       .eq('is_active', true),
+    supabase
+      .from('user_subscriptions')
+      .select('*', { count: 'exact', head: true })
+      .in('status', ['active', 'cancel_at_period_end']),
     supabase
       .from('users')
       .select('*', { count: 'exact', head: true })
@@ -96,6 +107,12 @@ export default async function AdminDashboard() {
       count: lowStockCount ?? 0,
     },
     {
+      href: '/admin/subscriptions',
+      icon: Repeat2,
+      title: 'サブスク管理',
+      count: activeSubscriptions ?? 0,
+    },
+    {
       href: '/admin/reimbursements',
       icon: ClipboardList,
       title: '立替管理',
@@ -105,7 +122,11 @@ export default async function AdminDashboard() {
       href: '/admin/transactions',
       icon: Receipt,
       title: '取引履歴',
-      count: (pendingCashOrders ?? 0) + (pendingCharges ?? 0) + (deferredUsers ?? 0),
+      count:
+        (pendingCashOrders ?? 0) +
+        (pendingCharges ?? 0) +
+        (pendingSubscriptionCashPayments ?? 0) +
+        (deferredUsers ?? 0),
     },
     {
       href: '/admin/cashbox',

@@ -4,6 +4,7 @@ export type CashboxDirection = 'in' | 'out';
 export type CashboxEntryType =
   | 'cash_order'
   | 'cash_charge'
+  | 'cash_subscription'
   | 'cash_settlement'
   | 'manual_in'
   | 'manual_out'
@@ -25,6 +26,7 @@ type InsertCashboxEntryInput = {
   charge_request_id?: string | null;
   settlement_id?: string | null;
   purchase_run_id?: string | null;
+  subscription_payment_id?: string | null;
   created_by?: string | null;
 };
 
@@ -60,6 +62,7 @@ export async function insertCashboxEntry(
 export const cashboxEntryLabels: Record<CashboxEntryType, string> = {
   cash_order: '現金注文',
   cash_charge: '現金チャージ入金',
+  cash_subscription: 'サブスク現金精算',
   cash_settlement: '現金精算',
   manual_in: '手動入金',
   manual_out: '手動出金',

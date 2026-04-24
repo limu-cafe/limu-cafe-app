@@ -547,14 +547,28 @@ export async function sendSlackEphemeralMessage(params: {
 
 // 定期精算リマインド
 export async function notifyMonthlySettlement(params: {
-  users: { slackUserId: string; name: string; amount: number }[];
+  users: {
+    slackUserId: string;
+    name: string;
+    amount: number;
+    deferredAmount?: number;
+    subscriptionAmount?: number;
+  }[];
 }) {
   for (const user of params.users) {
+    const deferredAmount = user.deferredAmount ?? user.amount;
+    const subscriptionAmount = user.subscriptionAmount ?? 0;
+    const hasSubscriptionAmount = subscriptionAmount > 0;
+
     await sendSlackDirectMessage({
       slackUserId: user.slackUserId,
       text:
         `📅 定期精算のお知らせ\n` +
-        `${user.name}さんの現在の後払い残高は ¥${user.amount.toLocaleString()} です。\n` +
+        `${user.name}さんの現在の精算予定額は ¥${user.amount.toLocaleString()} です。\n` +
+        `後払い残高: ¥${deferredAmount.toLocaleString()}\n` +
+        (hasSubscriptionAmount
+          ? `サブスク未精算: ¥${subscriptionAmount.toLocaleString()}\n`
+          : '') +
         `LIMU喫茶で精算をお願いします。\n` +
         (APP_BASE_URL ? `${APP_BASE_URL}/mypage` : ''),
     });

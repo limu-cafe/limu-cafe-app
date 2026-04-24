@@ -9,6 +9,7 @@ import {
 } from '@/lib/settlement-reminder';
 
 type ReminderUser = {
+  id: string;
   slack_user_id: string | null;
   name: string;
   deferred_balance: number;
@@ -43,18 +44,47 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, skipped: 'not_due_yet', next: settings.next_notification_on });
   }
 
-  const { data: users } = await supabase
-    .from('users')
-    .select('slack_user_id, name, deferred_balance')
-    .gt('deferred_balance', 0)
-    .eq('is_active', true);
+  const [{ data: users }, { data: subscriptionPayments }] = await Promise.all([
+    supabase
+      .from('users')
+      .select('id, slack_user_id, name, deferred_balance')
+      .eq('is_active', true),
+    supabase
+      .from('subscription_payments')
+      .select('user_id, cash_due_amount')
+      .eq('payment_status', 'pending_cash_settlement')
+      .gt('cash_due_amount', 0),
+  ]);
+
+  const subscriptionAmountsByUser = new Map<string, number>();
+  for (const payment of (subscriptionPayments ?? []) as Array<{ user_id: string; cash_due_amount: number }>) {
+    subscriptionAmountsByUser.set(
+      payment.user_id,
+      (subscriptionAmountsByUser.get(payment.user_id) ?? 0) + payment.cash_due_amount
+    );
+  }
 
   const targets = ((users ?? []) as ReminderUser[])
-    .filter((u: ReminderUser) => Boolean(u.slack_user_id))
-    .map((u) => ({
-      slackUserId: u.slack_user_id!,
-      name: u.name,
-      amount: u.deferred_balance,
+    .map((user) => {
+      const subscriptionAmount = subscriptionAmountsByUser.get(user.id) ?? 0;
+      const deferredAmount = user.deferred_balance;
+      const amount = deferredAmount + subscriptionAmount;
+
+      return {
+        slackUserId: user.slack_user_id,
+        name: user.name,
+        amount,
+        deferredAmount,
+        subscriptionAmount,
+      };
+    })
+    .filter((user) => Boolean(user.slackUserId) && user.amount > 0)
+    .map((user) => ({
+      slackUserId: user.slackUserId!,
+      name: user.name,
+      amount: user.amount,
+      deferredAmount: user.deferredAmount,
+      subscriptionAmount: user.subscriptionAmount,
     }));
 
   if (targets.length > 0) {

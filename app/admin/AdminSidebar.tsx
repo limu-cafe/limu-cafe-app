@@ -10,6 +10,7 @@ import {
   LogOut,
   MessageSquare,
   Package,
+  Repeat2,
   Receipt,
   ScrollText,
   Users,
@@ -65,6 +66,11 @@ export default function AdminSidebar({
           label: '商品管理',
           icon: Package,
           count: notifications.items,
+        },
+        {
+          href: '/admin/subscriptions',
+          label: 'サブスク管理',
+          icon: Repeat2,
         },
         {
           href: '/admin/reimbursements',

@@ -45,6 +45,34 @@ type ChargeFetchRow = {
   } | null;
 };
 
+type SubscriptionPaymentFetchRow = {
+  id: string;
+  user_id: string;
+  user_subscription_id: string;
+  amount: number;
+  payment_method: string;
+  payment_status: string;
+  points_used: number;
+  balance_used: number;
+  cash_due_amount: number;
+  billing_period_start_at: string;
+  billing_period_end_at: string;
+  created_at: string;
+  user?: {
+    id: string;
+    name: string;
+    avatar_url?: string | null;
+  } | null;
+  subscription_product?: {
+    id: string;
+    name: string;
+    english_name?: string | null;
+  } | null;
+  user_subscription?: {
+    status: string;
+  } | null;
+};
+
 async function fetchOrders() {
   const supabase = createAdminClient();
   const primary = await supabase
@@ -85,7 +113,14 @@ async function fetchOrders() {
 export default async function AdminTransactionsPage() {
   const supabase = createAdminClient();
 
-  const [orders, { data: charges }, { data: settlements }, { data: deferredUsers }, { data: chargeCashboxEntries }] =
+  const [
+    orders,
+    { data: charges },
+    { data: settlements },
+    { data: subscriptionPayments },
+    { data: deferredUsers },
+    { data: chargeCashboxEntries },
+  ] =
     await Promise.all([
       fetchOrders(),
       supabase
@@ -99,6 +134,13 @@ export default async function AdminTransactionsPage() {
         .from('settlements')
         .select(
           'id, user_id, amount, method, status, period_start, period_end, created_at, user:users!settlements_user_id_fkey(id, name, avatar_url)'
+        )
+        .order('created_at', { ascending: false })
+        .limit(80),
+      supabase
+        .from('subscription_payments')
+        .select(
+          'id, user_id, user_subscription_id, amount, payment_method, payment_status, points_used, balance_used, cash_due_amount, billing_period_start_at, billing_period_end_at, created_at, user:users!subscription_payments_user_id_fkey(id, name, avatar_url), subscription_product:subscription_products!subscription_payments_subscription_product_id_fkey(id, name, english_name), user_subscription:user_subscriptions!subscription_payments_user_subscription_id_fkey(status)'
         )
         .order('created_at', { ascending: false })
         .limit(80),
@@ -130,6 +172,7 @@ export default async function AdminTransactionsPage() {
       orders={orders}
       charges={normalizedCharges}
       settlements={settlements ?? []}
+      subscriptionPayments={(subscriptionPayments ?? []) as SubscriptionPaymentFetchRow[]}
       deferredUsers={deferredUsers ?? []}
     />
   );

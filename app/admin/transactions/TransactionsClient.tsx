@@ -50,6 +50,30 @@ type SettlementSummary = {
   created_at: string;
 };
 
+type SubscriptionPaymentSummary = {
+  id: string;
+  user_id: string;
+  user_subscription_id: string;
+  user?: UserSummary | null;
+  amount: number;
+  payment_method: string;
+  payment_status: string;
+  points_used: number;
+  balance_used: number;
+  cash_due_amount: number;
+  billing_period_start_at: string;
+  billing_period_end_at: string;
+  created_at: string;
+  subscription_product?: {
+    id: string;
+    name: string;
+    english_name?: string | null;
+  } | null;
+  user_subscription?: {
+    status: string;
+  } | null;
+};
+
 type DeferredUserSummary = {
   id: string;
   name: string;
@@ -57,13 +81,20 @@ type DeferredUserSummary = {
   deferred_balance: number;
 };
 
-type HistoryFilter = 'all' | 'orders' | 'charges' | 'settlements';
+type HistoryFilter = 'all' | 'orders' | 'charges' | 'settlements' | 'subscriptions';
 
 const paymentMethodLabel: Record<string, string> = {
   balance: '残高',
   deferred: '後払い',
   cash: '現金',
   stripe: 'クレカ',
+};
+
+const subscriptionPaymentMethodLabel: Record<string, string> = {
+  points: 'ポイント',
+  balance: '残高',
+  cash: '現金',
+  mixed: '複合',
 };
 
 const deferredMethodLabel: Record<string, string> = {
@@ -84,6 +115,12 @@ const chargeStatusLabel: Record<string, string> = {
   rejected: '却下',
   cancelled: '取消',
   refunded: '返金済み',
+};
+
+const subscriptionStatusLabel: Record<string, string> = {
+  pending_cash_settlement: '未精算',
+  completed: '反映済み',
+  cancelled: 'キャンセル',
 };
 
 const settlementMethodOptions = [
@@ -145,11 +182,13 @@ export default function TransactionsClient({
   orders,
   charges,
   settlements,
+  subscriptionPayments,
   deferredUsers,
 }: {
   orders: OrderSummary[];
   charges: ChargeSummary[];
   settlements: SettlementSummary[];
+  subscriptionPayments: SubscriptionPaymentSummary[];
   deferredUsers: DeferredUserSummary[];
 }) {
   const router = useRouter();
@@ -172,6 +211,10 @@ export default function TransactionsClient({
       ),
     [charges]
   );
+  const pendingSubscriptionCashPayments = useMemo(
+    () => subscriptionPayments.filter((payment) => payment.payment_status === 'pending_cash_settlement'),
+    [subscriptionPayments]
+  );
 
   const historyEntries = useMemo(() => {
     const normalizedOrders = orders
@@ -192,15 +235,22 @@ export default function TransactionsClient({
       settlement,
     }));
 
-    return [...normalizedOrders, ...normalizedCharges, ...normalizedSettlements]
+    const normalizedSubscriptions = subscriptionPayments.map((payment) => ({
+      kind: 'subscription' as const,
+      created_at: payment.created_at,
+      payment,
+    }));
+
+    return [...normalizedOrders, ...normalizedCharges, ...normalizedSettlements, ...normalizedSubscriptions]
       .filter((entry) => {
         if (historyFilter === 'all') return true;
         if (historyFilter === 'orders') return entry.kind === 'order';
         if (historyFilter === 'charges') return entry.kind === 'charge';
-        return entry.kind === 'settlement';
+        if (historyFilter === 'settlements') return entry.kind === 'settlement';
+        return entry.kind === 'subscription';
       })
       .sort((left, right) => new Date(right.created_at).getTime() - new Date(left.created_at).getTime());
-  }, [charges, historyFilter, orders, settlements]);
+  }, [charges, historyFilter, orders, settlements, subscriptionPayments]);
 
   const runAction = async ({
     key,
@@ -253,23 +303,30 @@ export default function TransactionsClient({
     });
   };
 
+  const requestSubscriptionPaymentCancel = async (payment: SubscriptionPaymentSummary) => {
+    if (payment.user_subscription?.status === 'active') {
+      toast.error('先に解約してください');
+      return;
+    }
+
+    await runAction({
+      key: `subscription-cancel:${payment.id}`,
+      request: () => fetch(`/api/admin/subscription-payments/${payment.id}/cancel`, { method: 'POST' }),
+      success: 'サブスク支払をキャンセルしました',
+      confirmMessage: 'このサブスク支払をキャンセルしますか？',
+    });
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="font-display text-2xl font-bold text-white">取引履歴</h1>
         <div className="flex flex-wrap gap-2 text-xs">
-          <span className="rounded-full bg-gray-900 px-3 py-2 text-gray-300">
-            現金注文 {pendingCashOrders.length}
-          </span>
-          <span className="rounded-full bg-gray-900 px-3 py-2 text-gray-300">
-            現金チャージ {pendingCashCharges.length}
-          </span>
-          <span className="rounded-full bg-gray-900 px-3 py-2 text-gray-300">
-            後払い {deferredUsers.length}
-          </span>
-          <span className="rounded-full bg-gray-900 px-3 py-2 text-gray-300">
-            承認待ち {pendingChargeRequests.length}
-          </span>
+          <span className="rounded-full bg-gray-900 px-3 py-2 text-gray-300">現金注文 {pendingCashOrders.length}</span>
+          <span className="rounded-full bg-gray-900 px-3 py-2 text-gray-300">現金チャージ {pendingCashCharges.length}</span>
+          <span className="rounded-full bg-gray-900 px-3 py-2 text-gray-300">サブスク現金 {pendingSubscriptionCashPayments.length}</span>
+          <span className="rounded-full bg-gray-900 px-3 py-2 text-gray-300">後払い {deferredUsers.length}</span>
+          <span className="rounded-full bg-gray-900 px-3 py-2 text-gray-300">承認待ち {pendingChargeRequests.length}</span>
         </div>
       </div>
 
@@ -281,6 +338,7 @@ export default function TransactionsClient({
         {pendingCashOrders.length === 0 &&
         pendingCashCharges.length === 0 &&
         pendingChargeRequests.length === 0 &&
+        pendingSubscriptionCashPayments.length === 0 &&
         deferredUsers.length === 0 ? (
           <div className="rounded-2xl border border-gray-800 bg-gray-900 px-5 py-10 text-center text-sm text-gray-500">
             未対応の取引はありません
@@ -304,15 +362,12 @@ export default function TransactionsClient({
                       </div>
                     </div>
                     <p className="text-sm text-gray-300">
-                      {(order.order_items ?? [])
-                        .map((item) => `${item.item_name} × ${item.quantity}`)
-                        .join(' / ') || '明細なし'}
+                      {(order.order_items ?? []).map((item) => `${item.item_name} × ${item.quantity}`).join(' / ') ||
+                        '明細なし'}
                     </p>
                   </div>
                   <div className="space-y-3 lg:text-right">
-                    <p className="font-display text-2xl font-bold text-white">
-                      {formatMoney(order.total_amount)}
-                    </p>
+                    <p className="font-display text-2xl font-bold text-white">{formatMoney(order.total_amount)}</p>
                     <div className="flex flex-wrap gap-2 lg:justify-end">
                       <ActionButton
                         tone="success"
@@ -367,9 +422,7 @@ export default function TransactionsClient({
                     {charge.note && <p className="text-sm text-gray-400">{charge.note}</p>}
                   </div>
                   <div className="space-y-3 lg:text-right">
-                    <p className="font-display text-2xl font-bold text-white">
-                      {formatMoney(charge.amount)}
-                    </p>
+                    <p className="font-display text-2xl font-bold text-white">{formatMoney(charge.amount)}</p>
                     <div className="flex flex-wrap gap-2 lg:justify-end">
                       <ActionButton
                         tone="success"
@@ -377,8 +430,7 @@ export default function TransactionsClient({
                         onClick={() =>
                           runAction({
                             key: `charge-settle:${charge.id}`,
-                            request: () =>
-                              fetch(`/api/admin/charge/${charge.id}/cash-settlement`, { method: 'POST' }),
+                            request: () => fetch(`/api/admin/charge/${charge.id}/cash-settlement`, { method: 'POST' }),
                             success: '精算済みにしました',
                             confirmMessage: '現金チャージを精算済みにしますか？',
                           })
@@ -406,6 +458,74 @@ export default function TransactionsClient({
               </div>
             ))}
 
+            {pendingSubscriptionCashPayments.map((payment) => (
+              <div key={payment.id} className="rounded-2xl border border-gray-800 bg-gray-900 px-4 py-4">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="min-w-0 space-y-2">
+                    <div className="flex items-center gap-3">
+                      <Avatar user={payment.user} />
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="font-medium text-white">{payment.user?.name ?? '不明なユーザー'}</p>
+                          <span className="rounded-full bg-purple-500/10 px-2 py-0.5 text-[11px] font-medium text-purple-300">
+                            サブスク現金
+                          </span>
+                        </div>
+                        <p className="text-xs text-gray-500">{formatDateTime(payment.created_at)}</p>
+                      </div>
+                    </div>
+                    <p className="text-sm text-gray-300">
+                      {payment.subscription_product?.name ?? 'サブスク'} /{' '}
+                      {payment.billing_period_start_at.slice(0, 10)} - {payment.billing_period_end_at.slice(0, 10)}
+                    </p>
+                    <div className="flex flex-wrap gap-2 text-xs">
+                      {payment.points_used > 0 && (
+                        <span className="rounded-full bg-matcha/10 px-2.5 py-1 text-matcha-dark">
+                          ポイント {payment.points_used}pt
+                        </span>
+                      )}
+                      {payment.balance_used > 0 && (
+                        <span className="rounded-full bg-sky-100 px-2.5 py-1 text-sky-700">
+                          残高 ¥{payment.balance_used.toLocaleString()}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="space-y-3 lg:text-right">
+                    <p className="font-display text-2xl font-bold text-white">
+                      {formatMoney(payment.cash_due_amount || payment.amount)}
+                    </p>
+                    <div className="flex flex-wrap gap-2 lg:justify-end">
+                      <ActionButton
+                        tone="success"
+                        disabled={loading === `subscription-settle:${payment.id}`}
+                        onClick={() =>
+                          runAction({
+                            key: `subscription-settle:${payment.id}`,
+                            request: () =>
+                              fetch(`/api/admin/subscription-payments/${payment.id}/cash-settlement`, {
+                                method: 'POST',
+                              }),
+                            success: '精算済みにしました',
+                            confirmMessage: 'このサブスク現金支払を精算済みにしますか？',
+                          })
+                        }
+                      >
+                        精算完了
+                      </ActionButton>
+                      <ActionButton
+                        tone="danger"
+                        disabled={loading === `subscription-cancel:${payment.id}`}
+                        onClick={() => requestSubscriptionPaymentCancel(payment)}
+                      >
+                        支払取消
+                      </ActionButton>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+
             {pendingChargeRequests.map((charge) => (
               <div key={charge.id} className="rounded-2xl border border-gray-800 bg-gray-900 px-4 py-4">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -425,9 +545,7 @@ export default function TransactionsClient({
                     {charge.note && <p className="text-sm text-gray-400">{charge.note}</p>}
                   </div>
                   <div className="space-y-3 lg:text-right">
-                    <p className="font-display text-2xl font-bold text-white">
-                      {formatMoney(charge.amount)}
-                    </p>
+                    <p className="font-display text-2xl font-bold text-white">{formatMoney(charge.amount)}</p>
                     <div className="flex flex-wrap gap-2 lg:justify-end">
                       <ActionButton
                         tone="danger"
@@ -516,6 +634,7 @@ export default function TransactionsClient({
             { id: 'orders' as const, label: '注文' },
             { id: 'charges' as const, label: 'チャージ' },
             { id: 'settlements' as const, label: '精算' },
+            { id: 'subscriptions' as const, label: 'サブスク' },
           ].map((option) => (
             <button
               key={option.id}
@@ -555,9 +674,7 @@ export default function TransactionsClient({
                           <div className="min-w-0">
                             <div className="flex flex-wrap items-center gap-2">
                               <p className="font-medium text-white">{order.user?.name ?? '不明なユーザー'}</p>
-                              <span className="rounded-full bg-gray-800 px-2 py-0.5 text-[11px] text-gray-300">
-                                注文
-                              </span>
+                              <span className="rounded-full bg-gray-800 px-2 py-0.5 text-[11px] text-gray-300">注文</span>
                               <span className="rounded-full bg-white/5 px-2 py-0.5 text-[11px] text-gray-400">
                                 {orderStatusLabel[order.payment_status] ?? order.payment_status}
                               </span>
@@ -566,9 +683,8 @@ export default function TransactionsClient({
                           </div>
                         </div>
                         <p className="text-sm text-gray-300">
-                          {(order.order_items ?? [])
-                            .map((item) => `${item.item_name} × ${item.quantity}`)
-                            .join(' / ') || '明細なし'}
+                          {(order.order_items ?? []).map((item) => `${item.item_name} × ${item.quantity}`).join(' / ') ||
+                            '明細なし'}
                         </p>
                         <p className="text-xs text-gray-500">{paymentLabel}</p>
                         {(order.points_used ?? 0) > 0 && (
@@ -576,9 +692,7 @@ export default function TransactionsClient({
                         )}
                       </div>
                       <div className="space-y-3 lg:text-right">
-                        <p className="font-display text-2xl font-bold text-white">
-                          {formatMoney(order.total_amount)}
-                        </p>
+                        <p className="font-display text-2xl font-bold text-white">{formatMoney(order.total_amount)}</p>
                         <div className="flex flex-wrap gap-2 lg:justify-end">
                           {order.payment_method === 'cash' && order.payment_status === 'completed' && (
                             <ActionButton
@@ -669,14 +783,10 @@ export default function TransactionsClient({
                           </div>
                         </div>
                         {charge.note && <p className="text-sm text-gray-400">{charge.note}</p>}
-                        <p className="text-xs text-gray-500">
-                          {charge.method === 'cash' ? '現金' : 'クレカ'}
-                        </p>
+                        <p className="text-xs text-gray-500">{charge.method === 'cash' ? '現金' : 'クレカ'}</p>
                       </div>
                       <div className="space-y-3 lg:text-right">
-                        <p className="font-display text-2xl font-bold text-white">
-                          {formatMoney(charge.amount)}
-                        </p>
+                        <p className="font-display text-2xl font-bold text-white">{formatMoney(charge.amount)}</p>
                         <div className="flex flex-wrap gap-2 lg:justify-end">
                           {charge.status === 'approved' && charge.method === 'cash' && charge.is_cash_settled && (
                             <ActionButton
@@ -719,65 +829,163 @@ export default function TransactionsClient({
                 );
               }
 
-              const settlement = entry.settlement;
+              if (entry.kind === 'settlement') {
+                const settlement = entry.settlement;
+                return (
+                  <div
+                    key={`settlement:${settlement.id}`}
+                    className="rounded-2xl border border-gray-800 bg-gray-900 px-4 py-4"
+                  >
+                    <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                      <div className="min-w-0 space-y-2">
+                        <div className="flex items-center gap-3">
+                          <Avatar user={settlement.user} />
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="font-medium text-white">{settlement.user?.name ?? '不明なユーザー'}</p>
+                              <span className="rounded-full bg-gray-800 px-2 py-0.5 text-[11px] text-gray-300">
+                                精算
+                              </span>
+                              <span className="rounded-full bg-white/5 px-2 py-0.5 text-[11px] text-gray-400">
+                                {settlement.status === 'completed' ? '精算済み' : '未精算'}
+                              </span>
+                            </div>
+                            <p className="text-xs text-gray-500">{formatDateTime(settlement.created_at)}</p>
+                          </div>
+                        </div>
+                        <p className="text-sm text-gray-300">
+                          {format(new Date(settlement.period_start), 'M/d', { locale: ja })} -{' '}
+                          {format(new Date(settlement.period_end), 'M/d', { locale: ja })}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {settlement.method === 'cash' ? '現金' : settlement.method === 'balance' ? '残高' : 'クレカ'}
+                        </p>
+                      </div>
+                      <div className="space-y-3 lg:text-right">
+                        <p className="font-display text-2xl font-bold text-white">{formatMoney(settlement.amount)}</p>
+                        {settlement.status === 'completed' && (
+                          <div className="flex flex-wrap gap-2 lg:justify-end">
+                            <ActionButton
+                              disabled={loading === `settlement-revert:${settlement.id}`}
+                              onClick={() =>
+                                runAction({
+                                  key: `settlement-revert:${settlement.id}`,
+                                  request: () =>
+                                    fetch(`/api/admin/settlements/${settlement.id}/revert`, {
+                                      method: 'POST',
+                                    }),
+                                  success: '未精算に戻しました',
+                                  confirmMessage: 'この精算を未精算に戻しますか？',
+                                })
+                              }
+                            >
+                              未精算に戻す
+                            </ActionButton>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+
+              const payment = entry.payment;
+              const canCancel = payment.payment_status !== 'cancelled';
+
               return (
-                <div
-                  key={`settlement:${settlement.id}`}
-                  className="rounded-2xl border border-gray-800 bg-gray-900 px-4 py-4"
-                >
+                <div key={`subscription:${payment.id}`} className="rounded-2xl border border-gray-800 bg-gray-900 px-4 py-4">
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                     <div className="min-w-0 space-y-2">
                       <div className="flex items-center gap-3">
-                        <Avatar user={settlement.user} />
+                        <Avatar user={payment.user} />
                         <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
-                            <p className="font-medium text-white">{settlement.user?.name ?? '不明なユーザー'}</p>
+                            <p className="font-medium text-white">{payment.user?.name ?? '不明なユーザー'}</p>
                             <span className="rounded-full bg-gray-800 px-2 py-0.5 text-[11px] text-gray-300">
-                              精算
+                              サブスク
                             </span>
                             <span className="rounded-full bg-white/5 px-2 py-0.5 text-[11px] text-gray-400">
-                              {settlement.status === 'completed' ? '精算済み' : '未精算'}
+                              {subscriptionStatusLabel[payment.payment_status]}
                             </span>
                           </div>
-                          <p className="text-xs text-gray-500">{formatDateTime(settlement.created_at)}</p>
+                          <p className="text-xs text-gray-500">{formatDateTime(payment.created_at)}</p>
                         </div>
                       </div>
                       <p className="text-sm text-gray-300">
-                        {format(new Date(settlement.period_start), 'M/d', { locale: ja })} -{' '}
-                        {format(new Date(settlement.period_end), 'M/d', { locale: ja })}
+                        {payment.subscription_product?.name ?? 'サブスク'} / {payment.billing_period_start_at.slice(0, 10)} -{' '}
+                        {payment.billing_period_end_at.slice(0, 10)}
                       </p>
                       <p className="text-xs text-gray-500">
-                        {settlement.method === 'cash'
-                          ? '現金'
-                          : settlement.method === 'balance'
-                            ? '残高'
-                            : 'クレカ'}
+                        {subscriptionPaymentMethodLabel[payment.payment_method] ?? payment.payment_method}
                       </p>
+                      <div className="flex flex-wrap gap-2 text-xs">
+                        {payment.points_used > 0 && (
+                          <span className="rounded-full bg-matcha/10 px-2.5 py-1 text-matcha-dark">
+                            ポイント {payment.points_used}pt
+                          </span>
+                        )}
+                        {payment.balance_used > 0 && (
+                          <span className="rounded-full bg-sky-100 px-2.5 py-1 text-sky-700">
+                            残高 ¥{payment.balance_used.toLocaleString()}
+                          </span>
+                        )}
+                        {payment.cash_due_amount > 0 && (
+                          <span className="rounded-full bg-amber-cafe/10 px-2.5 py-1 text-amber-cafe">
+                            現金 ¥{payment.cash_due_amount.toLocaleString()}
+                          </span>
+                        )}
+                      </div>
                     </div>
                     <div className="space-y-3 lg:text-right">
-                      <p className="font-display text-2xl font-bold text-white">
-                        {formatMoney(settlement.amount)}
-                      </p>
-                      {settlement.status === 'completed' && (
-                        <div className="flex flex-wrap gap-2 lg:justify-end">
+                      <p className="font-display text-2xl font-bold text-white">{formatMoney(payment.amount)}</p>
+                      <div className="flex flex-wrap gap-2 lg:justify-end">
+                        {payment.cash_due_amount > 0 && payment.payment_status === 'completed' && (
                           <ActionButton
-                            disabled={loading === `settlement-revert:${settlement.id}`}
+                            disabled={loading === `subscription-unsettle:${payment.id}`}
                             onClick={() =>
                               runAction({
-                                key: `settlement-revert:${settlement.id}`,
+                                key: `subscription-unsettle:${payment.id}`,
                                 request: () =>
-                                  fetch(`/api/admin/settlements/${settlement.id}/revert`, {
-                                    method: 'POST',
+                                  fetch(`/api/admin/subscription-payments/${payment.id}/cash-settlement`, {
+                                    method: 'DELETE',
                                   }),
                                 success: '未精算に戻しました',
-                                confirmMessage: 'この精算を未精算に戻しますか？',
+                                confirmMessage: 'このサブスク支払を未精算に戻しますか？',
                               })
                             }
                           >
                             未精算に戻す
                           </ActionButton>
-                        </div>
-                      )}
+                        )}
+                        {payment.cash_due_amount > 0 && payment.payment_status === 'pending_cash_settlement' && (
+                          <ActionButton
+                            tone="success"
+                            disabled={loading === `subscription-settle:${payment.id}`}
+                            onClick={() =>
+                              runAction({
+                                key: `subscription-settle:${payment.id}`,
+                                request: () =>
+                                  fetch(`/api/admin/subscription-payments/${payment.id}/cash-settlement`, {
+                                    method: 'POST',
+                                  }),
+                                success: '精算済みにしました',
+                                confirmMessage: 'このサブスク支払を精算済みにしますか？',
+                              })
+                            }
+                          >
+                            精算完了
+                          </ActionButton>
+                        )}
+                        {canCancel && (
+                          <ActionButton
+                            tone="danger"
+                            disabled={loading === `subscription-cancel:${payment.id}`}
+                            onClick={() => requestSubscriptionPaymentCancel(payment)}
+                          >
+                            支払取消
+                          </ActionButton>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>

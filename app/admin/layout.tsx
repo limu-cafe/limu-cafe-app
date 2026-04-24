@@ -20,6 +20,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     { count: pendingChargeRequests },
     { data: approvedCashCharges },
     { data: chargeCashboxEntries },
+    { count: pendingSubscriptionCashPayments },
     { count: pendingUsers },
     { count: pendingRequests },
     { count: pendingLegacyTransfers },
@@ -42,6 +43,10 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       .eq('status', 'approved')
       .eq('method', 'cash'),
     supabase.from('cashbox_entries').select('charge_request_id').not('charge_request_id', 'is', null),
+    supabase
+      .from('subscription_payments')
+      .select('*', { count: 'exact', head: true })
+      .eq('payment_status', 'pending_cash_settlement'),
     supabase
       .from('users')
       .select('*', { count: 'exact', head: true })
@@ -88,6 +93,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       (pendingOrders ?? 0) +
       (pendingChargeRequests ?? 0) +
       unsettledCashCharges +
+      (pendingSubscriptionCashPayments ?? 0) +
       (deferredUsers ?? 0),
     users: pendingUsers ?? 0,
     points: 0,
