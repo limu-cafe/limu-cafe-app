@@ -4,7 +4,18 @@ import { useState } from 'react';
 import toast from 'react-hot-toast';
 import { useRouter } from 'next/navigation';
 
-export default function BotIntroBroadcastCard({ eligibleCount }: { eligibleCount: number }) {
+type EligibleUser = {
+  id: string;
+  name: string | null;
+};
+
+export default function BotIntroBroadcastCard({
+  eligibleCount,
+  eligibleUsers,
+}: {
+  eligibleCount: number;
+  eligibleUsers: EligibleUser[];
+}) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
 
@@ -19,7 +30,14 @@ export default function BotIntroBroadcastCard({ eligibleCount }: { eligibleCount
 
       toast.success(`対象 ${payload.eligible}人中 ${payload.sent}人に送信しました`);
       if (payload.failed) {
-        toast.error(`${payload.failed}人には送信できませんでした`);
+        const failedNames = Array.isArray(payload.failed_users)
+          ? payload.failed_users.map((user: { name?: string | null }) => user.name || '名前未設定').join('、')
+          : '';
+        toast.error(
+          failedNames
+            ? `${payload.failed}人には送信できませんでした: ${failedNames}`
+            : `${payload.failed}人には送信できませんでした`
+        );
       }
       router.refresh();
     } catch (error: any) {
@@ -47,6 +65,22 @@ export default function BotIntroBroadcastCard({ eligibleCount }: { eligibleCount
           {loading ? '送信中...' : eligibleCount === 0 ? '送信対象なし' : '一括送信する'}
         </button>
       </div>
+
+      {eligibleUsers.length > 0 ? (
+        <div className="mt-3 space-y-2">
+          <p className="text-xs text-gray-400">未送信候補</p>
+          <div className="flex flex-wrap gap-2">
+            {eligibleUsers.map((user) => (
+              <span
+                key={user.id}
+                className="rounded-full bg-gray-800 px-3 py-1 text-xs font-medium text-gray-200"
+              >
+                {user.name || '名前未設定'}
+              </span>
+            ))}
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }
