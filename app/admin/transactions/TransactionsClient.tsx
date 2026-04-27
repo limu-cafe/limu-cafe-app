@@ -688,7 +688,7 @@ export default function TransactionsClient({
                 const chargeLabel = chargeStatusLabel[charge.status] ?? charge.status;
                 const methodLabel =
                   charge.method === 'cash'
-                    ? '現金 / 後払い精算に含む'
+                    ? '現金チャージ'
                     : charge.method === 'stripe'
                       ? 'クレカ'
                       : charge.method;
