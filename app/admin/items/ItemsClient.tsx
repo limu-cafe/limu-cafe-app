@@ -5,13 +5,14 @@ import { Pencil, Plus, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useRouter } from 'next/navigation';
 import type { Category, Item } from '@/types';
+import { isItemLowStock, isUnlimitedStockItem } from '@/lib/item-stock';
 
 interface Props {
   items: Item[];
   categories: Category[];
 }
 
-type StatusFilter = 'all' | 'selling' | 'low-stock' | 'stopped';
+type StatusFilter = 'all' | 'visible' | 'low-stock' | 'hidden';
 
 const EMPTY_FORM = {
   name: '',
@@ -22,6 +23,7 @@ const EMPTY_FORM = {
   stock_alert_threshold: '3',
   image_url: '',
   is_available: true,
+  is_unlimited_stock: false,
 };
 
 const FIELD_CLASS =
@@ -64,6 +66,7 @@ export default function ItemsClient({ items, categories }: Props) {
       stock_alert_threshold: String(item.stock_alert_threshold),
       image_url: item.image_url ?? '',
       is_available: item.is_available,
+      is_unlimited_stock: item.is_unlimited_stock,
     });
     setShowForm(true);
   };
@@ -86,6 +89,7 @@ export default function ItemsClient({ items, categories }: Props) {
         stock_alert_threshold: Number(form.stock_alert_threshold || 0),
         image_url: form.image_url.trim() || null,
         is_available: form.is_available,
+        is_unlimited_stock: form.is_unlimited_stock,
       };
 
       const res = await fetch(editing ? `/api/items/${editing.id}` : '/api/items', {
@@ -147,7 +151,7 @@ export default function ItemsClient({ items, categories }: Props) {
       setLocalItems((current) =>
         current.map((currentItem) => (currentItem.id === updatedItem.id ? updatedItem : currentItem))
       );
-      toast.success(updatedItem.is_available ? '販売中にしました' : '販売停止にしました');
+      toast.success(updatedItem.is_available ? '表示しました' : '非表示にしました');
       router.refresh();
     } catch (error: any) {
       toast.error(error.message);
@@ -157,6 +161,10 @@ export default function ItemsClient({ items, categories }: Props) {
   };
 
   const handleAddStock = async (item: Item) => {
+    if (item.is_unlimited_stock) {
+      toast.error('在庫管理なしの商品には在庫追加できません');
+      return;
+    }
     const quantity = Number(stockInputs[item.id] || 0);
     if (!quantity || quantity <= 0) {
       toast.error('追加数を入力してください');
@@ -198,9 +206,9 @@ export default function ItemsClient({ items, categories }: Props) {
 
   const statusOptions = [
     { id: 'all' as const, label: 'すべて' },
-    { id: 'selling' as const, label: '販売中' },
+    { id: 'visible' as const, label: '表示中' },
     { id: 'low-stock' as const, label: '要補充' },
-    { id: 'stopped' as const, label: '停止中' },
+    { id: 'hidden' as const, label: '非表示' },
   ];
 
   const filteredItems = useMemo(() => {
@@ -215,11 +223,11 @@ export default function ItemsClient({ items, categories }: Props) {
       if (!matchesSearch) return false;
 
       switch (statusFilter) {
-        case 'selling':
+        case 'visible':
           return item.is_available;
         case 'low-stock':
-          return item.is_available && item.stock <= item.stock_alert_threshold;
-        case 'stopped':
+          return isItemLowStock(item);
+        case 'hidden':
           return !item.is_available;
         default:
           return true;
@@ -276,13 +284,14 @@ export default function ItemsClient({ items, categories }: Props) {
               <th className="px-4 py-3 font-medium">価格</th>
               <th className="px-4 py-3 font-medium">在庫</th>
               <th className="px-4 py-3 font-medium">追加</th>
-              <th className="px-4 py-3 font-medium">状態</th>
+              <th className="px-4 py-3 font-medium">表示</th>
               <th className="px-4 py-3 font-medium">操作</th>
             </tr>
           </thead>
           <tbody>
             {filteredItems.map((item) => {
-              const isLowStock = item.stock <= item.stock_alert_threshold;
+              const isLowStock = isItemLowStock(item);
+              const hasUnlimitedStock = isUnlimitedStockItem(item);
               return (
                 <tr key={item.id} className="border-b border-gray-800/60 align-top">
                   <td className="px-4 py-4">
@@ -299,41 +308,49 @@ export default function ItemsClient({ items, categories }: Props) {
                     <div className="space-y-1">
                       <p
                         className={`font-mono text-lg font-bold ${
-                          item.stock === 0
+                          hasUnlimitedStock
+                            ? 'text-sky-300'
+                            : item.stock === 0
                             ? 'text-red-400'
                             : isLowStock
                               ? 'text-amber-400'
                               : 'text-green-400'
                         }`}
                       >
-                        {item.stock}
+                        {hasUnlimitedStock ? '∞' : item.stock}
                       </p>
-                      <p className="text-xs text-gray-500">警戒値 {item.stock_alert_threshold}</p>
+                      <p className="text-xs text-gray-500">
+                        {hasUnlimitedStock ? '在庫管理なし' : `警戒値 ${item.stock_alert_threshold}`}
+                      </p>
                     </div>
                   </td>
                   <td className="px-4 py-4">
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="number"
-                        min={1}
-                        value={stockInputs[item.id] ?? ''}
-                        onChange={(event) =>
-                          setStockInputs((current) => ({
-                            ...current,
-                            [item.id]: event.target.value,
-                          }))
-                        }
-                        placeholder="個数"
-                        className="w-24 rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:outline-none"
-                      />
-                      <button
-                        onClick={() => handleAddStock(item)}
-                        disabled={loading === `stock:${item.id}`}
-                        className="rounded-lg bg-white/10 px-3 py-2 text-xs font-medium text-white transition hover:bg-white/20 disabled:opacity-50"
-                      >
-                        {loading === `stock:${item.id}` ? '追加中...' : '在庫追加'}
-                      </button>
-                    </div>
+                    {hasUnlimitedStock ? (
+                      <span className="text-xs text-gray-500">対象外</span>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number"
+                          min={1}
+                          value={stockInputs[item.id] ?? ''}
+                          onChange={(event) =>
+                            setStockInputs((current) => ({
+                              ...current,
+                              [item.id]: event.target.value,
+                            }))
+                          }
+                          placeholder="個数"
+                          className="w-24 rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:outline-none"
+                        />
+                        <button
+                          onClick={() => handleAddStock(item)}
+                          disabled={loading === `stock:${item.id}`}
+                          className="rounded-lg bg-white/10 px-3 py-2 text-xs font-medium text-white transition hover:bg-white/20 disabled:opacity-50"
+                        >
+                          {loading === `stock:${item.id}` ? '追加中...' : '在庫追加'}
+                        </button>
+                      </div>
+                    )}
                   </td>
                   <td className="px-4 py-4">
                     <button
@@ -344,8 +361,9 @@ export default function ItemsClient({ items, categories }: Props) {
                           ? 'bg-green-500/15 text-green-300'
                           : 'bg-gray-700 text-gray-300'
                       }`}
+                      title={item.is_available ? 'ユーザー画面に表示中' : 'ユーザー画面では非表示'}
                     >
-                      {item.is_available ? '販売中' : '停止中'}
+                      {item.is_available ? '表示中' : '非表示'}
                     </button>
                   </td>
                   <td className="px-4 py-4">
@@ -443,7 +461,8 @@ export default function ItemsClient({ items, categories }: Props) {
                   onChange={(event) =>
                     setForm((current) => ({ ...current, stock_alert_threshold: event.target.value }))
                   }
-                  className={FIELD_CLASS}
+                  disabled={form.is_unlimited_stock}
+                  className={`${FIELD_CLASS} disabled:cursor-not-allowed disabled:opacity-40`}
                 />
               </Field>
               <Field label="画像URL">
@@ -474,7 +493,18 @@ export default function ItemsClient({ items, categories }: Props) {
                   }
                   className="rounded border-gray-700 bg-gray-900 text-white"
                 />
-                販売中にする
+                ユーザー画面に表示する
+              </label>
+              <label className="inline-flex items-center gap-2 text-sm text-gray-300 md:col-span-2">
+                <input
+                  type="checkbox"
+                  checked={form.is_unlimited_stock}
+                  onChange={(event) =>
+                    setForm((current) => ({ ...current, is_unlimited_stock: event.target.checked }))
+                  }
+                  className="rounded border-gray-700 bg-gray-900 text-white"
+                />
+                在庫を管理しない（無限在庫）
               </label>
             </div>
 

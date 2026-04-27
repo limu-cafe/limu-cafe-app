@@ -17,6 +17,7 @@ import {
   formatSubscriptionInterval,
   getAcademicYearEndMonthValue,
   getSubscriptionDisplayName,
+  resolveSubscriptionFunding,
   sanitizeSubscriptionPaymentPriority,
   storageDateToMonthValue,
   SUBSCRIPTION_PAYMENT_METHOD_LABELS,
@@ -100,6 +101,7 @@ export default function SubscriptionDetailClient({
           cancelConfirm: 'Cancel from next billing',
           confirmTitle: 'Do you want to start this subscription?',
           confirmBody: 'The first billing will be created immediately. If points or balance are not enough, the rest will become cash settlement.',
+          confirmPreview: 'Initial billing preview',
           cancelTitle: 'Do you want to cancel this subscription?',
           cancelBody: 'You can keep using the current paid period, but no new billing will be created after that.',
           points: 'Use points',
@@ -134,6 +136,7 @@ export default function SubscriptionDetailClient({
           confirmTitle: 'このサブスクを契約しますか？',
           confirmBody:
             '初回の支払はすぐに作成されます。ポイントや残高が足りない分は現金精算になります。',
+          confirmPreview: '初回支払の予定',
           cancelTitle: 'このサブスクを解約しますか？',
           cancelBody:
             'いま支払済みの期間までは利用できますが、その後は新しい支払が発生しなくなります。',
@@ -154,6 +157,40 @@ export default function SubscriptionDetailClient({
   const canStartNewContract =
     !latestSubscription ||
     latestSubscription.status === 'expired';
+
+  const subscriptionPreview = useMemo(
+    () =>
+      resolveSubscriptionFunding({
+        amount: product.price,
+        pointsBalance: profile?.points_balance ?? 0,
+        cashBalance: profile?.balance ?? 0,
+        priority: paymentPriority,
+        allowPartialPayment,
+        pointsEnabled: product.points_enabled,
+        balanceEnabled: product.balance_enabled,
+      }),
+    [
+      allowPartialPayment,
+      paymentPriority,
+      product.balance_enabled,
+      product.points_enabled,
+      product.price,
+      profile?.balance,
+      profile?.points_balance,
+    ]
+  );
+
+  const previewLines = [
+    subscriptionPreview.pointsUsed > 0
+      ? `${copy.points} ${subscriptionPreview.pointsUsed}pt`
+      : null,
+    subscriptionPreview.balanceUsed > 0
+      ? `${copy.balance} ¥${subscriptionPreview.balanceUsed.toLocaleString()}`
+      : null,
+    subscriptionPreview.cashDueAmount > 0
+      ? `${copy.cash} ¥${subscriptionPreview.cashDueAmount.toLocaleString()}`
+      : null,
+  ].filter(Boolean) as string[];
 
   const updatePriorityAt = (index: number, value: SubscriptionPaymentPriority) => {
     const next = [...paymentPriority];
@@ -176,7 +213,34 @@ export default function SubscriptionDetailClient({
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? '契約に失敗しました');
-      toast.success(locale === 'en' ? 'Subscription started' : 'サブスク契約を開始しました');
+      const payment = data.payment as
+        | {
+            amount: number;
+            points_used: number;
+            balance_used: number;
+            cash_due_amount: number;
+          }
+        | undefined;
+
+      if (payment) {
+        const parts = [
+          payment.points_used > 0 ? `${copy.points} ${payment.points_used}pt` : null,
+          payment.balance_used > 0
+            ? `${copy.balance} ¥${payment.balance_used.toLocaleString()}`
+            : null,
+          payment.cash_due_amount > 0
+            ? `${copy.cash} ¥${payment.cash_due_amount.toLocaleString()}`
+            : null,
+        ].filter(Boolean);
+
+        toast.success(
+          locale === 'en'
+            ? `Subscription started. Initial billing: ${parts.join(' / ') || `¥${payment.amount.toLocaleString()}`}`
+            : `サブスク契約を開始しました。初回支払: ${parts.join(' / ') || `¥${payment.amount.toLocaleString()}`}`
+        );
+      } else {
+        toast.success(locale === 'en' ? 'Subscription started' : 'サブスク契約を開始しました');
+      }
       router.refresh();
       setShowSubscribeConfirm(false);
     } catch (error: any) {
@@ -425,6 +489,8 @@ export default function SubscriptionDetailClient({
         <ConfirmDialog
           title={copy.confirmTitle}
           body={copy.confirmBody}
+          previewTitle={copy.confirmPreview}
+          previewBody={previewLines.join(' / ') || `¥${product.price.toLocaleString()}`}
           confirmLabel={copy.subscribeConfirm}
           closeLabel={copy.backLabel}
           loading={loading === 'subscribe'}
@@ -461,6 +527,8 @@ function MetricCard({ label, value }: { label: string; value: string }) {
 function ConfirmDialog({
   title,
   body,
+  previewTitle,
+  previewBody,
   confirmLabel,
   closeLabel,
   onClose,
@@ -470,6 +538,8 @@ function ConfirmDialog({
 }: {
   title: string;
   body: string;
+  previewTitle?: string;
+  previewBody?: string;
   confirmLabel: string;
   closeLabel: string;
   onClose: () => void;
@@ -482,6 +552,12 @@ function ConfirmDialog({
       <div className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl">
         <h3 className="font-display text-2xl font-bold text-espresso">{title}</h3>
         <p className="mt-3 text-sm leading-6 text-espresso-500">{body}</p>
+        {previewTitle && previewBody ? (
+          <div className="mt-4 rounded-2xl border border-cream-200 bg-cream-50 px-4 py-3">
+            <p className="text-sm font-medium text-espresso">{previewTitle}</p>
+            <p className="mt-2 text-sm text-espresso-500">{previewBody}</p>
+          </div>
+        ) : null}
         <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">
           <button
             type="button"

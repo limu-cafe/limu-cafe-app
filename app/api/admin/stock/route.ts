@@ -3,6 +3,35 @@ import { revalidatePath } from 'next/cache';
 import { createAdminClient, createClient } from '@/lib/supabase/server';
 import { logAdminAction } from '@/lib/admin-audit';
 import { insertCashboxEntry } from '@/lib/cashbox';
+import { isMissingItemEnhancementColumns } from '@/lib/item-select';
+
+async function fetchStockTarget(client: any, itemId: string) {
+  const enhancedQuery = await client
+    .from('items')
+    .select('stock, name, is_unlimited_stock')
+    .eq('id', itemId)
+    .single();
+
+  if (!isMissingItemEnhancementColumns(enhancedQuery.error)) {
+    return enhancedQuery;
+  }
+
+  const legacyQuery = await client
+    .from('items')
+    .select('stock, name')
+    .eq('id', itemId)
+    .single();
+
+  return {
+    ...legacyQuery,
+    data: legacyQuery.data
+      ? {
+          ...legacyQuery.data,
+          is_unlimited_stock: false,
+        }
+      : legacyQuery.data,
+  };
+}
 
 export async function POST(request: Request) {
   const sessionClient = await createClient();
@@ -16,10 +45,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: '無効なリクエストです' }, { status: 400 });
   }
 
-  const { data: item } = await supabase
-    .from('items').select('stock, name').eq('id', item_id).single();
+  const { data: item } = await fetchStockTarget(supabase, item_id);
 
   if (!item) return NextResponse.json({ error: '商品が見つかりません' }, { status: 404 });
+  if (item.is_unlimited_stock) {
+    return NextResponse.json(
+      { error: '在庫管理なしの商品には在庫追加できません' },
+      { status: 400 }
+    );
+  }
 
   let purchaseSummary: Record<string, unknown> | null = null;
   let normalizedPurchase:

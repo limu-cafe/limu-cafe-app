@@ -6,6 +6,7 @@ import toast from 'react-hot-toast';
 import ItemCard from '@/components/user/ItemCard';
 import InstallPromptCard from '@/components/user/InstallPromptCard';
 import { isQueryMatch } from '@/lib/search';
+import { isItemLowStock } from '@/lib/item-stock';
 import type { Category, Item } from '@/types';
 import { useUserLocale } from '@/components/user/UserLocaleProvider';
 
@@ -35,10 +36,7 @@ export default function ItemListClient({
     [favoriteItemIdSet, items]
   );
   const lowStockItems = useMemo(
-    () =>
-      items.filter(
-        (item) => item.is_available && item.stock > 0 && item.stock <= item.stock_alert_threshold
-      ),
+    () => items.filter((item) => isItemLowStock(item)),
     [items]
   );
 

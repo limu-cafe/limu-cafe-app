@@ -7,6 +7,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { useUserLocale } from '@/components/user/UserLocaleProvider';
 import { getItemDisplayName } from '@/lib/item-display';
+import { canIncreaseCartQuantity, isItemLowStock, isItemOutOfStock } from '@/lib/item-stock';
 
 export default function CartPage() {
   const { locale } = useUserLocale();
@@ -126,9 +127,9 @@ export default function CartPage() {
                 <p className="text-sm text-espresso-400">
                   ¥{item.price.toLocaleString()} × {quantity}
                 </p>
-                {item.stock <= item.stock_alert_threshold && (
-                  <p className={`mt-1 text-xs ${item.stock === 0 ? 'text-red-600' : 'text-amber-600'}`}>
-                    {item.stock === 0 ? copy.soldOut : copy.lowStock}
+                {(isItemOutOfStock(item) || isItemLowStock(item)) && (
+                  <p className={`mt-1 text-xs ${isItemOutOfStock(item) ? 'text-red-600' : 'text-amber-600'}`}>
+                    {isItemOutOfStock(item) ? copy.soldOut : copy.lowStock}
                   </p>
                 )}
               </div>
@@ -144,7 +145,7 @@ export default function CartPage() {
                 <span className="w-6 text-center font-medium font-mono">{quantity}</span>
                 <button
                   onClick={() => updateQuantity(item.id, quantity + 1)}
-                  disabled={quantity >= item.stock}
+                  disabled={!canIncreaseCartQuantity(item, quantity)}
                   className="w-8 h-8 rounded-full border border-cream-200 flex items-center justify-center hover:bg-cream-100 transition-colors disabled:opacity-40"
                 >
                   <Plus size={14} />
