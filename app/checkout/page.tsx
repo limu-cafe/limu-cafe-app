@@ -21,6 +21,7 @@ import { useUserLocale } from '@/components/user/UserLocaleProvider';
 import { getItemDisplayName } from '@/lib/item-display';
 import { clampPointsToUse } from '@/lib/points';
 import { playSuccessSound } from '@/lib/ui-sounds';
+import { isItemLowStock, isItemOutOfStock } from '@/lib/item-stock';
 
 type PaymentTiming = 'balance' | 'deferred';
 
@@ -309,9 +310,9 @@ export default function CheckoutPage() {
                   {getItemDisplayName(item, locale)}
                   <span className="ml-1 text-espresso-400">× {quantity}</span>
                 </span>
-                {item.stock <= item.stock_alert_threshold && (
-                  <p className={`mt-1 text-xs ${item.stock === 0 ? 'text-red-600' : 'text-amber-600'}`}>
-                    {item.stock === 0 ? copy.soldOut : copy.lowStock}
+                {(isItemOutOfStock(item) || isItemLowStock(item)) && (
+                  <p className={`mt-1 text-xs ${isItemOutOfStock(item) ? 'text-red-600' : 'text-amber-600'}`}>
+                    {isItemOutOfStock(item) ? copy.soldOut : copy.lowStock}
                   </p>
                 )}
               </div>

@@ -7,6 +7,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { format } from 'date-fns';
 import { ja } from 'date-fns/locale';
 import type { Item } from '@/types';
+import { isItemLowStock, isUnlimitedStockItem } from '@/lib/item-stock';
 
 interface Props { items: Item[]; history: any[]; }
 
@@ -49,6 +50,10 @@ export default function StockClient({ items, history }: Props) {
   };
 
   const handleRestock = async (item: Item) => {
+    if (item.is_unlimited_stock) {
+      toast.error('在庫管理なしの商品には在庫追加できません');
+      return;
+    }
     const qty = Number(quantities[item.id]);
     if (!qty || qty <= 0) { toast.error('数量を入力してください'); return; }
     const draft = getDraft(item.id);
@@ -138,13 +143,14 @@ export default function StockClient({ items, history }: Props) {
   };
 
   const stockColor = (item: Item) => {
+    if (item.is_unlimited_stock) return 'text-sky-300';
     if (item.stock === 0) return 'text-red-400';
     if (item.stock <= item.stock_alert_threshold) return 'text-amber-400';
     return 'text-green-400';
   };
 
   const visibleItems = pendingOnly
-    ? items.filter((item) => item.stock <= item.stock_alert_threshold)
+    ? items.filter((item) => isItemLowStock(item))
     : items;
 
   return (
@@ -245,61 +251,72 @@ export default function StockClient({ items, history }: Props) {
                         <span>{item.category?.icon ?? '📦'}</span>
                         <div>
                           <span className="text-white">{item.name}</span>
-                          {draft.enabled && (
+                          {draft.enabled && !isUnlimitedStockItem(item) && (
                             <p className="mt-1 text-[11px] text-gray-500">仕入れ情報も記録します</p>
+                          )}
+                          {isUnlimitedStockItem(item) && (
+                            <p className="mt-1 text-[11px] text-sky-300">在庫管理なし</p>
                           )}
                         </div>
                       </div>
                     </td>
                     <td className="px-4 py-3">
                       <span className={`font-mono font-bold text-lg ${stockColor(item)}`}>
-                        {item.stock}
+                        {item.is_unlimited_stock ? '∞' : item.stock}
                       </span>
-                      <span className="text-gray-600 text-xs ml-1">個</span>
+                      {!item.is_unlimited_stock && <span className="text-gray-600 text-xs ml-1">個</span>}
                     </td>
                     <td className="px-4 py-3 text-gray-500 text-xs">
-                      {item.stock_alert_threshold}個以下でアラート
+                      {item.is_unlimited_stock ? '対象外' : `${item.stock_alert_threshold}個以下でアラート`}
                     </td>
                     <td className="px-4 py-3 w-32">
-                      <input
-                        type="number"
-                        min={1}
-                        placeholder="個数"
-                        value={quantities[item.id] ?? ''}
-                        onChange={(e) => setQuantities({ ...quantities, [item.id]: e.target.value })}
-                        className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-white/20 text-sm font-mono"
-                      />
+                      {item.is_unlimited_stock ? (
+                        <span className="text-xs text-gray-500">対象外</span>
+                      ) : (
+                        <input
+                          type="number"
+                          min={1}
+                          placeholder="個数"
+                          value={quantities[item.id] ?? ''}
+                          onChange={(e) => setQuantities({ ...quantities, [item.id]: e.target.value })}
+                          className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-white/20 text-sm font-mono"
+                        />
+                      )}
                     </td>
                     <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => handleRestock(item)}
-                          disabled={loading === item.id || !quantities[item.id]}
-                          className="flex items-center gap-1.5 px-3 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg text-xs font-medium transition-colors disabled:opacity-40"
-                        >
-                          {loading === item.id ? (
-                            <span className="animate-spin w-3 h-3 border border-white border-t-transparent rounded-full" />
-                          ) : (
-                            <Plus size={14} />
-                          )}
-                          追加
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => updateDraft(item.id, { enabled: !draft.enabled })}
-                          className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors ${
-                            draft.enabled
-                              ? 'bg-amber-500/20 text-amber-300'
-                              : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-                          }`}
-                        >
-                          <Receipt size={14} />
-                          仕入れ記録
-                        </button>
-                      </div>
+                      {item.is_unlimited_stock ? (
+                        <span className="text-xs text-gray-500">在庫追加なし</span>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => handleRestock(item)}
+                            disabled={loading === item.id || !quantities[item.id]}
+                            className="flex items-center gap-1.5 px-3 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg text-xs font-medium transition-colors disabled:opacity-40"
+                          >
+                            {loading === item.id ? (
+                              <span className="animate-spin w-3 h-3 border border-white border-t-transparent rounded-full" />
+                            ) : (
+                              <Plus size={14} />
+                            )}
+                            追加
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => updateDraft(item.id, { enabled: !draft.enabled })}
+                            className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors ${
+                              draft.enabled
+                                ? 'bg-amber-500/20 text-amber-300'
+                                : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                            }`}
+                          >
+                            <Receipt size={14} />
+                            仕入れ記録
+                          </button>
+                        </div>
+                      )}
                     </td>
                   </tr>
-                  {draft.enabled && (
+                  {draft.enabled && !item.is_unlimited_stock && (
                     <tr className="border-b border-gray-800/50 bg-gray-950/70">
                       <td colSpan={5} className="px-4 py-4">
                         <div className="grid gap-3 lg:grid-cols-[1.2fr_1fr_1fr]">

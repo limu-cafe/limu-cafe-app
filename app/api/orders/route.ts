@@ -4,6 +4,7 @@ import { createAdminClient, createClient } from '@/lib/supabase/server';
 import { notifyCashOrderPending, notifyNewOrder, notifyLowStock } from '@/lib/slack';
 import { isMissingDeferredSettlementMethodColumn, isMissingOrderPointsColumn } from '@/lib/orders';
 import { clampPointsToUse } from '@/lib/points';
+import { isMissingItemEnhancementColumns } from '@/lib/item-select';
 
 interface OrderItemInput {
   item_id: string;
@@ -13,19 +14,46 @@ interface OrderItemInput {
   subtotal: number;
 }
 
+async function fetchOrderItemState(
+  client: any,
+  itemId: string
+) {
+  const enhancedQuery = await client
+    .from('items')
+    .select('stock, name, is_available, is_unlimited_stock, stock_alert_threshold')
+    .eq('id', itemId)
+    .single();
+
+  if (!isMissingItemEnhancementColumns(enhancedQuery.error)) {
+    return enhancedQuery;
+  }
+
+  const legacyQuery = await client
+    .from('items')
+    .select('stock, name, is_available, stock_alert_threshold')
+    .eq('id', itemId)
+    .single();
+
+  return {
+    ...legacyQuery,
+    data: legacyQuery.data
+      ? {
+          ...legacyQuery.data,
+          is_unlimited_stock: false,
+        }
+      : legacyQuery.data,
+  };
+}
+
 async function rollbackOrder(
   adminSupabase: ReturnType<typeof createAdminClient>,
   orderId: string,
   processedItems: Array<{ itemId: string; quantity: number }>
 ) {
   for (const processedItem of processedItems) {
-    const { data: currentItem } = await adminSupabase
-      .from('items')
-      .select('stock')
-      .eq('id', processedItem.itemId)
-      .single();
+    const { data: currentItem } = await fetchOrderItemState(adminSupabase, processedItem.itemId);
 
-    if (!currentItem) continue;
+    if (!currentItem || currentItem.is_unlimited_stock) continue;
 
     await adminSupabase
       .from('items')
@@ -113,9 +141,8 @@ export async function POST(request: Request) {
 
   // 在庫確認
   for (const item of items as OrderItemInput[]) {
-    const { data: dbItem } = await supabase
-      .from('items').select('stock, name').eq('id', item.item_id).single();
-    if (!dbItem || dbItem.stock < item.quantity) {
+    const { data: dbItem } = await fetchOrderItemState(supabase, item.item_id);
+    if (!dbItem || !dbItem.is_available || (!dbItem.is_unlimited_stock && dbItem.stock < item.quantity)) {
       return NextResponse.json(
         { error: `${dbItem?.name ?? '商品'}の在庫が不足しています` },
         { status: 400 }
@@ -198,41 +225,51 @@ export async function POST(request: Request) {
 
     // 3. 在庫を減らす & 在庫履歴
     for (const item of items as OrderItemInput[]) {
-      const { error: decrementError } = await adminSupabase.rpc('decrement_stock', {
-        p_item_id: item.item_id,
-        p_quantity: item.quantity,
-      });
+      const { data: currentItem, error: currentItemError } = await fetchOrderItemState(
+        adminSupabase,
+        item.item_id
+      );
 
-      if (decrementError) {
-        throw decrementError;
+      if (currentItemError || !currentItem) {
+        throw currentItemError ?? new Error('商品情報の取得に失敗しました');
       }
 
-      processedItems.push({ itemId: item.item_id, quantity: item.quantity });
+      if (!currentItem.is_unlimited_stock) {
+        const { error: decrementError } = await adminSupabase.rpc('decrement_stock', {
+          p_item_id: item.item_id,
+          p_quantity: item.quantity,
+        });
 
-      const { error: stockHistoryError } = await adminSupabase.from('stock_history').insert({
-        item_id: item.item_id,
-        change_amount: -item.quantity,
-        reason: 'purchase',
-        order_id: order.id,
-        created_by: user.id,
-      });
+        if (decrementError) {
+          throw decrementError;
+        }
 
-      if (stockHistoryError) {
-        throw stockHistoryError;
+        processedItems.push({ itemId: item.item_id, quantity: item.quantity });
+
+        const { error: stockHistoryError } = await adminSupabase.from('stock_history').insert({
+          item_id: item.item_id,
+          change_amount: -item.quantity,
+          reason: 'purchase',
+          order_id: order.id,
+          created_by: user.id,
+        });
+
+        if (stockHistoryError) {
+          throw stockHistoryError;
+        }
       }
 
       // 在庫アラートチェック
-      const { data: updatedItem, error: updatedItemError } = await adminSupabase
-        .from('items')
-        .select('stock, stock_alert_threshold, name')
-        .eq('id', item.item_id)
-        .single();
+      const { data: updatedItem, error: updatedItemError } = await fetchOrderItemState(
+        adminSupabase,
+        item.item_id
+      );
 
       if (updatedItemError) {
         throw updatedItemError;
       }
 
-      if (updatedItem.stock <= updatedItem.stock_alert_threshold) {
+      if (!updatedItem.is_unlimited_stock && updatedItem.stock <= updatedItem.stock_alert_threshold) {
         await notifyLowStock({
           itemName: updatedItem.name,
           currentStock: updatedItem.stock,

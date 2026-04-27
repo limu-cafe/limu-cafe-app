@@ -14,6 +14,7 @@ import type {
 import { useUserLocale } from '@/components/user/UserLocaleProvider';
 import { getItemDisplayName } from '@/lib/item-display';
 import { POINT_REASON_LABELS } from '@/lib/points';
+import { isItemPurchasable } from '@/lib/item-stock';
 
 type FavoriteCard = {
   item: {
@@ -23,6 +24,7 @@ type FavoriteCard = {
     price: number;
     stock: number;
     is_available: boolean;
+    is_unlimited_stock?: boolean;
   };
 };
 
@@ -476,7 +478,7 @@ export default function MyPageClient({
                 <p className="font-medium text-espresso">{getItemDisplayName(favorite.item, locale)}</p>
                 <p className="mt-1 text-sm text-espresso-400">¥{favorite.item.price.toLocaleString()}</p>
                 <p className="mt-2 text-xs text-espresso-400">
-                  {favorite.item.is_available && favorite.item.stock > 0 ? copy.available : copy.unavailable}
+                  {isItemPurchasable(favorite.item) ? copy.available : copy.unavailable}
                 </p>
               </div>
             ))}
