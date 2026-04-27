@@ -11,7 +11,7 @@ interface Props {
   categories: Category[];
 }
 
-type StatusFilter = 'all' | 'selling' | 'low-stock' | 'stopped';
+type StatusFilter = 'all' | 'visible' | 'low-stock' | 'hidden';
 
 const EMPTY_FORM = {
   name: '',
@@ -147,7 +147,7 @@ export default function ItemsClient({ items, categories }: Props) {
       setLocalItems((current) =>
         current.map((currentItem) => (currentItem.id === updatedItem.id ? updatedItem : currentItem))
       );
-      toast.success(updatedItem.is_available ? '販売中にしました' : '販売停止にしました');
+      toast.success(updatedItem.is_available ? '表示しました' : '非表示にしました');
       router.refresh();
     } catch (error: any) {
       toast.error(error.message);
@@ -198,9 +198,9 @@ export default function ItemsClient({ items, categories }: Props) {
 
   const statusOptions = [
     { id: 'all' as const, label: 'すべて' },
-    { id: 'selling' as const, label: '販売中' },
+    { id: 'visible' as const, label: '表示中' },
     { id: 'low-stock' as const, label: '要補充' },
-    { id: 'stopped' as const, label: '停止中' },
+    { id: 'hidden' as const, label: '非表示' },
   ];
 
   const filteredItems = useMemo(() => {
@@ -215,11 +215,11 @@ export default function ItemsClient({ items, categories }: Props) {
       if (!matchesSearch) return false;
 
       switch (statusFilter) {
-        case 'selling':
+        case 'visible':
           return item.is_available;
         case 'low-stock':
           return item.is_available && item.stock <= item.stock_alert_threshold;
-        case 'stopped':
+        case 'hidden':
           return !item.is_available;
         default:
           return true;
@@ -276,7 +276,7 @@ export default function ItemsClient({ items, categories }: Props) {
               <th className="px-4 py-3 font-medium">価格</th>
               <th className="px-4 py-3 font-medium">在庫</th>
               <th className="px-4 py-3 font-medium">追加</th>
-              <th className="px-4 py-3 font-medium">状態</th>
+              <th className="px-4 py-3 font-medium">表示</th>
               <th className="px-4 py-3 font-medium">操作</th>
             </tr>
           </thead>
@@ -344,8 +344,9 @@ export default function ItemsClient({ items, categories }: Props) {
                           ? 'bg-green-500/15 text-green-300'
                           : 'bg-gray-700 text-gray-300'
                       }`}
+                      title={item.is_available ? 'ユーザー画面に表示中' : 'ユーザー画面では非表示'}
                     >
-                      {item.is_available ? '販売中' : '停止中'}
+                      {item.is_available ? '表示中' : '非表示'}
                     </button>
                   </td>
                   <td className="px-4 py-4">
@@ -474,7 +475,7 @@ export default function ItemsClient({ items, categories }: Props) {
                   }
                   className="rounded border-gray-700 bg-gray-900 text-white"
                 />
-                販売中にする
+                ユーザー画面に表示する
               </label>
             </div>
 
