@@ -17,16 +17,22 @@ import BotIntroBroadcastCard from './operations/BotIntroBroadcastCard';
 
 export const dynamic = 'force-dynamic';
 
+type BotIntroUser = {
+  id: string;
+  name: string | null;
+};
+
 export default async function AdminDashboard() {
   const supabase = createAdminClient();
   const allowedWorkspaceId = process.env.ALLOWED_SLACK_WORKSPACE_ID?.trim() || null;
 
   let pendingBotIntroUsersQuery = supabase
     .from('users')
-    .select('*', { count: 'exact', head: true })
+    .select('id, name')
     .eq('is_active', true)
     .not('slack_user_id', 'is', null)
-    .is('bot_intro_sent_at', null);
+    .is('bot_intro_sent_at', null)
+    .order('name', { ascending: true });
 
   if (allowedWorkspaceId) {
     pendingBotIntroUsersQuery = pendingBotIntroUsersQuery.eq(
@@ -46,7 +52,7 @@ export default async function AdminDashboard() {
     { count: pendingUsers },
     { count: pendingRequests },
     { count: pendingLegacyTransfers },
-    { count: pendingBotIntroUsers },
+    { data: pendingBotIntroUsers },
   ] = await Promise.all([
     countLowStockItems(supabase),
     supabase
@@ -188,7 +194,13 @@ export default async function AdminDashboard() {
         ))}
       </div>
 
-      <BotIntroBroadcastCard eligibleCount={pendingBotIntroUsers ?? 0} />
+      <BotIntroBroadcastCard
+        eligibleCount={(pendingBotIntroUsers ?? []).length}
+        eligibleUsers={((pendingBotIntroUsers ?? []) as BotIntroUser[]).map((user) => ({
+          id: user.id,
+          name: user.name,
+        }))}
+      />
     </div>
   );
 }

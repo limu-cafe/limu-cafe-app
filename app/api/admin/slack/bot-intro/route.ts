@@ -33,6 +33,7 @@ export async function POST() {
   const eligible = eligibleUsers?.length ?? 0;
   let sent = 0;
   let failed = 0;
+  const failedUsers: Array<{ id: string; name: string | null }> = [];
 
   for (const user of eligibleUsers ?? []) {
     const dmResult = await notifyBotWelcome({
@@ -42,6 +43,7 @@ export async function POST() {
 
     if (!dmResult) {
       failed += 1;
+      failedUsers.push({ id: user.id, name: user.name });
       continue;
     }
 
@@ -53,6 +55,7 @@ export async function POST() {
     if (updateError) {
       console.error('failed to store bot intro timestamp after broadcast', updateError);
       failed += 1;
+      failedUsers.push({ id: user.id, name: user.name });
       continue;
     }
 
@@ -60,6 +63,7 @@ export async function POST() {
   }
 
   revalidatePath('/admin/operations');
+  revalidatePath('/admin');
 
-  return NextResponse.json({ ok: true, eligible, sent, failed });
+  return NextResponse.json({ ok: true, eligible, sent, failed, failed_users: failedUsers });
 }
