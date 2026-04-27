@@ -5,22 +5,12 @@ import AdminSidebar from './AdminSidebar';
 
 export const dynamic = 'force-dynamic';
 
-type ChargeCashboxEntry = {
-  charge_request_id: string | null;
-};
-
-type ChargeIdRow = {
-  id: string;
-};
-
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const supabase = createAdminClient();
 
   const [
     { count: pendingOrders },
     { count: pendingChargeRequests },
-    { data: approvedCashCharges },
-    { data: chargeCashboxEntries },
     { count: pendingSubscriptionCashPayments },
     { count: pendingUsers },
     { count: pendingRequests },
@@ -38,12 +28,6 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       .from('charge_requests')
       .select('*', { count: 'exact', head: true })
       .eq('status', 'pending'),
-    supabase
-      .from('charge_requests')
-      .select('id')
-      .eq('status', 'approved')
-      .eq('method', 'cash'),
-    supabase.from('cashbox_entries').select('charge_request_id').not('charge_request_id', 'is', null),
     supabase
       .from('subscription_payments')
       .select('*', { count: 'exact', head: true })
@@ -73,23 +57,12 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       .eq('is_active', true),
   ]);
 
-  const settledChargeIds = new Set(
-    ((chargeCashboxEntries ?? []) as ChargeCashboxEntry[])
-      .map((entry: ChargeCashboxEntry) => entry.charge_request_id)
-      .filter((value): value is string => Boolean(value))
-  );
-  const unsettledCashCharges =
-    ((approvedCashCharges ?? []) as ChargeIdRow[]).filter(
-      (charge: ChargeIdRow) => !settledChargeIds.has(charge.id)
-    ).length ?? 0;
-
   const notifications = {
     items: lowStockCount ?? 0,
     reimbursements: pendingReimbursements ?? 0,
     transactions:
       (pendingOrders ?? 0) +
       (pendingChargeRequests ?? 0) +
-      unsettledCashCharges +
       (pendingSubscriptionCashPayments ?? 0) +
       (deferredUsers ?? 0),
     users: pendingUsers ?? 0,

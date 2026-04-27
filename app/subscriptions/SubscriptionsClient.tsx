@@ -36,7 +36,7 @@ export default function SubscriptionsClient({
         }
       : {
           title: 'サブスク',
-          subtitle: 'コーヒーやお茶、お菓子などの定期契約を商品購入とは別で管理できます。',
+          subtitle: '',
           inactive: '未契約',
           active: '契約中',
           expiresAt: '有効期限',
@@ -55,7 +55,7 @@ export default function SubscriptionsClient({
           Subscription
         </div>
         <h1 className="font-display text-3xl font-bold text-espresso">{copy.title}</h1>
-        <p className="text-sm text-espresso-400">{copy.subtitle}</p>
+        {copy.subtitle ? <p className="text-sm text-espresso-400">{copy.subtitle}</p> : null}
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">

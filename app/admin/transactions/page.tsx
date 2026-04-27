@@ -25,10 +25,6 @@ type OrderFetchRow = {
   deferred_settlement_method?: string | null;
 };
 
-type CashboxChargeRow = {
-  charge_request_id: string | null;
-};
-
 type ChargeFetchRow = {
   id: string;
   user_id: string;
@@ -119,7 +115,6 @@ export default async function AdminTransactionsPage() {
     { data: settlements },
     { data: subscriptionPayments },
     { data: deferredUsers },
-    { data: chargeCashboxEntries },
   ] =
     await Promise.all([
       fetchOrders(),
@@ -150,27 +145,12 @@ export default async function AdminTransactionsPage() {
         .gt('deferred_balance', 0)
         .eq('is_active', true)
         .order('deferred_balance', { ascending: false }),
-      supabase
-        .from('cashbox_entries')
-        .select('charge_request_id')
-        .not('charge_request_id', 'is', null),
     ]);
-
-  const settledChargeIds = new Set(
-    ((chargeCashboxEntries ?? []) as CashboxChargeRow[])
-      .map((entry: CashboxChargeRow) => entry.charge_request_id)
-      .filter((value): value is string => Boolean(value))
-  );
-
-  const normalizedCharges = ((charges ?? []) as ChargeFetchRow[]).map((charge: ChargeFetchRow) => ({
-    ...charge,
-    is_cash_settled: charge.method === 'cash' ? settledChargeIds.has(charge.id) : false,
-  }));
 
   return (
     <TransactionsClient
       orders={orders}
-      charges={normalizedCharges}
+      charges={(charges ?? []) as ChargeFetchRow[]}
       settlements={settlements ?? []}
       subscriptionPayments={(subscriptionPayments ?? []) as SubscriptionPaymentFetchRow[]}
       deferredUsers={deferredUsers ?? []}
