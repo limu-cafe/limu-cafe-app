@@ -66,6 +66,7 @@ export interface Item {
   stock: number;
   stock_alert_threshold: number;
   is_available: boolean;
+  is_unlimited_stock: boolean;
   popular_override: ItemShowcaseOverride;
   new_arrival_override: ItemShowcaseOverride;
   created_at: string;

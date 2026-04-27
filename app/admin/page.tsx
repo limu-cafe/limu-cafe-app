@@ -12,6 +12,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { createAdminClient } from '@/lib/supabase/server';
+import { countLowStockItems } from '@/lib/item-stock';
 import BotIntroBroadcastCard from './operations/BotIntroBroadcastCard';
 
 export const dynamic = 'force-dynamic';
@@ -35,7 +36,7 @@ export default async function AdminDashboard() {
   }
 
   const [
-    { count: lowStockCount },
+    lowStockCount,
     { count: pendingReimbursements },
     { count: pendingCashOrders },
     { count: pendingCharges },
@@ -47,11 +48,7 @@ export default async function AdminDashboard() {
     { count: pendingLegacyTransfers },
     { count: pendingBotIntroUsers },
   ] = await Promise.all([
-    supabase
-      .from('items')
-      .select('*', { count: 'exact', head: true })
-      .eq('is_available', true)
-      .filter('stock', 'lte', 'stock_alert_threshold'),
+    countLowStockItems(supabase),
     supabase
       .from('purchase_runs')
       .select('*', { count: 'exact', head: true })

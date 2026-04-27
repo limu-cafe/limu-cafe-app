@@ -108,7 +108,21 @@ export async function POST(request: Request) {
     revalidatePath('/admin/subscriptions');
     revalidatePath('/admin/transactions');
 
-    return NextResponse.json({ ok: true, subscription_id: subscription.id, payment_id: payment.id });
+    return NextResponse.json({
+      ok: true,
+      subscription_id: subscription.id,
+      payment: {
+        id: payment.id,
+        amount: payment.amount,
+        payment_method: payment.payment_method,
+        payment_status: payment.payment_status,
+        points_used: payment.points_used,
+        balance_used: payment.balance_used,
+        cash_due_amount: payment.cash_due_amount,
+        billing_period_start_at: payment.billing_period_start_at,
+        billing_period_end_at: payment.billing_period_end_at,
+      },
+    });
   } catch (error: any) {
     await adminSupabase.from('user_subscriptions').delete().eq('id', subscription.id);
     return NextResponse.json(

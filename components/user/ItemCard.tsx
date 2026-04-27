@@ -7,6 +7,7 @@ import type { Item } from '@/types';
 import toast from 'react-hot-toast';
 import { useUserLocale } from './UserLocaleProvider';
 import { getItemDisplayName } from '@/lib/item-display';
+import { isItemLowStock, isItemOutOfStock, isUnlimitedStockItem } from '@/lib/item-stock';
 
 interface ItemCardProps {
   item: Item;
@@ -35,9 +36,11 @@ export default function ItemCard({
           noStock: 'Sold out',
           lowStock: 'Low stock',
           inStock: 'In stock',
+          unlimitedStock: 'Always available',
           awaiting: 'Restock soon',
           lowStockDetail: 'Only a few left',
           available: 'Available',
+          unlimitedDetail: 'Stock is not managed',
           product: 'Item',
           add: 'Add',
           waitlist: 'Waiting for restock',
@@ -50,9 +53,11 @@ export default function ItemCard({
           noStock: '在庫なし',
           lowStock: '少なめ',
           inStock: '在庫あり',
+          unlimitedStock: '在庫無限',
           awaiting: '入荷待ちです',
           lowStockDetail: '残りわずかです',
           available: '購入できます',
+          unlimitedDetail: '在庫管理なし',
           product: '商品',
           add: '追加',
           waitlist: '補充待ち',
@@ -60,14 +65,21 @@ export default function ItemCard({
         };
 
   const handleAdd = () => {
-    if (!item.is_available || item.stock === 0) return;
+    if (isItemOutOfStock(item)) return;
     addItem(item);
     toast.success(locale === 'en' ? `${displayName} ${copy.addSuccess}` : `${displayName}${copy.addSuccess}`);
   };
 
-  const isOutOfStock = item.stock === 0 || !item.is_available;
-  const isLowStock = item.stock > 0 && item.stock <= item.stock_alert_threshold;
-  const stockStatus = isOutOfStock
+  const isOutOfStock = isItemOutOfStock(item);
+  const isLowStock = isItemLowStock(item);
+  const hasUnlimitedStock = isUnlimitedStockItem(item);
+  const stockStatus = hasUnlimitedStock
+    ? {
+        label: copy.unlimitedStock,
+        className: 'bg-sky-100 text-sky-700',
+        detail: copy.unlimitedDetail,
+      }
+    : isOutOfStock
     ? {
         label: copy.noStock,
         className: 'bg-red-100 text-red-700',

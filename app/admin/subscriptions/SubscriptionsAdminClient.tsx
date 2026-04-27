@@ -372,7 +372,7 @@ export default function SubscriptionsAdminClient({
                 checked={createForm.is_active}
                 onChange={(event) => setCreateForm((current) => ({ ...current, is_active: event.target.checked }))}
               />
-              公開する
+              ユーザー画面に表示する
             </label>
           </div>
         </div>
@@ -479,6 +479,15 @@ export default function SubscriptionsAdminClient({
                   <div className="rounded-lg border border-gray-800 bg-gray-950/40 px-3 py-2 text-white">
                     ¥{product.price.toLocaleString()} / {formatSubscriptionInterval(product.billing_interval_count, product.billing_interval_unit)}
                   </div>
+                  <div
+                    className={`rounded-lg border px-3 py-2 text-sm font-medium ${
+                      draft.is_active
+                        ? 'border-green-500/20 bg-green-500/10 text-green-300'
+                        : 'border-gray-700 bg-gray-950/40 text-gray-300'
+                    }`}
+                  >
+                    {draft.is_active ? '表示中' : '非表示'}
+                  </div>
                   <label className="inline-flex items-center gap-2 rounded-lg border border-gray-800 bg-gray-950/40 px-3 py-2">
                     <input
                       type="checkbox"
@@ -516,7 +525,7 @@ export default function SubscriptionsAdminClient({
                         }))
                       }
                     />
-                    公開する
+                    ユーザー画面に表示する
                   </label>
                 </div>
               </div>

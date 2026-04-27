@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { CheckCircle, UserX, Plus } from 'lucide-react';
+import { CheckCircle, UserMinus, Plus } from 'lucide-react';
 import { format } from 'date-fns';
 import { ja } from 'date-fns/locale';
 import toast from 'react-hot-toast';
@@ -134,10 +134,11 @@ export default function UsersClient({ users }: { users: User[] }) {
             <button
               onClick={() => handleDeactivate(user.id, user.name)}
               disabled={!!loading}
-              className="p-1.5 rounded-lg hover:bg-red-500/20 text-gray-400 hover:text-red-400 transition-colors"
-              title="無効化（退会処理）"
+              className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs text-gray-300 transition-colors hover:bg-red-500/20 hover:text-red-300"
+              title="無効化（退会・卒業処理）"
             >
-              <UserX size={14} />
+              <UserMinus size={14} />
+              無効化
             </button>
           )}
         </div>

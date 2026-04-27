@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/server';
+import { countLowStockItems } from '@/lib/item-stock';
 import AdminAuthGuard from './AdminAuthGuard';
 import AdminSidebar from './AdminSidebar';
 
@@ -25,7 +26,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     { count: pendingRequests },
     { count: pendingLegacyTransfers },
     { count: pendingReimbursements },
-    { data: lowStockItems },
+    lowStockCount,
     { count: deferredUsers },
   ] = await Promise.all([
     supabase
@@ -64,11 +65,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       .from('purchase_runs')
       .select('*', { count: 'exact', head: true })
       .eq('reimbursement_status', 'pending_reimbursement'),
-    supabase
-      .from('items')
-      .select('id')
-      .eq('is_available', true)
-      .filter('stock', 'lte', 'stock_alert_threshold'),
+    countLowStockItems(supabase),
     supabase
       .from('users')
       .select('*', { count: 'exact', head: true })
@@ -87,7 +84,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     ).length ?? 0;
 
   const notifications = {
-    items: lowStockItems?.length ?? 0,
+    items: lowStockCount ?? 0,
     reimbursements: pendingReimbursements ?? 0,
     transactions:
       (pendingOrders ?? 0) +
