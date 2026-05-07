@@ -2,6 +2,12 @@ import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/server';
 import { notifyMonthlySettlement } from '@/lib/slack';
 import {
+  buildCashCollectionEntries,
+  type DeferredCashCollectionRow,
+  type PendingCashOrderRow,
+  type PendingSubscriptionCashRow,
+} from '@/lib/cash-collection';
+import {
   addMonthsWithDay,
   buildDefaultSettlementReminderSettings,
   getTodayInTokyo,
@@ -12,6 +18,7 @@ type ReminderUser = {
   id: string;
   slack_user_id: string | null;
   name: string;
+  avatar_url?: string | null;
   deferred_balance: number;
 };
 
@@ -44,38 +51,44 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, skipped: 'not_due_yet', next: settings.next_notification_on });
   }
 
-  const [{ data: users }, { data: subscriptionPayments }] = await Promise.all([
+  const [{ data: users }, { data: subscriptionPayments }, { data: pendingCashOrders }] =
+    await Promise.all([
     supabase
       .from('users')
-      .select('id, slack_user_id, name, deferred_balance')
+      .select('id, slack_user_id, name, avatar_url, deferred_balance')
       .eq('is_active', true),
     supabase
       .from('subscription_payments')
-      .select('user_id, cash_due_amount')
+      .select('user_id, cash_due_amount, user:users!subscription_payments_user_id_fkey(id, name, avatar_url)')
       .eq('payment_status', 'pending_cash_settlement')
       .gt('cash_due_amount', 0),
+    supabase
+      .from('orders')
+      .select('user_id, total_amount, user:users!orders_user_id_fkey(id, name, avatar_url)')
+      .eq('payment_method', 'cash')
+      .eq('payment_status', 'pending'),
   ]);
 
-  const subscriptionAmountsByUser = new Map<string, number>();
-  for (const payment of (subscriptionPayments ?? []) as Array<{ user_id: string; cash_due_amount: number }>) {
-    subscriptionAmountsByUser.set(
-      payment.user_id,
-      (subscriptionAmountsByUser.get(payment.user_id) ?? 0) + payment.cash_due_amount
-    );
-  }
+  const cashCollectionEntries = buildCashCollectionEntries({
+    deferredUsers: ((users ?? []) as ReminderUser[]).filter((user) => (user.deferred_balance ?? 0) > 0) as DeferredCashCollectionRow[],
+    pendingCashOrders: (pendingCashOrders ?? []) as PendingCashOrderRow[],
+    pendingSubscriptionPayments: (subscriptionPayments ?? []) as PendingSubscriptionCashRow[],
+  });
+
+  const cashCollectionByUserId = new Map(cashCollectionEntries.map((entry) => [entry.userId, entry]));
 
   const targets = ((users ?? []) as ReminderUser[])
     .map((user) => {
-      const subscriptionAmount = subscriptionAmountsByUser.get(user.id) ?? 0;
-      const deferredAmount = user.deferred_balance;
-      const amount = deferredAmount + subscriptionAmount;
+      const collection = cashCollectionByUserId.get(user.id);
+      const amount = collection?.totalAmount ?? 0;
 
       return {
         slackUserId: user.slack_user_id,
         name: user.name,
         amount,
-        deferredAmount,
-        subscriptionAmount,
+        deferredAmount: collection?.deferredAmount ?? 0,
+        cashOrderAmount: collection?.cashOrderAmount ?? 0,
+        subscriptionAmount: collection?.subscriptionCashAmount ?? 0,
       };
     })
     .filter((user) => Boolean(user.slackUserId) && user.amount > 0)
@@ -84,6 +97,7 @@ export async function GET(request: Request) {
       name: user.name,
       amount: user.amount,
       deferredAmount: user.deferredAmount,
+      cashOrderAmount: user.cashOrderAmount,
       subscriptionAmount: user.subscriptionAmount,
     }));
 

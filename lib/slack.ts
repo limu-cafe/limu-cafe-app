@@ -552,20 +552,26 @@ export async function notifyMonthlySettlement(params: {
     name: string;
     amount: number;
     deferredAmount?: number;
+    cashOrderAmount?: number;
     subscriptionAmount?: number;
   }[];
 }) {
   for (const user of params.users) {
     const deferredAmount = user.deferredAmount ?? user.amount;
+    const cashOrderAmount = user.cashOrderAmount ?? 0;
     const subscriptionAmount = user.subscriptionAmount ?? 0;
+    const hasCashOrderAmount = cashOrderAmount > 0;
     const hasSubscriptionAmount = subscriptionAmount > 0;
 
     await sendSlackDirectMessage({
       slackUserId: user.slackUserId,
       text:
         `📅 定期精算のお知らせ\n` +
-        `${user.name}さんの現在の精算予定額は ¥${user.amount.toLocaleString()} です。\n` +
-        `後払い残高: ¥${deferredAmount.toLocaleString()}\n` +
+        `${user.name}さんの現在の未精算額は ¥${user.amount.toLocaleString()} です。\n` +
+        `後払い・現金チャージ: ¥${deferredAmount.toLocaleString()}\n` +
+        (hasCashOrderAmount
+          ? `現金注文: ¥${cashOrderAmount.toLocaleString()}\n`
+          : '') +
         (hasSubscriptionAmount
           ? `サブスク未精算: ¥${subscriptionAmount.toLocaleString()}\n`
           : '') +

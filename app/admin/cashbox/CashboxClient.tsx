@@ -44,7 +44,7 @@ export default function CashboxClient({
   expectedAmount,
   pendingCashOrderAmount,
   pendingCashOrdersCount,
-  deferredReceivableAmount,
+  totalCashCollectionAmount,
   unreimbursedAdvanceAmount,
   unreimbursedPurchaseRuns,
   latestCount,
@@ -54,7 +54,7 @@ export default function CashboxClient({
   expectedAmount: number;
   pendingCashOrderAmount: number;
   pendingCashOrdersCount: number;
-  deferredReceivableAmount: number;
+  totalCashCollectionAmount: number;
   unreimbursedAdvanceAmount: number;
   unreimbursedPurchaseRuns: PendingPurchaseRun[];
   latestCount: Count | null;
@@ -213,10 +213,11 @@ export default function CashboxClient({
           <div className="w-10 h-10 rounded-xl bg-sky-500/10 flex items-center justify-center mb-3">
             <Wallet size={20} className="text-sky-400" />
           </div>
-          <p className="text-gray-400 text-xs mb-1">未回収の後払い</p>
+          <p className="text-gray-400 text-xs mb-1">未回収の要回収</p>
           <p className="font-display font-bold text-2xl text-sky-400">
-            ¥{deferredReceivableAmount.toLocaleString()}
+            ¥{totalCashCollectionAmount.toLocaleString()}
           </p>
+          <p className="mt-1 text-xs text-gray-500">後払い・現金注文・サブスク現金を含む</p>
         </div>
 
         <div className="bg-gray-900 rounded-2xl border border-gray-800 p-5">
