@@ -1,5 +1,11 @@
 import { createAdminClient } from '@/lib/supabase/server';
 import { calculateCashboxBalance } from '@/lib/cashbox';
+import {
+  buildCashCollectionEntries,
+  type DeferredCashCollectionRow,
+  type PendingCashOrderRow,
+  type PendingSubscriptionCashRow,
+} from '@/lib/cash-collection';
 import CashboxClient from './CashboxClient';
 
 export const dynamic = 'force-dynamic';
@@ -19,6 +25,7 @@ export default async function CashboxPage() {
     { count: pendingCashOrdersCount },
     { data: pendingCashOrders },
     { data: usersWithDeferred },
+    { data: pendingSubscriptionCashPayments },
     { data: unreimbursedPurchaseRuns },
   ] = await Promise.all([
     supabase
@@ -46,9 +53,16 @@ export default async function CashboxPage() {
       .eq('payment_status', 'pending'),
     supabase
       .from('users')
-      .select('deferred_balance')
+      .select('id, name, avatar_url, deferred_balance')
       .gt('deferred_balance', 0)
       .eq('is_active', true),
+    supabase
+      .from('subscription_payments')
+      .select(
+        'user_id, cash_due_amount, user:users!subscription_payments_user_id_fkey(id, name, avatar_url)'
+      )
+      .eq('payment_status', 'pending_cash_settlement')
+      .gt('cash_due_amount', 0),
     supabase
       .from('purchase_runs')
       .select('id, total_amount, vendor, note, created_at, created_by_user:users!purchase_runs_created_by_fkey(name), purchase_run_items(item_name, quantity)')
@@ -63,8 +77,17 @@ export default async function CashboxPage() {
     (sum: number, order: { total_amount: number }) => sum + order.total_amount,
     0
   );
-  const deferredReceivableAmount = (usersWithDeferred ?? []).reduce(
-    (sum: number, user: { deferred_balance: number }) => sum + user.deferred_balance,
+  const cashCollectionEntries = buildCashCollectionEntries({
+    deferredUsers: (usersWithDeferred ?? []) as DeferredCashCollectionRow[],
+    pendingCashOrders: ((pendingCashOrders ?? []).map((order: { total_amount: number }) => ({
+      ...order,
+      user: null,
+    })) ?? []) as PendingCashOrderRow[],
+    pendingSubscriptionPayments:
+      (pendingSubscriptionCashPayments ?? []) as PendingSubscriptionCashRow[],
+  });
+  const totalCashCollectionAmount = cashCollectionEntries.reduce(
+    (sum, entry) => sum + entry.totalAmount,
     0
   );
   const unreimbursedAdvanceAmount = (unreimbursedPurchaseRuns ?? []).reduce(
@@ -77,7 +100,7 @@ export default async function CashboxPage() {
       expectedAmount={expectedAmount}
       pendingCashOrderAmount={pendingCashOrderAmount}
       pendingCashOrdersCount={pendingCashOrdersCount ?? 0}
-      deferredReceivableAmount={deferredReceivableAmount}
+      totalCashCollectionAmount={totalCashCollectionAmount}
       unreimbursedAdvanceAmount={unreimbursedAdvanceAmount}
       unreimbursedPurchaseRuns={unreimbursedPurchaseRuns ?? []}
       latestCount={latestCount}
