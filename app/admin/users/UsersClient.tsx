@@ -8,8 +8,15 @@ import toast from 'react-hot-toast';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import type { User } from '@/types';
+import { describeCashCollectionBreakdown, type CashCollectionEntry } from '@/lib/cash-collection';
 
-export default function UsersClient({ users }: { users: User[] }) {
+export default function UsersClient({
+  users,
+  cashCollectionsByUserId,
+}: {
+  users: User[];
+  cashCollectionsByUserId: Record<string, CashCollectionEntry>;
+}) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [loading, setLoading] = useState<string | null>(null);
@@ -64,7 +71,10 @@ export default function UsersClient({ users }: { users: User[] }) {
     finally { setLoading(null); }
   };
 
-  const UserRow = ({ user }: { user: User }) => (
+  const UserRow = ({ user }: { user: User }) => {
+    const cashCollection = cashCollectionsByUserId[user.id];
+
+    return (
     <tr className="border-b border-gray-800/50 hover:bg-gray-800/30 transition-colors">
       <td className="px-4 py-3">
         <div className="flex items-center gap-2">
@@ -81,7 +91,12 @@ export default function UsersClient({ users }: { users: User[] }) {
       <td className="px-4 py-3 text-gray-400 text-sm">{user.email ?? '-'}</td>
       <td className="px-4 py-3 font-mono text-green-400">¥{user.balance.toLocaleString()}</td>
       <td className="px-4 py-3 font-mono text-amber-400">
-        {user.deferred_balance > 0 ? `¥${user.deferred_balance.toLocaleString()}` : '-'}
+        {cashCollection ? `¥${cashCollection.totalAmount.toLocaleString()}` : '-'}
+        {cashCollection && (
+          <p className="mt-1 text-[11px] leading-relaxed text-gray-500">
+            {describeCashCollectionBreakdown(cashCollection)}
+          </p>
+        )}
       </td>
       <td className="px-4 py-3 font-mono text-sky-300">
         {user.points_balance.toLocaleString()}pt
@@ -144,7 +159,8 @@ export default function UsersClient({ users }: { users: User[] }) {
         </div>
       </td>
     </tr>
-  );
+    );
+  };
 
   return (
     <div className="space-y-6">
@@ -207,7 +223,7 @@ export default function UsersClient({ users }: { users: User[] }) {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-gray-800">
-              {['名前', 'メール', '残高', '後払い', 'ポイント', '登録日', '操作'].map(h => (
+              {['名前', 'メール', '残高', '要回収', 'ポイント', '登録日', '操作'].map(h => (
                 <th key={h} className="px-4 py-3 text-left font-medium text-gray-500 text-xs">{h}</th>
               ))}
             </tr>
@@ -229,7 +245,7 @@ export default function UsersClient({ users }: { users: User[] }) {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-800">
-                {['名前', 'メール', '残高', '後払い', 'ポイント', '登録日', '操作'].map(h => (
+                {['名前', 'メール', '残高', '要回収', 'ポイント', '登録日', '操作'].map(h => (
                   <th key={h} className="px-4 py-3 text-left font-medium text-gray-500 text-xs">{h}</th>
                 ))}
               </tr>
