@@ -56,11 +56,11 @@ export default async function AdminDashboard() {
   const [
     lowStockCount,
     { count: pendingReimbursements },
+    { data: pendingDeferredOrders },
     { count: pendingCashOrders },
     { count: pendingCharges },
     { data: approvedCashCharges },
     { count: pendingSubscriptionCashPayments },
-    { count: deferredUsers },
     { data: deferredUsersForCollection },
     { data: pendingCashOrdersForCollection },
     { data: pendingSubscriptionCashForCollection },
@@ -71,6 +71,12 @@ export default async function AdminDashboard() {
     { data: pendingBotIntroUsers },
   ] = await Promise.all([
     countLowStockItems(supabase),
+    supabase
+      .from('orders')
+      .select('id, deferred_settlement_method, settled_at')
+      .eq('payment_method', 'deferred')
+      .eq('payment_status', 'completed')
+      .or('deferred_settlement_method.is.null,deferred_settlement_method.eq.cash'),
     supabase
       .from('purchase_runs')
       .select('*', { count: 'exact', head: true })
@@ -93,11 +99,6 @@ export default async function AdminDashboard() {
       .from('subscription_payments')
       .select('*', { count: 'exact', head: true })
       .eq('payment_status', 'pending_cash_settlement'),
-    supabase
-      .from('users')
-      .select('*', { count: 'exact', head: true })
-      .gt('deferred_balance', 0)
-      .eq('is_active', true),
     supabase
       .from('users')
       .select('id, name, avatar_url, deferred_balance')
@@ -138,6 +139,10 @@ export default async function AdminDashboard() {
   const pendingCashChargeCount = ((approvedCashCharges ?? []) as DashboardChargeRow[]).filter(
     (charge) => !charge.settled_at
   ).length;
+  const pendingDeferredOrderCount = ((pendingDeferredOrders ?? []) as Array<{
+    deferred_settlement_method?: string | null;
+    settled_at?: string | null;
+  }>).filter((order) => (order.deferred_settlement_method ?? 'cash') === 'cash' && !order.settled_at).length;
 
   const cashCollectionEntries = buildCashCollectionEntries({
     deferredUsers: (deferredUsersForCollection ?? []) as DeferredCashCollectionRow[],
@@ -175,11 +180,11 @@ export default async function AdminDashboard() {
       icon: Receipt,
       title: '取引履歴',
       count:
+        pendingDeferredOrderCount +
         (pendingCashOrders ?? 0) +
         pendingCashChargeCount +
         (pendingCharges ?? 0) +
-        (pendingSubscriptionCashPayments ?? 0) +
-        (deferredUsers ?? 0),
+        (pendingSubscriptionCashPayments ?? 0),
     },
     {
       href: '/admin/cashbox',

@@ -21,6 +21,9 @@ type OrderSummary = {
   payment_method: string;
   deferred_settlement_method?: string | null;
   payment_status: string;
+  settled_at?: string | null;
+  settlement_source?: 'individual_deferred_order' | 'deferred_settlement' | null;
+  settlement_id?: string | null;
   created_at: string;
   order_items?: Array<{ item_name: string; quantity: number }>;
 };
@@ -187,6 +190,17 @@ export default function TransactionsClient({
     () => orders.filter((order) => order.payment_method === 'cash' && order.payment_status === 'pending'),
     [orders]
   );
+  const pendingDeferredOrders = useMemo(
+    () =>
+      orders.filter(
+        (order) =>
+          order.payment_method === 'deferred' &&
+          order.payment_status === 'completed' &&
+          (order.deferred_settlement_method ?? 'cash') === 'cash' &&
+          !order.settled_at
+      ),
+    [orders]
+  );
   const pendingChargeRequests = useMemo(
     () => charges.filter((charge) => charge.status === 'pending'),
     [charges]
@@ -205,7 +219,16 @@ export default function TransactionsClient({
 
   const historyEntries = useMemo(() => {
     const normalizedOrders = orders
-      .filter((order) => !(order.payment_method === 'cash' && order.payment_status === 'pending'))
+      .filter(
+        (order) =>
+          !(order.payment_method === 'cash' && order.payment_status === 'pending') &&
+          !(
+            order.payment_method === 'deferred' &&
+            order.payment_status === 'completed' &&
+            (order.deferred_settlement_method ?? 'cash') === 'cash' &&
+            !order.settled_at
+          )
+      )
       .map((order) => ({ kind: 'order' as const, created_at: order.created_at, order }));
 
     const normalizedCharges = charges
@@ -289,6 +312,7 @@ export default function TransactionsClient({
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="font-display text-2xl font-bold text-white">取引履歴</h1>
         <div className="flex flex-wrap gap-2 text-xs">
+          <span className="rounded-full bg-gray-900 px-3 py-2 text-gray-300">後払い注文 {pendingDeferredOrders.length}</span>
           <span className="rounded-full bg-gray-900 px-3 py-2 text-gray-300">現金注文 {pendingCashOrders.length}</span>
           <span className="rounded-full bg-gray-900 px-3 py-2 text-gray-300">現金チャージ {pendingCashCharges.length}</span>
           <span className="rounded-full bg-gray-900 px-3 py-2 text-gray-300">サブスク現金 {pendingSubscriptionCashPayments.length}</span>
@@ -301,7 +325,8 @@ export default function TransactionsClient({
           <h2 className="text-sm font-semibold uppercase tracking-[0.16em] text-gray-400">要回収</h2>
         </div>
 
-        {pendingCashOrders.length === 0 &&
+        {pendingDeferredOrders.length === 0 &&
+        pendingCashOrders.length === 0 &&
         pendingCashCharges.length === 0 &&
         pendingSubscriptionCashPayments.length === 0 ? (
           <div className="rounded-2xl border border-gray-800 bg-gray-900 px-5 py-10 text-center text-sm text-gray-500">
@@ -309,6 +334,81 @@ export default function TransactionsClient({
           </div>
         ) : (
           <div className="space-y-3">
+            {pendingDeferredOrders.map((order) => (
+              <div key={order.id} className="rounded-2xl border border-gray-800 bg-gray-900 px-4 py-4">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="min-w-0 space-y-2">
+                    <div className="flex items-center gap-3">
+                      <Avatar user={order.user} />
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="font-medium text-white">{order.user?.name ?? '不明なユーザー'}</p>
+                          <span className="rounded-full bg-rose-500/10 px-2 py-0.5 text-[11px] font-medium text-rose-300">
+                            後払い注文
+                          </span>
+                        </div>
+                        <p className="text-xs text-gray-500">{formatDateTime(order.created_at)}</p>
+                      </div>
+                    </div>
+                    <p className="text-sm text-gray-300">
+                      {(order.order_items ?? []).map((item) => `${item.item_name} × ${item.quantity}`).join(' / ') ||
+                        '明細なし'}
+                    </p>
+                  </div>
+                  <div className="space-y-3 lg:text-right">
+                    <p className="font-display text-2xl font-bold text-white">{formatMoney(order.total_amount)}</p>
+                    <div className="flex flex-wrap gap-2 lg:justify-end">
+                      <ActionButton
+                        tone="success"
+                        disabled={loading === `deferred-order-settle:${order.id}`}
+                        onClick={() =>
+                          runAction({
+                            key: `deferred-order-settle:${order.id}`,
+                            request: () =>
+                              fetch(`/api/admin/orders/${order.id}/deferred-settlement`, {
+                                method: 'POST',
+                              }),
+                            success: '精算済みにしました',
+                            confirmMessage: 'この後払い注文を精算済みにしますか？',
+                          })
+                        }
+                      >
+                        精算完了
+                      </ActionButton>
+                      <ActionButton
+                        tone="danger"
+                        disabled={loading === `order-refund:${order.id}`}
+                        onClick={() =>
+                          runAction({
+                            key: `order-refund:${order.id}`,
+                            request: () => fetch(`/api/admin/orders/${order.id}/refund`, { method: 'POST' }),
+                            success: '返金しました',
+                            confirmMessage: 'この後払い注文を返金しますか？',
+                          })
+                        }
+                      >
+                        返金
+                      </ActionButton>
+                      <ActionButton
+                        tone="danger"
+                        disabled={loading === `order-cancel:${order.id}`}
+                        onClick={() =>
+                          runAction({
+                            key: `order-cancel:${order.id}`,
+                            request: () => fetch(`/api/admin/orders/${order.id}/cancel`, { method: 'POST' }),
+                            success: 'キャンセルしました',
+                            confirmMessage: 'この後払い注文をキャンセルしますか？',
+                          })
+                        }
+                      >
+                        キャンセル
+                      </ActionButton>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+
             {pendingCashOrders.map((order) => (
               <div key={order.id} className="rounded-2xl border border-gray-800 bg-gray-900 px-4 py-4">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -593,6 +693,14 @@ export default function TransactionsClient({
                   order.payment_method === 'deferred' && order.deferred_settlement_method
                     ? `${paymentMethodLabel[order.payment_method]} / ${deferredMethodLabel[order.deferred_settlement_method] ?? order.deferred_settlement_method}`
                     : paymentMethodLabel[order.payment_method] ?? order.payment_method;
+                const orderLabel =
+                  order.payment_method === 'deferred' &&
+                  (order.deferred_settlement_method ?? 'cash') === 'cash' &&
+                  order.settled_at
+                    ? order.settlement_source === 'individual_deferred_order'
+                      ? '個別精算済み'
+                      : '精算済み'
+                    : orderStatusLabel[order.payment_status] ?? order.payment_status;
 
                 return (
                   <div key={`order:${order.id}`} className="rounded-2xl border border-gray-800 bg-gray-900 px-4 py-4">
@@ -605,7 +713,7 @@ export default function TransactionsClient({
                               <p className="font-medium text-white">{order.user?.name ?? '不明なユーザー'}</p>
                               <span className="rounded-full bg-gray-800 px-2 py-0.5 text-[11px] text-gray-300">注文</span>
                               <span className="rounded-full bg-white/5 px-2 py-0.5 text-[11px] text-gray-400">
-                                {orderStatusLabel[order.payment_status] ?? order.payment_status}
+                                {orderLabel}
                               </span>
                             </div>
                             <p className="text-xs text-gray-500">{formatDateTime(order.created_at)}</p>
@@ -641,6 +749,26 @@ export default function TransactionsClient({
                               未精算に戻す
                             </ActionButton>
                           )}
+                          {order.payment_method === 'deferred' &&
+                            (order.deferred_settlement_method ?? 'cash') === 'cash' &&
+                            order.settlement_source === 'individual_deferred_order' && (
+                              <ActionButton
+                                disabled={loading === `deferred-order-unsettle:${order.id}`}
+                                onClick={() =>
+                                  runAction({
+                                    key: `deferred-order-unsettle:${order.id}`,
+                                    request: () =>
+                                      fetch(`/api/admin/orders/${order.id}/deferred-settlement`, {
+                                        method: 'DELETE',
+                                      }),
+                                    success: '未精算に戻しました',
+                                    confirmMessage: 'この後払い注文を未精算に戻しますか？',
+                                  })
+                                }
+                              >
+                                未精算に戻す
+                              </ActionButton>
+                            )}
                           {['pending', 'completed'].includes(order.payment_status) && (
                             <ActionButton
                               tone="danger"

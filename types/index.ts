@@ -84,6 +84,9 @@ export interface Order {
   payment_status: PaymentStatus;
   cash_confirmed_at?: string;
   cash_confirmed_by?: string;
+  settled_at?: string | null;
+  settlement_source?: 'individual_deferred_order' | 'deferred_settlement' | null;
+  settlement_id?: string | null;
   note?: string;
   order_items?: OrderItem[];
   created_at: string;
