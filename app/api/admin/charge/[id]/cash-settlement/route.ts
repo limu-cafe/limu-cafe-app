@@ -17,7 +17,7 @@ export async function POST(
   const supabase = createAdminClient();
   const { data: charge, error: chargeError } = await supabase
     .from('charge_requests')
-    .select('id, amount, method, status, settled_at, settlement_source')
+    .select('id, user_id, amount, method, status, settled_at, settlement_source')
     .eq('id', params.id)
     .single();
 
@@ -41,6 +41,11 @@ export async function POST(
   }
 
   const now = new Date().toISOString();
+  const { data: targetUser } = await supabase
+    .from('users')
+    .select('deferred_balance')
+    .eq('id', charge.user_id)
+    .single();
 
   const { data: existingCashEntry } = await supabase
     .from('cashbox_entries')
@@ -67,6 +72,13 @@ export async function POST(
       settlement_id: null,
     })
     .eq('id', charge.id);
+
+  await supabase
+    .from('users')
+    .update({
+      deferred_balance: Math.max(0, (targetUser?.deferred_balance ?? 0) - charge.amount),
+    })
+    .eq('id', charge.user_id);
 
   await logAdminAction(supabase, {
     actor_id: adminSession.user.id,
@@ -98,7 +110,7 @@ export async function DELETE(
   const supabase = createAdminClient();
   const { data: charge, error: chargeError } = await supabase
     .from('charge_requests')
-    .select('id, amount, method, status, settlement_source')
+    .select('id, user_id, amount, method, status, settlement_source')
     .eq('id', params.id)
     .single();
 
@@ -126,6 +138,17 @@ export async function DELETE(
       settlement_id: null,
     })
     .eq('id', charge.id);
+  const { data: targetUser } = await supabase
+    .from('users')
+    .select('deferred_balance')
+    .eq('id', charge.user_id)
+    .single();
+  await supabase
+    .from('users')
+    .update({
+      deferred_balance: (targetUser?.deferred_balance ?? 0) + charge.amount,
+    })
+    .eq('id', charge.user_id);
 
   await logAdminAction(supabase, {
     actor_id: adminSession.user.id,
