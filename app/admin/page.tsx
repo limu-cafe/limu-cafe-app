@@ -12,6 +12,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { createAdminClient } from '@/lib/supabase/server';
+import type { CashChargeSummary } from '@/lib/charge-settlement';
 import { countLowStockItems } from '@/lib/item-stock';
 import {
   buildCashCollectionEntries,
@@ -27,6 +28,10 @@ export const dynamic = 'force-dynamic';
 type BotIntroUser = {
   id: string;
   name: string | null;
+};
+
+type DashboardChargeRow = CashChargeSummary & {
+  settled_at?: string | null;
 };
 
 export default async function AdminDashboard() {
@@ -53,6 +58,7 @@ export default async function AdminDashboard() {
     { count: pendingReimbursements },
     { count: pendingCashOrders },
     { count: pendingCharges },
+    { data: approvedCashCharges },
     { count: pendingSubscriptionCashPayments },
     { count: deferredUsers },
     { data: deferredUsersForCollection },
@@ -78,6 +84,11 @@ export default async function AdminDashboard() {
       .from('charge_requests')
       .select('*', { count: 'exact', head: true })
       .eq('status', 'pending'),
+    supabase
+      .from('charge_requests')
+      .select('id, method, status, settled_at')
+      .eq('method', 'cash')
+      .eq('status', 'approved'),
     supabase
       .from('subscription_payments')
       .select('*', { count: 'exact', head: true })
@@ -124,6 +135,10 @@ export default async function AdminDashboard() {
     pendingBotIntroUsersQuery,
   ]);
 
+  const pendingCashChargeCount = ((approvedCashCharges ?? []) as DashboardChargeRow[]).filter(
+    (charge) => !charge.settled_at
+  ).length;
+
   const cashCollectionEntries = buildCashCollectionEntries({
     deferredUsers: (deferredUsersForCollection ?? []) as DeferredCashCollectionRow[],
     pendingCashOrders: (pendingCashOrdersForCollection ?? []) as PendingCashOrderRow[],
@@ -161,6 +176,7 @@ export default async function AdminDashboard() {
       title: '取引履歴',
       count:
         (pendingCashOrders ?? 0) +
+        pendingCashChargeCount +
         (pendingCharges ?? 0) +
         (pendingSubscriptionCashPayments ?? 0) +
         (deferredUsers ?? 0),

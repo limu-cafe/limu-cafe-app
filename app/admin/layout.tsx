@@ -1,9 +1,14 @@
 import { createAdminClient } from '@/lib/supabase/server';
+import type { CashChargeSummary } from '@/lib/charge-settlement';
 import { countLowStockItems } from '@/lib/item-stock';
 import AdminAuthGuard from './AdminAuthGuard';
 import AdminSidebar from './AdminSidebar';
 
 export const dynamic = 'force-dynamic';
+
+type LayoutChargeRow = CashChargeSummary & {
+  settled_at?: string | null;
+};
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const supabase = createAdminClient();
@@ -11,6 +16,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const [
     { count: pendingOrders },
     { count: pendingChargeRequests },
+    { data: approvedCashCharges },
     { count: pendingSubscriptionCashPayments },
     { count: pendingUsers },
     { count: pendingRequests },
@@ -28,6 +34,11 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       .from('charge_requests')
       .select('*', { count: 'exact', head: true })
       .eq('status', 'pending'),
+    supabase
+      .from('charge_requests')
+      .select('id, method, status, settled_at')
+      .eq('method', 'cash')
+      .eq('status', 'approved'),
     supabase
       .from('subscription_payments')
       .select('*', { count: 'exact', head: true })
@@ -57,11 +68,16 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       .eq('is_active', true),
   ]);
 
+  const pendingCashChargeCount = ((approvedCashCharges ?? []) as LayoutChargeRow[]).filter(
+    (charge) => !charge.settled_at
+  ).length;
+
   const notifications = {
     items: lowStockCount ?? 0,
     reimbursements: pendingReimbursements ?? 0,
     transactions:
       (pendingOrders ?? 0) +
+      pendingCashChargeCount +
       (pendingChargeRequests ?? 0) +
       (pendingSubscriptionCashPayments ?? 0) +
       (deferredUsers ?? 0),
