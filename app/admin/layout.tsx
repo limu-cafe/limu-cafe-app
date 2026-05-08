@@ -14,6 +14,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const supabase = createAdminClient();
 
   const [
+    { data: pendingDeferredOrders },
     { count: pendingOrders },
     { count: pendingChargeRequests },
     { data: approvedCashCharges },
@@ -23,8 +24,13 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     { count: pendingLegacyTransfers },
     { count: pendingReimbursements },
     lowStockCount,
-    { count: deferredUsers },
   ] = await Promise.all([
+    supabase
+      .from('orders')
+      .select('id, deferred_settlement_method, settled_at')
+      .eq('payment_method', 'deferred')
+      .eq('payment_status', 'completed')
+      .or('deferred_settlement_method.is.null,deferred_settlement_method.eq.cash'),
     supabase
       .from('orders')
       .select('*', { count: 'exact', head: true })
@@ -61,26 +67,25 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       .select('*', { count: 'exact', head: true })
       .eq('reimbursement_status', 'pending_reimbursement'),
     countLowStockItems(supabase),
-    supabase
-      .from('users')
-      .select('*', { count: 'exact', head: true })
-      .gt('deferred_balance', 0)
-      .eq('is_active', true),
   ]);
 
   const pendingCashChargeCount = ((approvedCashCharges ?? []) as LayoutChargeRow[]).filter(
     (charge) => !charge.settled_at
   ).length;
+  const pendingDeferredOrderCount = ((pendingDeferredOrders ?? []) as Array<{
+    deferred_settlement_method?: string | null;
+    settled_at?: string | null;
+  }>).filter((order) => (order.deferred_settlement_method ?? 'cash') === 'cash' && !order.settled_at).length;
 
   const notifications = {
     items: lowStockCount ?? 0,
     reimbursements: pendingReimbursements ?? 0,
     transactions:
+      pendingDeferredOrderCount +
       (pendingOrders ?? 0) +
       pendingCashChargeCount +
       (pendingChargeRequests ?? 0) +
-      (pendingSubscriptionCashPayments ?? 0) +
-      (deferredUsers ?? 0),
+      (pendingSubscriptionCashPayments ?? 0),
     users: pendingUsers ?? 0,
     points: 0,
     requests: pendingRequests ?? 0,

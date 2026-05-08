@@ -5,8 +5,9 @@ import TransactionsClient from './TransactionsClient';
 
 export const dynamic = 'force-dynamic';
 
-const ORDER_SELECT = `id, user_id, total_amount, points_used, payment_method, deferred_settlement_method, payment_status, created_at, user:users!orders_user_id_fkey(id, name, avatar_url), ${ORDER_ITEMS_SELECT_ENHANCED}`;
-const ORDER_SELECT_LEGACY = `id, user_id, total_amount, payment_method, payment_status, created_at, user:users!orders_user_id_fkey(id, name, avatar_url), ${ORDER_ITEMS_SELECT_LEGACY}`;
+const ORDER_SELECT = `id, user_id, total_amount, points_used, payment_method, deferred_settlement_method, payment_status, settled_at, settlement_source, settlement_id, created_at, user:users!orders_user_id_fkey(id, name, avatar_url), ${ORDER_ITEMS_SELECT_ENHANCED}`;
+const ORDER_SELECT_NO_SETTLEMENT = `id, user_id, total_amount, points_used, payment_method, deferred_settlement_method, payment_status, created_at, user:users!orders_user_id_fkey(id, name, avatar_url), ${ORDER_ITEMS_SELECT_ENHANCED}`;
+const ORDER_SELECT_FULL_LEGACY = `id, user_id, total_amount, payment_method, payment_status, created_at, user:users!orders_user_id_fkey(id, name, avatar_url), ${ORDER_ITEMS_SELECT_LEGACY}`;
 
 type OrderFetchRow = {
   id: string;
@@ -23,6 +24,9 @@ type OrderFetchRow = {
   order_items?: Array<{ item_name: string; quantity: number }>;
   points_used?: number | null;
   deferred_settlement_method?: string | null;
+  settled_at?: string | null;
+  settlement_source?: 'individual_deferred_order' | 'deferred_settlement' | null;
+  settlement_id?: string | null;
 };
 
 type ChargeFetchRow = {
@@ -87,13 +91,24 @@ async function fetchOrders() {
     }));
   }
 
-  if (!needsLegacyOrderSelect(primary.error)) {
+  const primaryMessage =
+    primary.error && typeof primary.error.message === 'string' ? primary.error.message : '';
+  const isMissingSettlementTrackingColumns =
+    primaryMessage.includes('settled_at') ||
+    primaryMessage.includes('settlement_source') ||
+    primaryMessage.includes('settlement_id');
+
+  if (!needsLegacyOrderSelect(primary.error) && !isMissingSettlementTrackingColumns) {
     throw primary.error;
   }
 
+  const fallbackSelect = needsLegacyOrderSelect(primary.error)
+    ? ORDER_SELECT_FULL_LEGACY
+    : ORDER_SELECT_NO_SETTLEMENT;
+
   const legacy = await supabase
     .from('orders')
-    .select(ORDER_SELECT_LEGACY)
+    .select(fallbackSelect)
     .order('created_at', { ascending: false })
     .limit(80);
 
@@ -103,8 +118,11 @@ async function fetchOrders() {
 
   return ((legacy.data ?? []) as OrderFetchRow[]).map((order: OrderFetchRow) => ({
     ...order,
-    points_used: 0,
-    deferred_settlement_method: null,
+    points_used: order.points_used ?? 0,
+    deferred_settlement_method: order.deferred_settlement_method ?? null,
+    settled_at: order.settled_at ?? null,
+    settlement_source: order.settlement_source ?? null,
+    settlement_id: order.settlement_id ?? null,
   }));
 }
 

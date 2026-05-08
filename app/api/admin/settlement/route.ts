@@ -34,6 +34,19 @@ export async function POST(request: Request) {
     .eq('id', user_id);
 
   await supabase
+    .from('orders')
+    .update({
+      settled_at: settlement.settled_at ?? new Date().toISOString(),
+      settlement_source: 'deferred_settlement',
+      settlement_id: settlement.id,
+    })
+    .eq('user_id', user_id)
+    .eq('payment_method', 'deferred')
+    .eq('payment_status', 'completed')
+    .or('deferred_settlement_method.is.null,deferred_settlement_method.eq.cash')
+    .is('settled_at', null);
+
+  await supabase
     .from('charge_requests')
     .update({
       settled_at: settlement.settled_at ?? new Date().toISOString(),

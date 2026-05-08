@@ -74,6 +74,16 @@ export async function POST(
     .eq('settlement_id', settlement.id)
     .eq('settlement_source', 'deferred_settlement');
 
+  await supabase
+    .from('orders')
+    .update({
+      settled_at: null,
+      settlement_source: null,
+      settlement_id: null,
+    })
+    .eq('settlement_id', settlement.id)
+    .eq('settlement_source', 'deferred_settlement');
+
   const { error: updateError } = await supabase
     .from('settlements')
     .update({
