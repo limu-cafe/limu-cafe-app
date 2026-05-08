@@ -64,6 +64,16 @@ export async function POST(
     await supabase.from('cashbox_entries').delete().eq('settlement_id', settlement.id);
   }
 
+  await supabase
+    .from('charge_requests')
+    .update({
+      settled_at: null,
+      settlement_source: null,
+      settlement_id: null,
+    })
+    .eq('settlement_id', settlement.id)
+    .eq('settlement_source', 'deferred_settlement');
+
   const { error: updateError } = await supabase
     .from('settlements')
     .update({

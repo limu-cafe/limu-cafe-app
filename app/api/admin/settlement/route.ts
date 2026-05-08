@@ -15,7 +15,7 @@ export async function POST(request: Request) {
     status: 'completed',
     settled_at: new Date().toISOString(),
     settled_by: user?.id ?? null,
-  }).select('id').single();
+  }).select('id, settled_at').single();
 
   if (settlementError || !settlement) {
     return NextResponse.json({ error: settlementError?.message ?? '精算に失敗しました' }, { status: 500 });
@@ -32,6 +32,18 @@ export async function POST(request: Request) {
   await supabase.from('users')
     .update({ deferred_balance: 0 })
     .eq('id', user_id);
+
+  await supabase
+    .from('charge_requests')
+    .update({
+      settled_at: settlement.settled_at ?? new Date().toISOString(),
+      settlement_source: 'deferred_settlement',
+      settlement_id: settlement.id,
+    })
+    .eq('user_id', user_id)
+    .eq('method', 'cash')
+    .eq('status', 'approved')
+    .is('settled_at', null);
 
   if (method === 'cash') {
     await insertCashboxEntry(supabase, {

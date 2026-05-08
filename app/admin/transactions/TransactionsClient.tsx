@@ -36,6 +36,8 @@ type ChargeSummary = {
   created_at: string;
   approved_at?: string | null;
   is_cash_settled: boolean;
+  settled_at?: string | null;
+  settlement_source?: string | null;
 };
 
 type SettlementSummary = {
@@ -765,7 +767,9 @@ export default function TransactionsClient({
                 const chargeLabel =
                   charge.method === 'cash'
                     ? charge.is_cash_settled
-                      ? '精算済み'
+                      ? charge.settlement_source === 'deferred_settlement'
+                        ? '精算済み'
+                        : '個別精算済み'
                       : charge.status === 'approved'
                         ? '未精算'
                         : chargeStatusLabel[charge.status] ?? charge.status
@@ -802,7 +806,10 @@ export default function TransactionsClient({
                       <div className="space-y-3 lg:text-right">
                         <p className="font-display text-2xl font-bold text-white">{formatMoney(charge.amount)}</p>
                         <div className="flex flex-wrap gap-2 lg:justify-end">
-                          {charge.status === 'approved' && charge.method === 'cash' && charge.is_cash_settled && (
+                          {charge.status === 'approved' &&
+                            charge.method === 'cash' &&
+                            charge.is_cash_settled &&
+                            charge.settlement_source === 'individual_cash_charge' && (
                             <ActionButton
                               disabled={loading === `charge-unsettle:${charge.id}`}
                               onClick={() =>

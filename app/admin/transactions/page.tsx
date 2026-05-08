@@ -1,8 +1,4 @@
 import { createAdminClient } from '@/lib/supabase/server';
-import {
-  buildSettledChargeIdSet,
-  type CashChargeSettlementRow,
-} from '@/lib/charge-settlement';
 import { ORDER_ITEMS_SELECT_ENHANCED, ORDER_ITEMS_SELECT_LEGACY } from '@/lib/item-select';
 import { needsLegacyOrderSelect } from '@/lib/orders';
 import TransactionsClient from './TransactionsClient';
@@ -29,8 +25,6 @@ type OrderFetchRow = {
   deferred_settlement_method?: string | null;
 };
 
-type CashboxChargeRow = CashChargeSettlementRow;
-
 type ChargeFetchRow = {
   id: string;
   user_id: string;
@@ -40,6 +34,8 @@ type ChargeFetchRow = {
   note?: string | null;
   created_at: string;
   approved_at?: string | null;
+  settled_at?: string | null;
+  settlement_source?: string | null;
   user?: {
     id: string;
     name: string;
@@ -121,14 +117,13 @@ export default async function AdminTransactionsPage() {
     { data: settlements },
     { data: subscriptionPayments },
     { data: deferredUsers },
-    { data: chargeCashboxEntries },
   ] =
     await Promise.all([
       fetchOrders(),
       supabase
         .from('charge_requests')
         .select(
-          'id, user_id, amount, method, status, note, created_at, approved_at, user:users!charge_requests_user_id_fkey(id, name, avatar_url)'
+          'id, user_id, amount, method, status, note, created_at, approved_at, settled_at, settlement_source, user:users!charge_requests_user_id_fkey(id, name, avatar_url)'
         )
         .order('created_at', { ascending: false })
         .limit(80),
@@ -152,19 +147,11 @@ export default async function AdminTransactionsPage() {
         .gt('deferred_balance', 0)
         .eq('is_active', true)
         .order('deferred_balance', { ascending: false }),
-      supabase
-        .from('cashbox_entries')
-        .select('charge_request_id')
-        .not('charge_request_id', 'is', null),
     ]);
-
-  const settledChargeIds = buildSettledChargeIdSet(
-    (chargeCashboxEntries ?? []) as CashboxChargeRow[]
-  );
 
   const normalizedCharges = ((charges ?? []) as ChargeFetchRow[]).map((charge: ChargeFetchRow) => ({
     ...charge,
-    is_cash_settled: charge.method === 'cash' ? settledChargeIds.has(charge.id) : false,
+    is_cash_settled: charge.method === 'cash' ? Boolean(charge.settled_at) : false,
   }));
 
   return (
