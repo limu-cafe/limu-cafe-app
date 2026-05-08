@@ -1,9 +1,17 @@
 import { createAdminClient } from '@/lib/supabase/server';
+import {
+  buildSettledChargeIdSet,
+  isPendingCashChargeSettlement,
+  type CashChargeSettlementRow,
+  type CashChargeSummary,
+} from '@/lib/charge-settlement';
 import { countLowStockItems } from '@/lib/item-stock';
 import AdminAuthGuard from './AdminAuthGuard';
 import AdminSidebar from './AdminSidebar';
 
 export const dynamic = 'force-dynamic';
+
+type LayoutChargeRow = CashChargeSummary;
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const supabase = createAdminClient();
@@ -11,6 +19,8 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const [
     { count: pendingOrders },
     { count: pendingChargeRequests },
+    { data: approvedCashCharges },
+    { data: chargeCashboxEntries },
     { count: pendingSubscriptionCashPayments },
     { count: pendingUsers },
     { count: pendingRequests },
@@ -28,6 +38,15 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       .from('charge_requests')
       .select('*', { count: 'exact', head: true })
       .eq('status', 'pending'),
+    supabase
+      .from('charge_requests')
+      .select('id, method, status')
+      .eq('method', 'cash')
+      .eq('status', 'approved'),
+    supabase
+      .from('cashbox_entries')
+      .select('charge_request_id')
+      .not('charge_request_id', 'is', null),
     supabase
       .from('subscription_payments')
       .select('*', { count: 'exact', head: true })
@@ -57,11 +76,19 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       .eq('is_active', true),
   ]);
 
+  const settledChargeIds = buildSettledChargeIdSet(
+    (chargeCashboxEntries ?? []) as CashChargeSettlementRow[]
+  );
+  const pendingCashChargeCount = ((approvedCashCharges ?? []) as LayoutChargeRow[]).filter((charge) =>
+    isPendingCashChargeSettlement(charge, settledChargeIds)
+  ).length;
+
   const notifications = {
     items: lowStockCount ?? 0,
     reimbursements: pendingReimbursements ?? 0,
     transactions:
       (pendingOrders ?? 0) +
+      pendingCashChargeCount +
       (pendingChargeRequests ?? 0) +
       (pendingSubscriptionCashPayments ?? 0) +
       (deferredUsers ?? 0),
