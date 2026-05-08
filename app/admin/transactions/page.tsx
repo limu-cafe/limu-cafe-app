@@ -1,4 +1,8 @@
 import { createAdminClient } from '@/lib/supabase/server';
+import {
+  buildSettledChargeIdSet,
+  type CashChargeSettlementRow,
+} from '@/lib/charge-settlement';
 import { ORDER_ITEMS_SELECT_ENHANCED, ORDER_ITEMS_SELECT_LEGACY } from '@/lib/item-select';
 import { needsLegacyOrderSelect } from '@/lib/orders';
 import TransactionsClient from './TransactionsClient';
@@ -24,6 +28,8 @@ type OrderFetchRow = {
   points_used?: number | null;
   deferred_settlement_method?: string | null;
 };
+
+type CashboxChargeRow = CashChargeSettlementRow;
 
 type ChargeFetchRow = {
   id: string;
@@ -115,6 +121,7 @@ export default async function AdminTransactionsPage() {
     { data: settlements },
     { data: subscriptionPayments },
     { data: deferredUsers },
+    { data: chargeCashboxEntries },
   ] =
     await Promise.all([
       fetchOrders(),
@@ -145,12 +152,25 @@ export default async function AdminTransactionsPage() {
         .gt('deferred_balance', 0)
         .eq('is_active', true)
         .order('deferred_balance', { ascending: false }),
+      supabase
+        .from('cashbox_entries')
+        .select('charge_request_id')
+        .not('charge_request_id', 'is', null),
     ]);
+
+  const settledChargeIds = buildSettledChargeIdSet(
+    (chargeCashboxEntries ?? []) as CashboxChargeRow[]
+  );
+
+  const normalizedCharges = ((charges ?? []) as ChargeFetchRow[]).map((charge: ChargeFetchRow) => ({
+    ...charge,
+    is_cash_settled: charge.method === 'cash' ? settledChargeIds.has(charge.id) : false,
+  }));
 
   return (
     <TransactionsClient
       orders={orders}
-      charges={(charges ?? []) as ChargeFetchRow[]}
+      charges={normalizedCharges}
       settlements={settlements ?? []}
       subscriptionPayments={(subscriptionPayments ?? []) as SubscriptionPaymentFetchRow[]}
       deferredUsers={deferredUsers ?? []}
