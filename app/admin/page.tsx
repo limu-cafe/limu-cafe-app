@@ -12,12 +12,6 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { createAdminClient } from '@/lib/supabase/server';
-import {
-  buildSettledChargeIdSet,
-  isPendingCashChargeSettlement,
-  type CashChargeSettlementRow,
-  type CashChargeSummary,
-} from '@/lib/charge-settlement';
 import { countLowStockItems } from '@/lib/item-stock';
 import {
   buildCashCollectionEntries,
@@ -34,8 +28,6 @@ type BotIntroUser = {
   id: string;
   name: string | null;
 };
-
-type DashboardChargeRow = CashChargeSummary;
 
 export default async function AdminDashboard() {
   const supabase = createAdminClient();
@@ -61,8 +53,6 @@ export default async function AdminDashboard() {
     { count: pendingReimbursements },
     { count: pendingCashOrders },
     { count: pendingCharges },
-    { data: approvedCashCharges },
-    { data: chargeCashboxEntries },
     { count: pendingSubscriptionCashPayments },
     { count: deferredUsers },
     { data: deferredUsersForCollection },
@@ -88,15 +78,6 @@ export default async function AdminDashboard() {
       .from('charge_requests')
       .select('*', { count: 'exact', head: true })
       .eq('status', 'pending'),
-    supabase
-      .from('charge_requests')
-      .select('id, method, status')
-      .eq('method', 'cash')
-      .eq('status', 'approved'),
-    supabase
-      .from('cashbox_entries')
-      .select('charge_request_id')
-      .not('charge_request_id', 'is', null),
     supabase
       .from('subscription_payments')
       .select('*', { count: 'exact', head: true })
@@ -143,13 +124,6 @@ export default async function AdminDashboard() {
     pendingBotIntroUsersQuery,
   ]);
 
-  const settledChargeIds = buildSettledChargeIdSet(
-    (chargeCashboxEntries ?? []) as CashChargeSettlementRow[]
-  );
-  const pendingCashChargeCount = ((approvedCashCharges ?? []) as DashboardChargeRow[]).filter((charge) =>
-    isPendingCashChargeSettlement(charge, settledChargeIds)
-  ).length;
-
   const cashCollectionEntries = buildCashCollectionEntries({
     deferredUsers: (deferredUsersForCollection ?? []) as DeferredCashCollectionRow[],
     pendingCashOrders: (pendingCashOrdersForCollection ?? []) as PendingCashOrderRow[],
@@ -187,7 +161,6 @@ export default async function AdminDashboard() {
       title: '取引履歴',
       count:
         (pendingCashOrders ?? 0) +
-        pendingCashChargeCount +
         (pendingCharges ?? 0) +
         (pendingSubscriptionCashPayments ?? 0) +
         (deferredUsers ?? 0),
