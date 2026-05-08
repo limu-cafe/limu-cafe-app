@@ -76,13 +76,6 @@ type SubscriptionPaymentSummary = {
   } | null;
 };
 
-type DeferredUserSummary = {
-  id: string;
-  name: string;
-  avatar_url?: string | null;
-  deferred_balance: number;
-};
-
 type HistoryFilter = 'all' | 'orders' | 'charges' | 'settlements' | 'subscriptions';
 
 const paymentMethodLabel: Record<string, string> = {
@@ -125,11 +118,6 @@ const subscriptionStatusLabel: Record<string, string> = {
   cancelled: 'キャンセル',
 };
 
-const settlementMethodOptions = [
-  { id: 'cash', label: '現金' },
-  { id: 'balance', label: '残高' },
-] as const;
-
 function formatMoney(value: number) {
   return `¥${value.toLocaleString()}`;
 }
@@ -138,7 +126,7 @@ function formatDateTime(value: string) {
   return format(new Date(value), 'M/d HH:mm', { locale: ja });
 }
 
-function Avatar({ user }: { user?: UserSummary | DeferredUserSummary | null }) {
+function Avatar({ user }: { user?: UserSummary | null }) {
   if (user?.avatar_url) {
     return <img src={user.avatar_url} alt="" className="h-9 w-9 rounded-full object-cover" />;
   }
@@ -185,18 +173,15 @@ export default function TransactionsClient({
   charges,
   settlements,
   subscriptionPayments,
-  deferredUsers,
 }: {
   orders: OrderSummary[];
   charges: ChargeSummary[];
   settlements: SettlementSummary[];
   subscriptionPayments: SubscriptionPaymentSummary[];
-  deferredUsers: DeferredUserSummary[];
 }) {
   const router = useRouter();
   const [historyFilter, setHistoryFilter] = useState<HistoryFilter>('all');
   const [loading, setLoading] = useState<string | null>(null);
-  const [settlementMethodByUser, setSettlementMethodByUser] = useState<Record<string, string>>({});
 
   const pendingCashOrders = useMemo(
     () => orders.filter((order) => order.payment_method === 'cash' && order.payment_status === 'pending'),
@@ -285,26 +270,6 @@ export default function TransactionsClient({
     }
   };
 
-  const settleDeferred = async (userId: string, amount: number) => {
-    await runAction({
-      key: `settle:${userId}`,
-      request: () =>
-        fetch('/api/admin/settlement', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            user_id: userId,
-            amount,
-            method: settlementMethodByUser[userId] ?? 'cash',
-            period_start: format(new Date(new Date().getFullYear(), new Date().getMonth(), 1), 'yyyy-MM-dd'),
-            period_end: format(new Date(), 'yyyy-MM-dd'),
-          }),
-        }),
-      success: '精算しました',
-      confirmMessage: 'この要回収残高を精算済みにしますか？',
-    });
-  };
-
   const requestSubscriptionPaymentCancel = async (payment: SubscriptionPaymentSummary) => {
     if (payment.user_subscription?.status === 'active') {
       toast.error('先に解約してください');
@@ -327,7 +292,6 @@ export default function TransactionsClient({
           <span className="rounded-full bg-gray-900 px-3 py-2 text-gray-300">現金注文 {pendingCashOrders.length}</span>
           <span className="rounded-full bg-gray-900 px-3 py-2 text-gray-300">現金チャージ {pendingCashCharges.length}</span>
           <span className="rounded-full bg-gray-900 px-3 py-2 text-gray-300">サブスク現金 {pendingSubscriptionCashPayments.length}</span>
-          <span className="rounded-full bg-gray-900 px-3 py-2 text-gray-300">要回収残高 {deferredUsers.length}</span>
           <span className="rounded-full bg-gray-900 px-3 py-2 text-gray-300">承認待ち {pendingChargeRequests.length}</span>
         </div>
       </div>
@@ -339,8 +303,7 @@ export default function TransactionsClient({
 
         {pendingCashOrders.length === 0 &&
         pendingCashCharges.length === 0 &&
-        pendingSubscriptionCashPayments.length === 0 &&
-        deferredUsers.length === 0 ? (
+        pendingSubscriptionCashPayments.length === 0 ? (
           <div className="rounded-2xl border border-gray-800 bg-gray-900 px-5 py-10 text-center text-sm text-gray-500">
             要回収の取引はありません
           </div>
@@ -527,50 +490,6 @@ export default function TransactionsClient({
               </div>
             ))}
 
-            {deferredUsers.map((user) => (
-              <div key={user.id} className="rounded-2xl border border-gray-800 bg-gray-900 px-4 py-4">
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                  <div className="flex items-center gap-3">
-                    <Avatar user={user} />
-                    <div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="font-medium text-white">{user.name}</p>
-                        <span className="rounded-full bg-rose-500/10 px-2 py-0.5 text-[11px] font-medium text-rose-300">
-                          要回収
-                        </span>
-                      </div>
-                      <p className="text-xs text-gray-500">{formatMoney(user.deferred_balance)}</p>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                    <select
-                      value={settlementMethodByUser[user.id] ?? 'cash'}
-                      onChange={(event) =>
-                        setSettlementMethodByUser((current) => ({
-                          ...current,
-                          [user.id]: event.target.value,
-                        }))
-                      }
-                      className="rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white focus:outline-none"
-                    >
-                      {settlementMethodOptions.map((option) => (
-                        <option key={option.id} value={option.id}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                    <ActionButton
-                      tone="success"
-                      disabled={loading === `settle:${user.id}`}
-                      onClick={() => settleDeferred(user.id, user.deferred_balance)}
-                    >
-                      精算完了
-                    </ActionButton>
-                  </div>
-                </div>
-              </div>
-            ))}
           </div>
         )}
       </section>
