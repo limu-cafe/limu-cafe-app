@@ -35,6 +35,7 @@ type ChargeSummary = {
   note?: string | null;
   created_at: string;
   approved_at?: string | null;
+  is_cash_settled: boolean;
 };
 
 type SettlementSummary = {
@@ -203,6 +204,13 @@ export default function TransactionsClient({
     () => charges.filter((charge) => charge.status === 'pending'),
     [charges]
   );
+  const pendingCashCharges = useMemo(
+    () =>
+      charges.filter(
+        (charge) => charge.status === 'approved' && charge.method === 'cash' && !charge.is_cash_settled
+      ),
+    [charges]
+  );
   const pendingSubscriptionCashPayments = useMemo(
     () => subscriptionPayments.filter((payment) => payment.payment_status === 'pending_cash_settlement'),
     [subscriptionPayments]
@@ -214,7 +222,11 @@ export default function TransactionsClient({
       .map((order) => ({ kind: 'order' as const, created_at: order.created_at, order }));
 
     const normalizedCharges = charges
-      .filter((charge) => charge.status !== 'pending')
+      .filter(
+        (charge) =>
+          charge.status !== 'pending' &&
+          !(charge.status === 'approved' && charge.method === 'cash' && !charge.is_cash_settled)
+      )
       .map((charge) => ({ kind: 'charge' as const, created_at: charge.created_at, charge }));
 
     const normalizedSettlements = settlements.map((settlement) => ({
@@ -287,7 +299,7 @@ export default function TransactionsClient({
           }),
         }),
       success: '精算しました',
-      confirmMessage: 'この後払い残高を精算済みにしますか？',
+      confirmMessage: 'この要回収残高を精算済みにしますか？',
     });
   };
 
@@ -311,8 +323,9 @@ export default function TransactionsClient({
         <h1 className="font-display text-2xl font-bold text-white">取引履歴</h1>
         <div className="flex flex-wrap gap-2 text-xs">
           <span className="rounded-full bg-gray-900 px-3 py-2 text-gray-300">現金注文 {pendingCashOrders.length}</span>
+          <span className="rounded-full bg-gray-900 px-3 py-2 text-gray-300">現金チャージ {pendingCashCharges.length}</span>
           <span className="rounded-full bg-gray-900 px-3 py-2 text-gray-300">サブスク現金 {pendingSubscriptionCashPayments.length}</span>
-          <span className="rounded-full bg-gray-900 px-3 py-2 text-gray-300">後払い {deferredUsers.length}</span>
+          <span className="rounded-full bg-gray-900 px-3 py-2 text-gray-300">要回収残高 {deferredUsers.length}</span>
           <span className="rounded-full bg-gray-900 px-3 py-2 text-gray-300">承認待ち {pendingChargeRequests.length}</span>
         </div>
       </div>
@@ -323,6 +336,7 @@ export default function TransactionsClient({
         </div>
 
         {pendingCashOrders.length === 0 &&
+        pendingCashCharges.length === 0 &&
         pendingChargeRequests.length === 0 &&
         pendingSubscriptionCashPayments.length === 0 &&
         deferredUsers.length === 0 ? (
@@ -378,6 +392,61 @@ export default function TransactionsClient({
                             request: () => fetch(`/api/admin/orders/${order.id}/refund`, { method: 'POST' }),
                             success: '返金しました',
                             confirmMessage: 'この現金注文を返金しますか？',
+                          })
+                        }
+                      >
+                        返金
+                      </ActionButton>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            {pendingCashCharges.map((charge) => (
+              <div key={charge.id} className="rounded-2xl border border-gray-800 bg-gray-900 px-4 py-4">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="min-w-0 space-y-2">
+                    <div className="flex items-center gap-3">
+                      <Avatar user={charge.user} />
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="font-medium text-white">{charge.user?.name ?? '不明なユーザー'}</p>
+                          <span className="rounded-full bg-sky-500/10 px-2 py-0.5 text-[11px] font-medium text-sky-300">
+                            現金チャージ
+                          </span>
+                        </div>
+                        <p className="text-xs text-gray-500">{formatDateTime(charge.created_at)}</p>
+                      </div>
+                    </div>
+                    {charge.note && <p className="text-sm text-gray-400">{charge.note}</p>}
+                  </div>
+                  <div className="space-y-3 lg:text-right">
+                    <p className="font-display text-2xl font-bold text-white">{formatMoney(charge.amount)}</p>
+                    <div className="flex flex-wrap gap-2 lg:justify-end">
+                      <ActionButton
+                        tone="success"
+                        disabled={loading === `charge-settle:${charge.id}`}
+                        onClick={() =>
+                          runAction({
+                            key: `charge-settle:${charge.id}`,
+                            request: () => fetch(`/api/admin/charge/${charge.id}/cash-settlement`, { method: 'POST' }),
+                            success: '精算済みにしました',
+                            confirmMessage: 'この現金チャージを精算済みにしますか？',
+                          })
+                        }
+                      >
+                        精算完了
+                      </ActionButton>
+                      <ActionButton
+                        tone="danger"
+                        disabled={loading === `charge-refund:${charge.id}`}
+                        onClick={() =>
+                          runAction({
+                            key: `charge-refund:${charge.id}`,
+                            request: () => fetch(`/api/admin/charge/${charge.id}/refund`, { method: 'POST' }),
+                            success: '返金しました',
+                            confirmMessage: 'この現金チャージを返金しますか？',
                           })
                         }
                       >
@@ -519,7 +588,7 @@ export default function TransactionsClient({
                       <div className="flex flex-wrap items-center gap-2">
                         <p className="font-medium text-white">{user.name}</p>
                         <span className="rounded-full bg-rose-500/10 px-2 py-0.5 text-[11px] font-medium text-rose-300">
-                          後払い
+                          要回収
                         </span>
                       </div>
                       <p className="text-xs text-gray-500">{formatMoney(user.deferred_balance)}</p>
@@ -685,7 +754,14 @@ export default function TransactionsClient({
 
               if (entry.kind === 'charge') {
                 const charge = entry.charge;
-                const chargeLabel = chargeStatusLabel[charge.status] ?? charge.status;
+                const chargeLabel =
+                  charge.method === 'cash'
+                    ? charge.is_cash_settled
+                      ? '精算済み'
+                      : charge.status === 'approved'
+                        ? '未精算'
+                        : chargeStatusLabel[charge.status] ?? charge.status
+                    : chargeStatusLabel[charge.status] ?? charge.status;
                 const methodLabel =
                   charge.method === 'cash'
                     ? '現金チャージ'
@@ -718,6 +794,24 @@ export default function TransactionsClient({
                       <div className="space-y-3 lg:text-right">
                         <p className="font-display text-2xl font-bold text-white">{formatMoney(charge.amount)}</p>
                         <div className="flex flex-wrap gap-2 lg:justify-end">
+                          {charge.status === 'approved' && charge.method === 'cash' && charge.is_cash_settled && (
+                            <ActionButton
+                              disabled={loading === `charge-unsettle:${charge.id}`}
+                              onClick={() =>
+                                runAction({
+                                  key: `charge-unsettle:${charge.id}`,
+                                  request: () =>
+                                    fetch(`/api/admin/charge/${charge.id}/cash-settlement`, {
+                                      method: 'DELETE',
+                                    }),
+                                  success: '未精算に戻しました',
+                                  confirmMessage: 'この現金チャージを未精算に戻しますか？',
+                                })
+                              }
+                            >
+                              未精算に戻す
+                            </ActionButton>
+                          )}
                           {charge.status === 'approved' && (
                             <ActionButton
                               tone="danger"
