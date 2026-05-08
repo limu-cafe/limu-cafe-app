@@ -111,13 +111,7 @@ async function fetchOrders() {
 export default async function AdminTransactionsPage() {
   const supabase = createAdminClient();
 
-  const [
-    orders,
-    { data: charges },
-    { data: settlements },
-    { data: subscriptionPayments },
-    { data: deferredUsers },
-  ] =
+  const [orders, { data: charges }, { data: settlements }, { data: subscriptionPayments }] =
     await Promise.all([
       fetchOrders(),
       supabase
@@ -141,12 +135,6 @@ export default async function AdminTransactionsPage() {
         )
         .order('created_at', { ascending: false })
         .limit(80),
-      supabase
-        .from('users')
-        .select('id, name, avatar_url, deferred_balance')
-        .gt('deferred_balance', 0)
-        .eq('is_active', true)
-        .order('deferred_balance', { ascending: false }),
     ]);
 
   const normalizedCharges = ((charges ?? []) as ChargeFetchRow[]).map((charge: ChargeFetchRow) => ({
@@ -160,7 +148,6 @@ export default async function AdminTransactionsPage() {
       charges={normalizedCharges}
       settlements={settlements ?? []}
       subscriptionPayments={(subscriptionPayments ?? []) as SubscriptionPaymentFetchRow[]}
-      deferredUsers={deferredUsers ?? []}
     />
   );
 }
