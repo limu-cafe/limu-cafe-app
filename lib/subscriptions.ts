@@ -74,12 +74,20 @@ export function monthValueToStorageDate(value: string) {
 }
 
 export function storageDateToMonthValue(value: string | null | undefined) {
-  if (!value) return '';
-  return value.slice(0, 7);
+  return normalizeMonthValue(value) ?? '';
+}
+
+export function normalizeMonthValue(value: string | null | undefined) {
+  if (!value) return null;
+  if (/^\d{4}-\d{2}$/.test(value)) return value;
+  if (/^\d{4}-\d{2}-\d{2}/.test(value)) return value.slice(0, 7);
+  return null;
 }
 
 export function getEndMonthDeadline(value: string) {
-  const parsed = parseMonthValue(value);
+  const monthValue = normalizeMonthValue(value);
+  if (!monthValue) return null;
+  const parsed = parseMonthValue(monthValue);
   if (!parsed) return null;
   return new Date(Date.UTC(parsed.year, parsed.month, 0, 23, 59, 59, 999));
 }

@@ -97,15 +97,22 @@ export async function recomputeUserSubscriptionState(
   const latestPeriodEnd = latestPayment?.billing_period_end_at
     ? new Date(latestPayment.billing_period_end_at)
     : null;
+  const hasPaidPeriodLeft = latestPeriodEnd ? latestPeriodEnd >= now : false;
+  const isPastEndMonth = endMonthDeadline ? now > endMonthDeadline : false;
 
   let nextBillingAt: string | null = null;
   let nextStatus: SubscriptionStatus = subscription.status as SubscriptionStatus;
 
-  if (subscription.status === 'active' && latestPeriodEnd && product) {
+  if (subscription.status === 'active' && latestPeriodEnd && product && !isPastEndMonth) {
     const next = new Date(latestPeriodEnd.getTime() + 1);
     if (!endMonthDeadline || next <= endMonthDeadline) {
       nextBillingAt = next.toISOString();
     }
+  }
+
+  if (subscription.status === 'active' && isPastEndMonth && !hasPaidPeriodLeft) {
+    nextStatus = 'expired';
+    nextBillingAt = null;
   }
 
   if (
