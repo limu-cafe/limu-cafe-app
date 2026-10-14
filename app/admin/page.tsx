@@ -55,8 +55,8 @@ export default async function AdminDashboard() {
 
   const [
     lowStockCount,
-    { count: pendingReimbursements },
     { data: pendingDeferredOrders },
+    { count: pendingReimbursements },
     { count: pendingCashOrders },
     { count: pendingCharges },
     { data: approvedCashCharges },
