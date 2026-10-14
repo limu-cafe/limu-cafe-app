@@ -1,6 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/server';
 import { ORDER_ITEMS_SELECT_ENHANCED, ORDER_ITEMS_SELECT_LEGACY } from '@/lib/item-select';
 import { needsLegacyOrderSelect } from '@/lib/orders';
+import { fetchRecentAndPendingRows } from '@/lib/transaction-history';
 import TransactionsClient from './TransactionsClient';
 
 export const dynamic = 'force-dynamic';
@@ -75,48 +76,33 @@ type SubscriptionPaymentFetchRow = {
   } | null;
 };
 
-async function fetchOrders() {
+async function fetchOrdersWithSelect(
+  select: string,
+  options: { settlementTracking: boolean; deferredMethod: boolean }
+) {
   const supabase = createAdminClient();
-  const primary = await supabase
-    .from('orders')
-    .select(ORDER_SELECT)
-    .order('created_at', { ascending: false })
-    .limit(80);
+  const queryOrders = () =>
+    supabase.from('orders').select(select).order('created_at', { ascending: false }).order('id', { ascending: false });
 
-  if (!primary.error) {
-    return ((primary.data ?? []) as OrderFetchRow[]).map((order: OrderFetchRow) => ({
-      ...order,
-      points_used: order.points_used ?? 0,
-      deferred_settlement_method: order.deferred_settlement_method ?? null,
-    }));
-  }
+  const orders = await fetchRecentAndPendingRows<OrderFetchRow>({
+    recent: queryOrders().limit(80),
+    pending: [
+      (from, to) =>
+        queryOrders().eq('payment_method', 'cash').eq('payment_status', 'pending').range(from, to),
+      (from, to) => {
+        let query = queryOrders().eq('payment_method', 'deferred').eq('payment_status', 'completed');
+        if (options.deferredMethod) {
+          query = query.or('deferred_settlement_method.is.null,deferred_settlement_method.eq.cash');
+        }
+        if (options.settlementTracking) {
+          query = query.is('settled_at', null);
+        }
+        return query.range(from, to);
+      },
+    ],
+  });
 
-  const primaryMessage =
-    primary.error && typeof primary.error.message === 'string' ? primary.error.message : '';
-  const isMissingSettlementTrackingColumns =
-    primaryMessage.includes('settled_at') ||
-    primaryMessage.includes('settlement_source') ||
-    primaryMessage.includes('settlement_id');
-
-  if (!needsLegacyOrderSelect(primary.error) && !isMissingSettlementTrackingColumns) {
-    throw primary.error;
-  }
-
-  const fallbackSelect = needsLegacyOrderSelect(primary.error)
-    ? ORDER_SELECT_FULL_LEGACY
-    : ORDER_SELECT_NO_SETTLEMENT;
-
-  const legacy = await supabase
-    .from('orders')
-    .select(fallbackSelect)
-    .order('created_at', { ascending: false })
-    .limit(80);
-
-  if (legacy.error) {
-    throw legacy.error;
-  }
-
-  return ((legacy.data ?? []) as OrderFetchRow[]).map((order: OrderFetchRow) => ({
+  return orders.map((order) => ({
     ...order,
     points_used: order.points_used ?? 0,
     deferred_settlement_method: order.deferred_settlement_method ?? null,
@@ -126,19 +112,55 @@ async function fetchOrders() {
   }));
 }
 
+async function fetchOrders() {
+  try {
+    return await fetchOrdersWithSelect(ORDER_SELECT, {
+      settlementTracking: true,
+      deferredMethod: true,
+    });
+  } catch (error) {
+    const message = error && typeof error === 'object' && 'message' in error
+      ? String(error.message)
+      : '';
+    const missingSettlementTracking =
+      message.includes('settled_at') || message.includes('settlement_source') || message.includes('settlement_id');
+    if (!needsLegacyOrderSelect(error) && !missingSettlementTracking) throw error;
+
+    const fullLegacy = needsLegacyOrderSelect(error);
+    return fetchOrdersWithSelect(fullLegacy ? ORDER_SELECT_FULL_LEGACY : ORDER_SELECT_NO_SETTLEMENT, {
+      settlementTracking: false,
+      deferredMethod: !fullLegacy,
+    });
+  }
+}
+
 export default async function AdminTransactionsPage() {
   const supabase = createAdminClient();
 
-  const [orders, { data: charges }, { data: settlements }, { data: subscriptionPayments }] =
+  const queryCharges = () =>
+    supabase
+      .from('charge_requests')
+      .select('id, user_id, amount, method, status, note, created_at, approved_at, settled_at, settlement_source, user:users!charge_requests_user_id_fkey(id, name, avatar_url)')
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false });
+  const querySubscriptionPayments = () =>
+    supabase
+      .from('subscription_payments')
+      .select('id, user_id, user_subscription_id, amount, payment_method, payment_status, points_used, balance_used, cash_due_amount, billing_period_start_at, billing_period_end_at, created_at, user:users!subscription_payments_user_id_fkey(id, name, avatar_url), subscription_product:subscription_products!subscription_payments_subscription_product_id_fkey(id, name, english_name), user_subscription:user_subscriptions!subscription_payments_user_subscription_id_fkey(status)')
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false });
+
+  const [orders, charges, { data: settlements }, subscriptionPayments] =
     await Promise.all([
       fetchOrders(),
-      supabase
-        .from('charge_requests')
-        .select(
-          'id, user_id, amount, method, status, note, created_at, approved_at, settled_at, settlement_source, user:users!charge_requests_user_id_fkey(id, name, avatar_url)'
-        )
-        .order('created_at', { ascending: false })
-        .limit(80),
+      fetchRecentAndPendingRows<ChargeFetchRow>({
+        recent: queryCharges().limit(80),
+        pending: [
+          (from, to) => queryCharges().eq('status', 'pending').range(from, to),
+          (from, to) =>
+            queryCharges().eq('method', 'cash').eq('status', 'approved').is('settled_at', null).range(from, to),
+        ],
+      }),
       supabase
         .from('settlements')
         .select(
@@ -146,16 +168,15 @@ export default async function AdminTransactionsPage() {
         )
         .order('created_at', { ascending: false })
         .limit(80),
-      supabase
-        .from('subscription_payments')
-        .select(
-          'id, user_id, user_subscription_id, amount, payment_method, payment_status, points_used, balance_used, cash_due_amount, billing_period_start_at, billing_period_end_at, created_at, user:users!subscription_payments_user_id_fkey(id, name, avatar_url), subscription_product:subscription_products!subscription_payments_subscription_product_id_fkey(id, name, english_name), user_subscription:user_subscriptions!subscription_payments_user_subscription_id_fkey(status)'
-        )
-        .order('created_at', { ascending: false })
-        .limit(80),
+      fetchRecentAndPendingRows<SubscriptionPaymentFetchRow>({
+        recent: querySubscriptionPayments().limit(80),
+        pending: [
+          (from, to) => querySubscriptionPayments().eq('payment_status', 'pending_cash_settlement').range(from, to),
+        ],
+      }),
     ]);
 
-  const normalizedCharges = ((charges ?? []) as ChargeFetchRow[]).map((charge: ChargeFetchRow) => ({
+  const normalizedCharges = charges.map((charge) => ({
     ...charge,
     is_cash_settled: charge.method === 'cash' ? Boolean(charge.settled_at) : false,
   }));
@@ -165,7 +186,7 @@ export default async function AdminTransactionsPage() {
       orders={orders}
       charges={normalizedCharges}
       settlements={settlements ?? []}
-      subscriptionPayments={(subscriptionPayments ?? []) as SubscriptionPaymentFetchRow[]}
+      subscriptionPayments={subscriptionPayments}
     />
   );
 }
