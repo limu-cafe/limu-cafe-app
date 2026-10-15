@@ -8,6 +8,8 @@ import ItemListClient from './ItemListClient';
 import { Suspense } from 'react';
 import DeferredDataPlaceholder from '@/components/user/DeferredDataPlaceholder';
 import type { User as AuthUser } from '@supabase/supabase-js';
+import { loadItemDisplayOrder } from '@/lib/item-order-server';
+import { sortItemsByDisplayOrder } from '@/lib/item-order';
 import {
   isMissingItemEnhancementColumns,
   ITEM_SELECT_ENHANCED,
@@ -23,6 +25,7 @@ async function HomeContent({ userId, authUser }: { userId: string; authUser: Aut
     initialItemsQuery,
     { data: categories, error: categoriesError },
     { data: favoriteItems, error: favoriteItemsError },
+    displayOrder,
   ] = await Promise.all([
     adminClient
       .from('items')
@@ -34,6 +37,7 @@ async function HomeContent({ userId, authUser }: { userId: string; authUser: Aut
       .select('id, name, icon, sort_order, created_at')
       .order('sort_order'),
     adminClient.from('favorite_items').select('item_id').eq('user_id', userId),
+    loadItemDisplayOrder(adminClient),
   ]);
 
   let items = initialItemsQuery.data;
@@ -55,7 +59,7 @@ async function HomeContent({ userId, authUser }: { userId: string; authUser: Aut
   if (favoriteItemsError) console.error('failed to load favorites for home page', favoriteItemsError);
 
   const categoryMap = new Map(((categories ?? []) as Category[]).map((category) => [category.id, category]));
-  const itemList = ((items ?? []) as Item[]).map((item) => ({
+  const itemList = sortItemsByDisplayOrder((items ?? []) as Item[], displayOrder.itemIds).map((item) => ({
     ...normalizeItem(item),
     category: item.category_id ? categoryMap.get(item.category_id) : undefined,
   }));

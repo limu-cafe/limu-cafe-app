@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import type { ReactNode } from 'react';
 import { Pencil, Plus, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useRouter } from 'next/navigation';
@@ -10,6 +11,7 @@ import { isItemLowStock, isUnlimitedStockItem } from '@/lib/item-stock';
 interface Props {
   items: Item[];
   categories: Category[];
+  orderEditor?: ReactNode;
 }
 
 type StatusFilter = 'all' | 'visible' | 'low-stock' | 'hidden';
@@ -29,7 +31,7 @@ const EMPTY_FORM = {
 const FIELD_CLASS =
   'w-full rounded-xl border border-gray-700 bg-gray-800 px-4 py-3 text-sm text-white placeholder:text-gray-500 focus:outline-none';
 
-export default function ItemsClient({ items, categories }: Props) {
+export default function ItemsClient({ items, categories, orderEditor }: Props) {
   const router = useRouter();
   const [localItems, setLocalItems] = useState<Item[]>(items);
   const [showForm, setShowForm] = useState(false);
@@ -250,6 +252,8 @@ export default function ItemsClient({ items, categories }: Props) {
         </button>
       </div>
 
+      {orderEditor}
+
       <div className="flex flex-col gap-3 rounded-2xl border border-gray-800 bg-gray-900 p-4 md:flex-row md:items-center">
         <input
           type="text"
@@ -275,7 +279,7 @@ export default function ItemsClient({ items, categories }: Props) {
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-gray-800 bg-gray-900">
+      <div className="overflow-x-auto rounded-2xl border border-gray-800 bg-gray-900">
         <table className="w-full min-w-[980px] text-sm">
           <thead>
             <tr className="border-b border-gray-800 text-left text-xs text-gray-500">

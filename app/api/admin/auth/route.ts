@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { ADMIN_PROOF_COOKIE, createAdminProof } from '@/lib/admin-proof';
 
 const ADMIN_COOKIE = 'limu_admin_auth';
 const ADMIN_SESSION_DURATION = 8 * 60 * 60;
@@ -22,6 +23,13 @@ export async function POST(request: Request) {
 
   if (password === adminPassword) {
     const response = NextResponse.json({ ok: true });
+    response.cookies.set(ADMIN_PROOF_COOKIE, createAdminProof(user.id, Date.now() + ADMIN_SESSION_DURATION * 1000, adminPassword), {
+      path: '/',
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: ADMIN_SESSION_DURATION,
+    });
     response.cookies.set(ADMIN_COOKIE, String(Date.now() + ADMIN_SESSION_DURATION * 1000), {
       path: '/',
       sameSite: 'lax',
@@ -32,4 +40,14 @@ export async function POST(request: Request) {
   }
 
   return NextResponse.json({ error: 'Invalid password' }, { status: 401 });
+}
+
+export async function DELETE(request: Request) {
+  if (request.headers.get('origin') !== new URL(request.url).origin) {
+    return NextResponse.json({ error: 'Invalid origin' }, { status: 403 });
+  }
+  const response = NextResponse.json({ ok: true });
+  response.cookies.set(ADMIN_PROOF_COOKIE, '', { path: '/', httpOnly: true, maxAge: 0 });
+  response.cookies.set(ADMIN_COOKIE, '', { path: '/', maxAge: 0 });
+  return response;
 }

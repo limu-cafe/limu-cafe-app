@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
 import { createAdminClient } from '@/lib/supabase/server';
+import { loadItemDisplayOrder } from '@/lib/item-order-server';
+import { sortItemsByDisplayOrder } from '@/lib/item-order';
+
+export const dynamic = 'force-dynamic';
 
 export async function GET() {
   const supabase = createAdminClient();
@@ -10,7 +14,12 @@ export async function GET() {
     .order('created_at', { ascending: false });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json(data);
+  try {
+    const displayOrder = await loadItemDisplayOrder(supabase);
+    return NextResponse.json(sortItemsByDisplayOrder(data ?? [], displayOrder.itemIds));
+  } catch {
+    return NextResponse.json({ error: '商品一覧を取得できませんでした' }, { status: 500 });
+  }
 }
 
 export async function POST(request: Request) {

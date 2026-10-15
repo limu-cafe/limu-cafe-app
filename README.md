@@ -571,3 +571,22 @@ Slack
 - `main` に merge
 
 この運用を守るのがいちばん安全です。
+
+## 商品表示順の並び替え
+
+商品管理の「表示順を編集」で上下移動・位置指定を行い、「この順序で保存」で一括保存します。利用者の商品一覧、カテゴリ・検索の絞り込み、商品取得APIに同じ順序を使います。非表示商品はそのまま非表示になり、保存後の新商品は並び替え済みの商品の後ろに並びます。
+
+利用前に `supabase/migrations/20261015051758_item_display_order.sql` のみを対象DBの既存状態・マイグレーション履歴と照合し、適用してください。既存マイグレーションを未確認のまま一括適用しないでください。このSQLは表示順設定と専用関数を追加し、在庫・価格・残高を変更しません。未適用時は従来の表示順で動作し、並び替えの保存は無効になります。
+
+新しい保存APIは、Slack認証に加えて管理者パスワード確認時に発行する署名付きHttpOnly cookieを検証します。初回は管理者パスワード画面で再ログインしてください。これは従来のAPI全体の認証を修正するものではありません。
+
+保存は、全商品ID・表示順のrevision・監査記録を1つのDBトランザクションで扱います。別の管理者が先に保存した場合や商品が追加・削除された場合は409で拒否し、入力中の順序を残します。設定テーブルと関数を一般ユーザーから操作することはできません。
+
+検証コマンド：
+
+```sh
+node --test scripts/tests/admin-transactions.test.cjs scripts/tests/item-order.test.cjs
+PGLITE_MODULE=/absolute/path/to/@electric-sql/pglite node --test scripts/tests/item-order-db.test.cjs
+```
+
+後者は一時インストールしたPGliteのPostgresでSQL・権限制限・監査失敗時のロールバックを確認します。実際のSupabaseには接続しません。`PGLITE_MODULE` 未指定時はDBテストをskipするため、SQLの検証済みとは扱わないでください。

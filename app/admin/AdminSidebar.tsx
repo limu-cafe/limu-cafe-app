@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
+import toast from 'react-hot-toast';
 import {
   ArrowLeft,
   ClipboardList,
@@ -119,9 +120,13 @@ export default function AdminSidebar({
     },
   ];
 
-  const handleLogout = () => {
-    clearAdminSession();
-    router.push('/admin/login');
+  const handleLogout = async () => {
+    try {
+      await clearAdminSession();
+      router.push('/admin/login');
+    } catch {
+      toast.error('ログアウトに失敗しました。もう一度お試しください');
+    }
   };
 
   return (
