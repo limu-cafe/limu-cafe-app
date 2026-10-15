@@ -1,18 +1,23 @@
-import { createHmac, timingSafeEqual } from 'node:crypto';
-
 export const ADMIN_PROOF_COOKIE = 'limu_admin_proof';
 
-function signature(userId: string, expiry: string, secret: string) {
-  return createHmac('sha256', secret).update(`limu-admin-proof:v1:${userId}:${expiry}`).digest('hex');
+function message(userId: string, expiry: string) {
+  return new TextEncoder().encode(`limu-admin-proof:v1:${userId}:${expiry}`);
 }
 
-export function createAdminProof(userId: string, expiresAt: number, secret: string) {
-  return `${expiresAt}.${signature(userId, String(expiresAt), secret)}`;
+function key(secret: string) {
+  return crypto.subtle.importKey('raw', new TextEncoder().encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign', 'verify']);
 }
 
-export function verifyAdminProof(proof: string | undefined, userId: string, secret: string | undefined, now = Date.now()) {
+export async function createAdminProof(userId: string, expiresAt: number, secret: string) {
+  const signature = await crypto.subtle.sign('HMAC', await key(secret), message(userId, String(expiresAt)));
+  const digest = Array.from(new Uint8Array(signature), (byte) => byte.toString(16).padStart(2, '0')).join('');
+  return `${expiresAt}.${digest}`;
+}
+
+export async function verifyAdminProof(proof: string | undefined, userId: string, secret: string | undefined, now = Date.now()) {
   if (!proof || !secret) return false;
   const [expiry, digest, extra] = proof.split('.');
   if (extra || !/^\d{13}$/.test(expiry) || !/^[a-f0-9]{64}$/.test(digest ?? '') || Number(expiry) <= now) return false;
-  return timingSafeEqual(Buffer.from(digest, 'hex'), Buffer.from(signature(userId, expiry, secret), 'hex'));
+  const bytes = Uint8Array.from(digest.match(/../g)!, (byte) => parseInt(byte, 16));
+  return crypto.subtle.verify('HMAC', await key(secret), bytes, message(userId, expiry));
 }

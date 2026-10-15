@@ -1,3 +1,4 @@
+import { requireAdminPage } from '@/lib/admin-page-session';
 import { createAdminClient } from '@/lib/supabase/server';
 import ItemsClient from './ItemsClient';
 import ItemOrderEditor from './ItemOrderEditor';
@@ -9,6 +10,7 @@ import type { Item } from '@/types';
 export const dynamic = 'force-dynamic';
 
 export default async function AdminItemsPage() {
+  await requireAdminPage();
   const supabase = createAdminClient();
   const [itemsQuery, categoriesQuery, displayOrder, session] = await Promise.all([
     supabase.from('items').select('*, category:categories(*)').order('created_at', { ascending: false }),

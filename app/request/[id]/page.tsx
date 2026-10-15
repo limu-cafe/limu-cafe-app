@@ -60,7 +60,7 @@ export default async function RequestDetailPage({
   const layoutUser = {
     id: user.id,
     name: user.user_metadata?.full_name ?? user.user_metadata?.name ?? user.email ?? 'LIMU Member',
-    balance: 0,
+    balance: null,
   };
 
   return (

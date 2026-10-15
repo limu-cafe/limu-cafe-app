@@ -1,9 +1,11 @@
+import { requireAdminPage } from '@/lib/admin-page-session';
 import { createAdminClient } from '@/lib/supabase/server';
 import PriceWatchClient from './PriceWatchClient';
 
 export const dynamic = 'force-dynamic';
 
 export default async function PriceWatchPage() {
+  await requireAdminPage();
   const supabase = createAdminClient();
   const { data: watches } = await supabase
     .from('price_watches')

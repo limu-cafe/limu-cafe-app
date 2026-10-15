@@ -1,3 +1,4 @@
+import { requireAdminSession } from '@/lib/admin-session';
 import { NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
 import { createAdminClient, createClient } from '@/lib/supabase/server';
@@ -34,6 +35,9 @@ async function fetchStockTarget(client: any, itemId: string) {
 }
 
 export async function POST(request: Request) {
+  const adminAccess = await requireAdminSession();
+  if (!adminAccess.user) return NextResponse.json({ error: adminAccess.error }, { status: adminAccess.status });
+
   const sessionClient = await createClient();
   const {
     data: { user },

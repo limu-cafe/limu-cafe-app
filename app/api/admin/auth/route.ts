@@ -23,7 +23,7 @@ export async function POST(request: Request) {
 
   if (password === adminPassword) {
     const response = NextResponse.json({ ok: true });
-    response.cookies.set(ADMIN_PROOF_COOKIE, createAdminProof(user.id, Date.now() + ADMIN_SESSION_DURATION * 1000, adminPassword), {
+    response.cookies.set(ADMIN_PROOF_COOKIE, await createAdminProof(user.id, Date.now() + ADMIN_SESSION_DURATION * 1000, adminPassword), {
       path: '/',
       httpOnly: true,
       sameSite: 'lax',

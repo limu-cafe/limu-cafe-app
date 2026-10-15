@@ -1,3 +1,4 @@
+import { requireAdminPage } from '@/lib/admin-page-session';
 import { createAdminClient } from '@/lib/supabase/server';
 import { format } from 'date-fns';
 import { ja } from 'date-fns/locale';
@@ -5,6 +6,7 @@ import { ja } from 'date-fns/locale';
 export const dynamic = 'force-dynamic';
 
 export default async function AdminAuditPage() {
+  await requireAdminPage();
   const supabase = createAdminClient();
   const { data: logs } = await supabase
     .from('admin_audit_logs')

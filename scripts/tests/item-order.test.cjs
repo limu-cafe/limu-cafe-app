@@ -17,11 +17,12 @@ function load(file, mocks = {}, globals = {}) {
     }).outputText;
     const localRequire = (name) => {
       if (name in mocks) return mocks[name];
+      if (name === 'react') return { cache: (fn) => fn };
       if (name.startsWith('node:')) return require(name);
       if (name.startsWith('@/')) return compile(path.join(root, name.slice(2)) + '.ts');
       throw new Error(`Unexpected import ${name}`);
     };
-    vm.runInNewContext(source, { exports: module.exports, module, require: localRequire, Buffer, Date, URL, console, process: { env: {} }, ...globals }, { filename });
+    vm.runInNewContext(source, { exports: module.exports, module, require: localRequire, Buffer, Date, URL, console, crypto: require('node:crypto').webcrypto, TextEncoder, process: { env: {} }, ...globals }, { filename });
     return module.exports;
   }
   return compile(path.join(root, file));
@@ -48,17 +49,17 @@ test('reject invalid IDs, duplicates (including mixed case), and invalid revisio
     { itemIds: ids, expectedRevision: '0' }]) assert.equal(ordering.parseItemOrderInput(body), null);
   assert.deepEqual(plain(ordering.parseItemOrderInput({ itemIds: ids, expectedRevision: 0 })), { itemIds: ids, expectedRevision: 0 });
 });
-test('password proof rejects a fabricated expiry, wrong user, expiry, tampering and rotated password', () => {
+test('password proof rejects a fabricated expiry, wrong user, expiry, tampering and rotated password', async () => {
   const { createAdminProof, verifyAdminProof } = load('lib/admin-proof.ts');
   const now = 1792020000000; const expiry = now + 3600000;
-  const proof = createAdminProof('user-a', expiry, 'test-only-secret');
-  assert.equal(verifyAdminProof(proof, 'user-a', 'test-only-secret', now), true);
+  const proof = await createAdminProof('user-a', expiry, 'test-only-secret');
+  assert.equal(await verifyAdminProof(proof, 'user-a', 'test-only-secret', now), true);
   for (const [token, user, secret, time] of [
     [String(expiry), 'user-a', 'test-only-secret', now],
     [proof, 'user-b', 'test-only-secret', now], [proof, 'user-a', 'changed-secret', now],
     [proof, 'user-a', 'test-only-secret', expiry], [proof + '.extra', 'user-a', 'test-only-secret', now],
     [proof.replace(String(expiry), String(expiry + 1)), 'user-a', 'test-only-secret', now],
-  ]) assert.equal(verifyAdminProof(token, user, secret, time), false);
+  ]) assert.equal(await verifyAdminProof(token, user, secret, time), false);
 });
 function route(session, rpcResult = { data: 1, error: null }) {
   const calls = []; const invalidated = [];
@@ -112,7 +113,7 @@ test('management login issues an HttpOnly user-bound proof, and logout removes i
   assert.equal((await module.POST({ json: async () => ({ password: 'test-only-password' }) })).status, 200);
   const [name, proof, flags] = settings.find(([name]) => name === 'limu_admin_proof');
   assert.equal(name, 'limu_admin_proof'); assert.equal(flags.httpOnly, true);
-  assert.equal(load('lib/admin-proof.ts').verifyAdminProof(proof, 'user-a', 'test-only-password'), true);
+  assert.equal(await load('lib/admin-proof.ts').verifyAdminProof(proof, 'user-a', 'test-only-password'), true);
   settings.length = 0;
   assert.equal((await module.DELETE({ url: 'https://cafe.test/api/admin/auth', headers: new Headers({ origin: 'https://cafe.test' }) })).status, 200);
   assert.ok(settings.some(([name, value, flags]) => name === 'limu_admin_proof' && value === '' && flags.maxAge === 0));
@@ -127,9 +128,9 @@ test('signed management session rejects the legacy timestamp without a valid pas
     '@/lib/supabase/server': { createClient: async () => ({ auth: { getUser: async () => ({ data: { user: { id: 'user-a' } } }) } }) },
   }, { process: { env: { ADMIN_PASSWORD: 'test-secret' } } });
   assert.equal((await module.requireVerifiedAdminSession()).status, 403);
-  proof = createAdminProof('another-user', future, 'test-secret');
+  proof = await createAdminProof('another-user', future, 'test-secret');
   assert.equal((await module.requireVerifiedAdminSession()).status, 403);
-  proof = createAdminProof('user-a', future, 'test-secret');
+  proof = await createAdminProof('user-a', future, 'test-secret');
   assert.equal((await module.requireVerifiedAdminSession()).status, 200);
 });
 

@@ -1,8 +1,10 @@
+import { requireAdminSession } from '@/lib/admin-session';
 import { NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
 import { createAdminClient } from '@/lib/supabase/server';
 import { loadItemDisplayOrder } from '@/lib/item-order-server';
 import { sortItemsByDisplayOrder } from '@/lib/item-order';
+import { ProductCreation } from '@/lib/domain/product';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,12 +25,21 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const adminAccess = await requireAdminSession();
+  if (!adminAccess.user) return NextResponse.json({ error: adminAccess.error }, { status: adminAccess.status });
+
   const supabase = createAdminClient();
-  const body = await request.json();
+  const body = await request.json().catch(() => null);
+  let change: ProductCreation;
+  try {
+    change = new ProductCreation(body);
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : '商品情報が不正です' }, { status: 400 });
+  }
 
   const { data, error } = await supabase
     .from('items')
-    .insert(body)
+    .insert({ ...change.patch, stock: change.initialStock })
     .select()
     .single();
 

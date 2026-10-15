@@ -1,3 +1,4 @@
+import { requireAdminPage } from '@/lib/admin-page-session';
 import { createAdminClient } from '@/lib/supabase/server';
 import ReimbursementsClient from './ReimbursementsClient';
 
@@ -13,6 +14,7 @@ type PurchaseRunListRow = {
 };
 
 export default async function AdminReimbursementsPage() {
+  await requireAdminPage();
   const supabase = createAdminClient();
 
   const [{ data: items }, { data: purchaseRuns }, { data: miscExpenseNotes }] = await Promise.all([

@@ -18,7 +18,7 @@ import {
 } from '@/lib/item-select';
 
 async function HomeContent({ userId, authUser }: { userId: string; authUser: AuthUser }) {
-  await syncUserProfile(authUser);
+  const profileSync = syncUserProfile(authUser);
   const adminClient = createAdminClient();
 
   const [
@@ -38,6 +38,7 @@ async function HomeContent({ userId, authUser }: { userId: string; authUser: Aut
       .order('sort_order'),
     adminClient.from('favorite_items').select('item_id').eq('user_id', userId),
     loadItemDisplayOrder(adminClient),
+    profileSync,
   ]);
 
   let items = initialItemsQuery.data;
@@ -82,7 +83,7 @@ export default async function HomePage() {
   const layoutUser = {
     id: user.id,
     name: user.user_metadata?.full_name ?? user.user_metadata?.name ?? user.email ?? 'LIMU Member',
-    balance: 0,
+    balance: null,
   };
 
   return (

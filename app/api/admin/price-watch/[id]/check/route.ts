@@ -1,3 +1,4 @@
+import { requireAdminSession } from '@/lib/admin-session';
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/server';
 import { notifyPriceDrop } from '@/lib/slack';
@@ -37,6 +38,9 @@ export async function POST(
   _request: Request,
   { params }: { params: { id: string } }
 ) {
+  const adminAccess = await requireAdminSession();
+  if (!adminAccess.user) return NextResponse.json({ error: adminAccess.error }, { status: adminAccess.status });
+
   const supabase = createAdminClient();
 
   const { data: watch } = await supabase
