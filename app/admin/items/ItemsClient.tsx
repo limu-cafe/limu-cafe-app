@@ -8,6 +8,7 @@ import { useRouter } from 'next/navigation';
 import type { Category, Item } from '@/types';
 import { isItemLowStock } from '@/lib/item-stock';
 import { Product } from '@/lib/domain/product';
+import { RestockSubmission } from '@/lib/restock';
 
 interface Props {
   items: Item[];
@@ -45,6 +46,7 @@ export default function ItemsClient({ items, categories, orderEditor }: Props) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selected = localItems.find((item) => item.id === selectedId);
   const busy = useRef(false);
+  const restockRequests = useRef(new RestockSubmission());
   const detailPanel = useRef<HTMLElement>(null);
   const editDialog = useRef<HTMLDivElement>(null);
   const [stockInputs, setStockInputs] = useState<Record<string, string>>({});
@@ -215,28 +217,18 @@ export default function ItemsClient({ items, categories, orderEditor }: Props) {
     if (busy.current) return;
     busy.current = true;
     setLoading(`stock:${item.id}`);
+    const input = { item_id: item.id, quantity, note: '在庫追加', purchase: null };
     try {
       const res = await fetch('/api/admin/stock', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          item_id: item.id,
-          quantity,
-          note: '在庫追加',
-          purchase: null,
-        }),
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...input, request_id: restockRequests.current.requestId(input) }),
       });
 
       const payload = await res.json();
       if (!res.ok) throw new Error(payload.error ?? '在庫追加に失敗しました');
 
-      setLocalItems((current) =>
-        current.map((currentItem) =>
-          currentItem.id === item.id
-            ? { ...currentItem, stock: currentItem.stock + quantity }
-            : currentItem
-        )
-      );
+      restockRequests.current.complete(input);
+      // Reload the authoritative stock. A replayed response may describe an earlier completed operation.
       setStockInputs((current) => ({ ...current, [item.id]: '' }));
       toast.success(`${item.name} の在庫を追加しました`);
       router.refresh();
