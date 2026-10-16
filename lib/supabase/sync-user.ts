@@ -41,18 +41,28 @@ export async function syncUserProfile(authUser: any) {
     name: metadata?.full_name ?? metadata?.name ?? authUser.email ?? '名無し',
     avatar_url: metadata?.avatar_url ?? null,
     email: authUser.email ?? null,
-    is_approved: true,
-    role: 'member' as const,
   };
 
-  const { error } = await adminClient
-    .from('users')
-    .upsert(payload, { onConflict: 'id' });
-
-  if (error) {
-    console.error('failed to sync user profile', error);
+  const { data: existing, error: readError } = await adminClient.from('users')
+    .select('id, slack_user_id, slack_workspace_id, name, avatar_url, email').eq('id', authUser.id).maybeSingle();
+  if (readError) {
+    console.error('failed to read user profile', readError);
+    return payload;
   }
-
+  if (!existing) {
+    // Preserve the established new-member policy. Never upsert approval/role over an existing user.
+    const { error } = await adminClient.from('users').insert({ ...payload, is_approved: true, role: 'member' });
+    if (error && error.code !== '23505') console.error('failed to create user profile', error);
+    return payload;
+  }
+  const patch: Record<string, unknown> = {};
+  for (const [field, value] of Object.entries(payload)) {
+    if (field !== 'id' && value !== null && existing[field] !== value) patch[field] = value;
+  }
+  if (Object.keys(patch).length) {
+    const { error } = await adminClient.from('users').update(patch).eq('id', authUser.id);
+    if (error) console.error('failed to sync user profile', error);
+  }
   return payload;
 }
 

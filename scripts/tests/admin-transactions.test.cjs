@@ -71,8 +71,10 @@ function load(relativePath, db) {
   const cache = new Map();
   const jsx = (type, props) => ({ type, props });
   const mocks = {
+    '@/lib/admin-page-session': { requireAdminPage: async () => ({ id: 'admin' }) },
+    '@/lib/admin-session': { requireAdminSession: async () => ({ user: { id: 'admin' } }) },
     '@/lib/supabase/server': { createAdminClient: () => db },
-    '@/lib/item-stock': { countLowStockItems: async () => 3 },
+    'react': { cache: (fn) => { let value; return () => value ??= fn(); }, Suspense: 'Suspense' },
     'react/jsx-runtime': { jsx, jsxs: jsx },
     'next/link': { default: 'link' },
     'lucide-react': new Proxy({}, { get: (_, key) => key }),
@@ -90,6 +92,8 @@ function load(relativePath, db) {
       if (name.endsWith('TransactionsClient')) return { default: 'TransactionsClient' };
       if (name.endsWith('BotIntroBroadcastCard')) return { default: 'BotIntroBroadcastCard' };
       if (name.endsWith('AdminAuthGuard')) return { default: 'AdminAuthGuard' };
+      if (name.endsWith('AdminShell')) return { default: 'AdminShell' };
+      if (name.endsWith('AdminSidebarData')) return { default: 'AdminSidebarData' };
       if (name.endsWith('AdminSidebar')) return { default: 'AdminSidebar' };
       const target = name.startsWith('@/') ? path.join(root, name.slice(2)) : path.resolve(path.dirname(filename), name);
       return compile(target + '.ts');
@@ -112,7 +116,7 @@ function ordersFixture() {
 
 test('transactions page includes all four unsettled orders, including positions 90 and 107, exactly once', async () => {
   const db = database({ orders: ordersFixture() });
-  const page = await load('app/admin/transactions/page.tsx', db).default();
+  const page = await load('app/admin/transactions/page.tsx', db).default({});
   const pending = page.props.orders.filter((item) => item.payment_method === 'deferred' && !item.settled_at);
   assert.deepEqual(Array.from(pending, (item) => item.id), ['order-24', 'order-41', 'order-90', 'order-107']);
   assert.equal(pending.reduce((sum, item) => sum + item.total_amount, 0), 520);
@@ -130,7 +134,7 @@ test('old pending cash orders, charges and subscription payments remain actionab
   charges.push(row('old-approval', 201, { method: 'stripe', status: 'pending' }));
   const subscriptions = Array.from({ length: 90 }, (_, index) => row(`subscription-${index}`, index, { payment_status: 'completed' }));
   subscriptions.push(row('old-subscription', 200, { payment_status: 'pending_cash_settlement' }));
-  const page = await load('app/admin/transactions/page.tsx', database({ orders, charge_requests: charges, subscription_payments: subscriptions })).default();
+  const page = await load('app/admin/transactions/page.tsx', database({ orders, charge_requests: charges, subscription_payments: subscriptions })).default({});
   assert.ok(page.props.orders.some((item) => item.id === 'old-cash'));
   assert.ok(!page.props.orders.some((item) => ['old-settled', 'old-card'].includes(item.id)));
   assert.ok(page.props.charges.some((item) => item.id === 'old-charge' && !item.is_cash_settled));
@@ -140,18 +144,18 @@ test('old pending cash orders, charges and subscription payments remain actionab
 
 test('pending pagination retrieves more than 1000 records even with a smaller server row cap', async () => {
   const orders = Array.from({ length: 1025 }, (_, index) => row(`pending-${index}`, index, { payment_method: 'deferred', payment_status: 'completed', deferred_settlement_method: null, settled_at: null }));
-  const page = await load('app/admin/transactions/page.tsx', database({ orders }, { rowCap: 73 })).default();
+  const page = await load('app/admin/transactions/page.tsx', database({ orders }, { rowCap: 73 })).default({});
   assert.equal(page.props.orders.length, 1025);
   assert.equal(new Set(page.props.orders.map((item) => item.id)).size, 1025);
 });
 
 test('a failed pending query raises an error rather than showing an incomplete collection list', async () => {
   const page = load('app/admin/transactions/page.tsx', database({ orders: ordersFixture() }, { failPending: true }));
-  await assert.rejects(page.default(), (error) => error.message === 'database unavailable');
+  await assert.rejects(page.default({}), (error) => error.message === 'database unavailable');
 });
 
 test('legacy schema fallback still retrieves old pending orders', async () => {
-  const page = await load('app/admin/transactions/page.tsx', database({ orders: ordersFixture() }, { missingSettlementColumns: true })).default();
+  const page = await load('app/admin/transactions/page.tsx', database({ orders: ordersFixture() }, { missingSettlementColumns: true })).default({});
   assert.equal(page.props.orders.filter((item) => item.payment_method === 'deferred').length, 4);
 });
 
@@ -174,13 +178,36 @@ test('dashboard renders four pending transactions and two reimbursements from th
     orders: ordersFixture(),
     purchase_runs: [{ id: 'purchase-1', reimbursement_status: 'pending_reimbursement' }, { id: 'purchase-2', reimbursement_status: 'pending_reimbursement' }],
   });
-  const page = await load('app/admin/page.tsx', db).default();
+  const page = await load('app/admin/page.tsx', db).default({});
   const transactions = find(page, (node) => node.props?.href === '/admin/transactions');
   const reimbursements = find(page, (node) => node.props?.href === '/admin/reimbursements');
   assert.equal(textContent(transactions), '取引履歴4');
   assert.equal(textContent(reimbursements), '立替管理2');
-  const layout = await load('app/admin/layout.tsx', db).default({ children: null });
-  const sidebar = find(layout, (node) => node.props?.notifications);
+  const sidebar = await load('app/admin/AdminSidebarData.tsx', db).default({});
   assert.equal(sidebar.props.notifications.transactions, 4);
   assert.equal(sidebar.props.notifications.reimbursements, 2);
+});
+
+
+test('admin layout renders immediately without a database read', () => {
+  const db = { from() { throw new Error('layout must not wait for database'); } };
+  const layout = load('app/admin/layout.tsx', db).default({ children: 'page' });
+  assert.equal(typeof layout.then, 'undefined');
+  assert.equal(layout.type, 'AdminShell');
+});
+
+test('user scope applies to every source and retains old pending transactions on later pages', async () => {
+  const user = '00000000-0000-4000-8000-000000000001';
+  const other = '00000000-0000-4000-8000-000000000002';
+  const orders = ordersFixture().map((o) => ({ ...o, user_id: user }));
+  orders.push(row('other-pending', 300, { user_id: other, payment_method: 'cash', payment_status: 'pending' }));
+  const charges = [row('charge', 1, { user_id: other, status: 'pending' })];
+  const db = database({ orders, charge_requests: charges, settlements: [row('settlement', 1, { user_id: other })] });
+  const page = await load('app/admin/transactions/page.tsx', db).default({ searchParams: { user, page: '2' } });
+  assert.ok(page.props.orders.every((o) => o.user_id === user));
+  assert.equal(page.props.charges.length, 0);
+  assert.equal(page.props.settlements.length, 0);
+  assert.equal(page.props.orders.filter((o) => o.payment_method === 'deferred').length, 4);
+  assert.equal(page.props.hasNextPage, false);
+  assert.equal(page.props.page, 2);
 });

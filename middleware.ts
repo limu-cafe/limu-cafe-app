@@ -1,13 +1,14 @@
 import { createServerClient } from '@supabase/ssr';
 import type { CookieOptions } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
+import { ADMIN_PROOF_COOKIE, verifyAdminProof } from '@/lib/admin-proof';
+import { isManagementApi } from '@/lib/admin-access';
 
 const USER_PROTECTED_PATHS = ['/', '/mypage', '/request', '/charge', '/cart', '/checkout', '/pending', '/order-complete'];
 const ADMIN_PROTECTED_PREFIX = '/admin';
 const ADMIN_LOGIN_PATH = '/admin/login';
 const ADMIN_PASSWORD_PATH = '/admin/password';
 const LOGIN_PATH = '/login';
-const ADMIN_COOKIE = 'limu_admin_auth';
 
 function isUserProtectedPath(pathname: string) {
   return USER_PROTECTED_PATHS.includes(pathname);
@@ -19,6 +20,9 @@ function isAdminProtectedPath(pathname: string) {
 
 export async function middleware(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
+  const managementApi = isManagementApi(pathname, request.method);
+  if (pathname.startsWith('/api/') && !managementApi) return NextResponse.next();
+  const protectedAdminPath = isAdminProtectedPath(pathname) || managementApi;
 
   const redirectToLogin = () => {
     const loginUrl = request.nextUrl.clone();
@@ -31,6 +35,7 @@ export async function middleware(request: NextRequest) {
   };
 
   const redirectToAdminLogin = () => {
+    if (managementApi) return NextResponse.json({ error: '管理者ログインを更新してください' }, { status: 403 });
     const adminLoginUrl = request.nextUrl.clone();
     adminLoginUrl.pathname = ADMIN_LOGIN_PATH;
     adminLoginUrl.search = '';
@@ -42,7 +47,7 @@ export async function middleware(request: NextRequest) {
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (!supabaseUrl || !supabaseAnonKey) {
-    if (isAdminProtectedPath(pathname)) {
+    if (protectedAdminPath) {
       return redirectToAdminLogin();
     }
     if (isUserProtectedPath(pathname)) {
@@ -85,7 +90,7 @@ export async function middleware(request: NextRequest) {
     user = sessionUser;
   } catch (error) {
     console.error('middleware auth check failed', error);
-    if (isAdminProtectedPath(pathname)) {
+    if (protectedAdminPath) {
       return redirectToAdminLogin();
     }
     if (isUserProtectedPath(pathname)) {
@@ -98,7 +103,7 @@ export async function middleware(request: NextRequest) {
     return redirectToLogin();
   }
 
-  if (!user && isAdminProtectedPath(pathname)) {
+  if (!user && protectedAdminPath) {
     return redirectToAdminLogin();
   }
 
@@ -106,10 +111,8 @@ export async function middleware(request: NextRequest) {
     return redirectToAdminLogin();
   }
 
-  if (user && isAdminProtectedPath(pathname)) {
-    const adminCookie = request.cookies.get(ADMIN_COOKIE)?.value;
-    const adminExpiry = adminCookie ? Number(adminCookie) : 0;
-    if (!adminExpiry || Date.now() >= adminExpiry) {
+  if (user && protectedAdminPath) {
+    if (!await verifyAdminProof(request.cookies.get(ADMIN_PROOF_COOKIE)?.value, user.id, process.env.ADMIN_PASSWORD)) {
       return redirectToAdminLogin();
     }
   }
@@ -118,5 +121,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)'],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
 };

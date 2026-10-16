@@ -1,15 +1,19 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import { Pencil, Plus, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useRouter } from 'next/navigation';
 import type { Category, Item } from '@/types';
-import { isItemLowStock, isUnlimitedStockItem } from '@/lib/item-stock';
+import { isItemLowStock } from '@/lib/item-stock';
+import { Product } from '@/lib/domain/product';
+import { RestockSubmission } from '@/lib/restock';
 
 interface Props {
   items: Item[];
   categories: Category[];
+  orderEditor?: ReactNode;
 }
 
 type StatusFilter = 'all' | 'visible' | 'low-stock' | 'hidden';
@@ -29,7 +33,7 @@ const EMPTY_FORM = {
 const FIELD_CLASS =
   'w-full rounded-xl border border-gray-700 bg-gray-800 px-4 py-3 text-sm text-white placeholder:text-gray-500 focus:outline-none';
 
-export default function ItemsClient({ items, categories }: Props) {
+export default function ItemsClient({ items, categories, orderEditor }: Props) {
   const router = useRouter();
   const [localItems, setLocalItems] = useState<Item[]>(items);
   const [showForm, setShowForm] = useState(false);
@@ -38,11 +42,41 @@ export default function ItemsClient({ items, categories }: Props) {
   const [loading, setLoading] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [search, setSearch] = useState('');
+  const [categoryId, setCategoryId] = useState('');
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const selected = localItems.find((item) => item.id === selectedId);
+  const busy = useRef(false);
+  const restockRequests = useRef(new RestockSubmission());
+  const detailPanel = useRef<HTMLElement>(null);
+  const editDialog = useRef<HTMLDivElement>(null);
   const [stockInputs, setStockInputs] = useState<Record<string, string>>({});
 
   useEffect(() => {
     setLocalItems(items);
   }, [items]);
+
+  useEffect(() => {
+    if (selectedId) detailPanel.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, [selectedId]);
+
+  useEffect(() => {
+    if (!showForm) return;
+    const previous = document.activeElement as HTMLElement | null;
+    const controls = () => editDialog.current?.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled])');
+    controls()?.[0]?.focus();
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !busy.current) setShowForm(false);
+      if (event.key === 'Tab') {
+        const elements = controls();
+        if (!elements?.length) return;
+        const first = elements[0], last = elements[elements.length - 1];
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => { window.removeEventListener('keydown', onKey); previous?.focus(); };
+  }, [showForm]);
 
   const attachCategory = (item: Item) => ({
     ...item,
@@ -77,6 +111,8 @@ export default function ItemsClient({ items, categories }: Props) {
       return;
     }
 
+    if (busy.current) return;
+    busy.current = true;
     setLoading('item-form');
     try {
       const body = {
@@ -85,7 +121,7 @@ export default function ItemsClient({ items, categories }: Props) {
         description: form.description.trim() || null,
         price: Number(form.price),
         category_id: form.category_id || null,
-        stock: editing?.stock ?? 0,
+        ...(editing ? { expected_updated_at: editing.updated_at } : {}),
         stock_alert_threshold: Number(form.stock_alert_threshold || 0),
         image_url: form.image_url.trim() || null,
         is_available: form.is_available,
@@ -113,6 +149,7 @@ export default function ItemsClient({ items, categories }: Props) {
     } catch (error: any) {
       toast.error(error.message);
     } finally {
+      busy.current = false;
       setLoading(null);
     }
   };
@@ -120,6 +157,8 @@ export default function ItemsClient({ items, categories }: Props) {
   const handleDelete = async (item: Item) => {
     if (!confirm(`「${item.name}」を削除しますか？`)) return;
 
+    if (busy.current) return;
+    busy.current = true;
     setLoading(`delete:${item.id}`);
     try {
       const res = await fetch(`/api/items/${item.id}`, { method: 'DELETE' });
@@ -132,17 +171,20 @@ export default function ItemsClient({ items, categories }: Props) {
     } catch (error: any) {
       toast.error(error.message);
     } finally {
+      busy.current = false;
       setLoading(null);
     }
   };
 
   const handleToggleAvailability = async (item: Item) => {
+    if (busy.current) return;
+    busy.current = true;
     setLoading(`toggle:${item.id}`);
     try {
       const res = await fetch(`/api/items/${item.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ is_available: !item.is_available }),
+        body: JSON.stringify({ is_available: !item.is_available, expected_updated_at: item.updated_at }),
       });
       const payload = await res.json();
       if (!res.ok) throw new Error(payload.error ?? '更新に失敗しました');
@@ -156,6 +198,7 @@ export default function ItemsClient({ items, categories }: Props) {
     } catch (error: any) {
       toast.error(error.message);
     } finally {
+      busy.current = false;
       setLoading(null);
     }
   };
@@ -166,40 +209,33 @@ export default function ItemsClient({ items, categories }: Props) {
       return;
     }
     const quantity = Number(stockInputs[item.id] || 0);
-    if (!quantity || quantity <= 0) {
+    if (!Number.isInteger(quantity) || quantity <= 0) {
       toast.error('追加数を入力してください');
       return;
     }
 
+    if (busy.current) return;
+    busy.current = true;
     setLoading(`stock:${item.id}`);
+    const input = { item_id: item.id, quantity, note: '在庫追加', purchase: null };
     try {
       const res = await fetch('/api/admin/stock', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          item_id: item.id,
-          quantity,
-          note: '在庫追加',
-          purchase: null,
-        }),
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...input, request_id: restockRequests.current.requestId(input) }),
       });
 
       const payload = await res.json();
       if (!res.ok) throw new Error(payload.error ?? '在庫追加に失敗しました');
 
-      setLocalItems((current) =>
-        current.map((currentItem) =>
-          currentItem.id === item.id
-            ? { ...currentItem, stock: currentItem.stock + quantity }
-            : currentItem
-        )
-      );
+      restockRequests.current.complete(input);
+      // Reload the authoritative stock. A replayed response may describe an earlier completed operation.
       setStockInputs((current) => ({ ...current, [item.id]: '' }));
       toast.success(`${item.name} の在庫を追加しました`);
       router.refresh();
     } catch (error: any) {
       toast.error(error.message);
     } finally {
+      busy.current = false;
       setLoading(null);
     }
   };
@@ -220,7 +256,7 @@ export default function ItemsClient({ items, categories }: Props) {
         item.name.toLowerCase().includes(keyword) ||
         (item.english_name ?? '').toLowerCase().includes(keyword);
 
-      if (!matchesSearch) return false;
+      if (!matchesSearch || (categoryId && item.category_id !== categoryId)) return false;
 
       switch (statusFilter) {
         case 'visible':
@@ -233,7 +269,7 @@ export default function ItemsClient({ items, categories }: Props) {
           return true;
       }
     });
-  }, [localItems, search, statusFilter]);
+  }, [localItems, search, statusFilter, categoryId]);
 
   return (
     <div className="space-y-5">
@@ -242,6 +278,7 @@ export default function ItemsClient({ items, categories }: Props) {
           <h1 className="font-display text-2xl font-bold text-white">商品管理</h1>
         </div>
         <button
+          disabled={Boolean(loading)}
           onClick={openCreate}
           className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-medium text-gray-950 transition hover:bg-gray-100"
         >
@@ -250,18 +287,23 @@ export default function ItemsClient({ items, categories }: Props) {
         </button>
       </div>
 
+      {orderEditor}
+
       <div className="flex flex-col gap-3 rounded-2xl border border-gray-800 bg-gray-900 p-4 md:flex-row md:items-center">
         <input
           type="text"
+          aria-label="商品名で検索"
           value={search}
           onChange={(event) => setSearch(event.target.value)}
           placeholder="商品名で検索"
           className="w-full rounded-xl border border-gray-700 bg-gray-800 px-4 py-3 text-sm text-white placeholder:text-gray-500 focus:outline-none"
         />
-        <div className="flex flex-wrap gap-2">
+        <select aria-label="カテゴリで絞り込む" value={categoryId} onChange={(event) => setCategoryId(event.target.value)} className="rounded-xl border border-gray-700 bg-gray-800 px-3 py-3 text-sm text-white"><option value="">全カテゴリ</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select>
+        <div className="flex shrink-0 flex-wrap gap-2">
           {statusOptions.map((option) => (
             <button
               key={option.id}
+              aria-pressed={statusFilter === option.id}
               onClick={() => setStatusFilter(option.id)}
               className={`rounded-full px-3 py-2 text-xs font-medium transition-colors ${
                 statusFilter === option.id
@@ -275,130 +317,35 @@ export default function ItemsClient({ items, categories }: Props) {
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-gray-800 bg-gray-900">
-        <table className="w-full min-w-[980px] text-sm">
-          <thead>
-            <tr className="border-b border-gray-800 text-left text-xs text-gray-500">
-              <th className="px-4 py-3 font-medium">商品</th>
-              <th className="px-4 py-3 font-medium">カテゴリ</th>
-              <th className="px-4 py-3 font-medium">価格</th>
-              <th className="px-4 py-3 font-medium">在庫</th>
-              <th className="px-4 py-3 font-medium">追加</th>
-              <th className="px-4 py-3 font-medium">表示</th>
-              <th className="px-4 py-3 font-medium">操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredItems.map((item) => {
-              const isLowStock = isItemLowStock(item);
-              const hasUnlimitedStock = isUnlimitedStockItem(item);
-              return (
-                <tr key={item.id} className="border-b border-gray-800/60 align-top">
-                  <td className="px-4 py-4">
-                    <div className="space-y-1">
-                      <p className="font-medium text-white">{item.name}</p>
-                      {item.english_name && <p className="text-xs text-gray-500">{item.english_name}</p>}
-                    </div>
-                  </td>
-                  <td className="px-4 py-4 text-gray-300">
-                    {item.category?.icon ?? '📦'} {item.category?.name ?? '未設定'}
-                  </td>
-                  <td className="px-4 py-4 font-mono text-white">¥{item.price.toLocaleString()}</td>
-                  <td className="px-4 py-4">
-                    <div className="space-y-1">
-                      <p
-                        className={`font-mono text-lg font-bold ${
-                          hasUnlimitedStock
-                            ? 'text-sky-300'
-                            : item.stock === 0
-                            ? 'text-red-400'
-                            : isLowStock
-                              ? 'text-amber-400'
-                              : 'text-green-400'
-                        }`}
-                      >
-                        {hasUnlimitedStock ? '∞' : item.stock}
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        {hasUnlimitedStock ? '在庫管理なし' : `警戒値 ${item.stock_alert_threshold}`}
-                      </p>
-                    </div>
-                  </td>
-                  <td className="px-4 py-4">
-                    {hasUnlimitedStock ? (
-                      <span className="text-xs text-gray-500">対象外</span>
-                    ) : (
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="number"
-                          min={1}
-                          value={stockInputs[item.id] ?? ''}
-                          onChange={(event) =>
-                            setStockInputs((current) => ({
-                              ...current,
-                              [item.id]: event.target.value,
-                            }))
-                          }
-                          placeholder="個数"
-                          className="w-24 rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:outline-none"
-                        />
-                        <button
-                          onClick={() => handleAddStock(item)}
-                          disabled={loading === `stock:${item.id}`}
-                          className="rounded-lg bg-white/10 px-3 py-2 text-xs font-medium text-white transition hover:bg-white/20 disabled:opacity-50"
-                        >
-                          {loading === `stock:${item.id}` ? '追加中...' : '在庫追加'}
-                        </button>
-                      </div>
-                    )}
-                  </td>
-                  <td className="px-4 py-4">
-                    <button
-                      onClick={() => handleToggleAvailability(item)}
-                      disabled={loading === `toggle:${item.id}`}
-                      className={`rounded-full px-3 py-1 text-xs font-medium ${
-                        item.is_available
-                          ? 'bg-green-500/15 text-green-300'
-                          : 'bg-gray-700 text-gray-300'
-                      }`}
-                      title={item.is_available ? 'ユーザー画面に表示中' : 'ユーザー画面では非表示'}
-                    >
-                      {item.is_available ? '表示中' : '非表示'}
-                    </button>
-                  </td>
-                  <td className="px-4 py-4">
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => openEdit(item)}
-                        className="rounded-lg p-2 text-gray-300 transition hover:bg-gray-800 hover:text-white"
-                        title="編集"
-                      >
-                        <Pencil size={15} />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(item)}
-                        disabled={loading === `delete:${item.id}`}
-                        className="rounded-lg p-2 text-gray-400 transition hover:bg-red-500/15 hover:text-red-300 disabled:opacity-50"
-                        title="削除"
-                      >
-                        <Trash2 size={15} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
+      <p className="text-sm text-gray-400">{filteredItems.length} / {localItems.length}商品 · 商品を選ぶと詳細と操作を表示します</p>
+      {selected && <section ref={detailPanel} aria-label="選択した商品" className="rounded-2xl border border-gray-600 bg-gray-900 p-5">
+        <div className="flex items-start justify-between gap-4">
+          <div><h2 className="text-xl font-bold text-white">{selected.name}</h2><p className="mt-1 text-sm text-gray-400">{new Product(selected).status} · ¥{selected.price.toLocaleString()} · {selected.category?.name ?? 'カテゴリ未設定'}</p></div>
+          <button type="button" aria-label="商品詳細を閉じる" onClick={() => setSelectedId(null)} className="rounded-lg px-3 py-2 text-gray-300">✕</button>
+        </div>
+        {selected.description && <p className="mt-3 whitespace-pre-wrap text-sm text-gray-300">{selected.description}</p>}
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <button disabled={Boolean(loading)} onClick={() => openEdit(selected)} className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2 text-sm text-gray-950 disabled:opacity-50"><Pencil size={15}/>商品情報を編集</button>
+          <button disabled={Boolean(loading)} onClick={() => handleToggleAvailability(selected)} className="rounded-xl border border-gray-600 px-4 py-2 text-sm text-white disabled:opacity-50">{selected.is_available ? '非表示にする' : '表示する'}</button>
+          {!selected.is_unlimited_stock && <div className="flex flex-wrap items-center gap-2"><span className="text-sm text-gray-300">現在庫 {selected.stock}</span><input aria-label={`${selected.name}の在庫追加数`} type="number" min={1} step={1} value={stockInputs[selected.id] ?? ''} onChange={(event) => setStockInputs((current) => ({ ...current, [selected.id]: event.target.value }))} placeholder="追加数" className="w-24 rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white"/><button disabled={Boolean(loading)} onClick={() => handleAddStock(selected)} className="rounded-xl bg-white/10 px-4 py-2 text-sm text-white disabled:opacity-50">在庫追加</button></div>}
+        </div>
+        <details className="mt-5 text-xs text-gray-400"><summary className="cursor-pointer">その他の操作</summary><p className="my-2">販売を止める場合は「非表示」を利用できます。取引に使った商品は削除できません。</p><button disabled={Boolean(loading)} onClick={() => handleDelete(selected)} className="inline-flex items-center gap-2 rounded-lg border border-red-900 px-3 py-2 text-red-300 disabled:opacity-50"><Trash2 size={14}/>商品を削除</button></details>
+      </section>}
+      <div className="overflow-x-auto rounded-2xl border border-gray-800 bg-gray-900">
+        <table className="w-full text-sm">
+          <thead><tr className="border-b border-gray-800 text-left text-xs text-gray-500"><th className="px-4 py-3">商品</th><th className="px-3 py-3">価格</th><th className="px-3 py-3">在庫・状態</th></tr></thead>
+          <tbody>{filteredItems.map((item) => <tr key={item.id} className={`border-b border-gray-800/60 ${selectedId === item.id ? 'bg-white/5' : ''}`}>
+            <td className="px-4 py-3"><button type="button" aria-pressed={selectedId === item.id} onClick={() => setSelectedId(item.id)} className="text-left font-medium text-white underline decoration-gray-600 underline-offset-4">{item.name}</button><p className="mt-1 text-xs text-gray-500">{item.category?.icon} {item.category?.name ?? '未設定'}</p></td>
+            <td className="whitespace-nowrap px-3 py-3 font-mono text-white">¥{item.price.toLocaleString()}</td>
+            <td className="px-3 py-3"><p className="font-mono text-white">{item.is_unlimited_stock ? '∞' : item.stock}</p><p className={`text-xs ${isItemLowStock(item) ? 'text-amber-300' : 'text-gray-400'}`}>{new Product(item).status}</p></td>
+          </tr>)}</tbody>
         </table>
-
-        {filteredItems.length === 0 && (
-          <div className="px-6 py-16 text-center text-sm text-gray-500">商品がありません</div>
-        )}
+        {filteredItems.length === 0 && <div className="px-6 py-12 text-center text-sm text-gray-500">条件に合う商品がありません</div>}
       </div>
 
       {showForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-          <div className="w-full max-w-2xl rounded-3xl border border-gray-800 bg-gray-900 p-6 shadow-2xl">
+          <div ref={editDialog} role="dialog" aria-modal="true" aria-label={editing ? "商品情報編集" : "新商品追加"} className="max-h-[90dvh] w-full max-w-2xl overflow-y-auto rounded-3xl border border-gray-800 bg-gray-900 p-6 shadow-2xl">
             <div className="flex items-center justify-between">
               <h2 className="font-display text-2xl font-bold text-white">
                 {editing ? '商品情報編集' : '新商品追加'}

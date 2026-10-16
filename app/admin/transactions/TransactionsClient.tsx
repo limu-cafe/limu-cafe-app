@@ -1,6 +1,7 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { format } from 'date-fns';
 import { ja } from 'date-fns/locale';
@@ -176,7 +177,11 @@ export default function TransactionsClient({
   charges,
   settlements,
   subscriptionPayments,
+  selectedUserId = null, page = 1, hasNextPage = false,
+  userChoices = [],
 }: {
+  selectedUserId?: string | null; page?: number; hasNextPage?: boolean;
+  userChoices?: { id: string; name: string }[];
   orders: OrderSummary[];
   charges: ChargeSummary[];
   settlements: SettlementSummary[];
@@ -185,6 +190,9 @@ export default function TransactionsClient({
   const router = useRouter();
   const [historyFilter, setHistoryFilter] = useState<HistoryFilter>('all');
   const [loading, setLoading] = useState<string | null>(null);
+  const actionLock = useRef(false);
+  const people = useMemo(() => userChoices.length ? userChoices : Array.from(new Map([...orders, ...charges, ...settlements, ...subscriptionPayments].filter((row) => row.user).map((row) => [row.user_id, row.user!])).values()).sort((a, b) => a.name.localeCompare(b.name, 'ja')), [userChoices, orders, charges, settlements, subscriptionPayments]);
+  const pageHref = (next: number) => `/admin/transactions?page=${next}${selectedUserId ? `&user=${encodeURIComponent(selectedUserId)}` : ''}`;
 
   const pendingCashOrders = useMemo(
     () => orders.filter((order) => order.payment_method === 'cash' && order.payment_status === 'pending'),
@@ -245,7 +253,7 @@ export default function TransactionsClient({
       settlement,
     }));
 
-    const normalizedSubscriptions = subscriptionPayments.map((payment) => ({
+    const normalizedSubscriptions = subscriptionPayments.filter((payment) => payment.payment_status !== 'pending_cash_settlement').map((payment) => ({
       kind: 'subscription' as const,
       created_at: payment.created_at,
       payment,
@@ -273,10 +281,12 @@ export default function TransactionsClient({
     success: string;
     confirmMessage?: string;
   }) => {
+    if (actionLock.current) return;
     if (confirmMessage && !confirm(confirmMessage)) {
       return;
     }
 
+    actionLock.current = true;
     setLoading(key);
     try {
       const response = await request();
@@ -289,6 +299,7 @@ export default function TransactionsClient({
     } catch (error: any) {
       toast.error(error.message);
     } finally {
+      actionLock.current = false;
       setLoading(null);
     }
   };
@@ -309,6 +320,18 @@ export default function TransactionsClient({
 
   return (
     <div className="space-y-6">
+      <form action="/admin/transactions" className="flex flex-wrap items-center gap-3 rounded-2xl border border-gray-800 bg-gray-900 p-4">
+        <label htmlFor="transaction-user" className="text-sm text-gray-300">ユーザー</label>
+        <select key={selectedUserId ?? 'all'} id="transaction-user" name="user" defaultValue={selectedUserId ?? ''} className="max-w-full rounded-xl border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white"><option value="">全員</option>{people.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}{selectedUserId && !people.some((person) => person.id === selectedUserId) && <option value={selectedUserId}>選択中のユーザー</option>}</select>
+        <button className="rounded-xl bg-white px-4 py-2 text-sm text-gray-950">絞り込む</button>
+        {selectedUserId && <Link prefetch={false} href="/admin/transactions" className="text-sm text-gray-300 underline">全員に戻す</Link>}
+        <p className="w-full text-xs text-gray-400">{selectedUserId ? '選択したユーザーの取引を表示中。' : '全員の取引を表示中。'}未処理の取引は期間に関係なく表示します。</p>
+      </form>
+      <nav aria-label="履歴のページ" className="flex flex-wrap items-center gap-4 text-sm text-gray-300">
+        {page > 1 && <Link prefetch={false} href={pageHref(page - 1)} className="rounded-lg border border-gray-700 px-3 py-2">新しい履歴へ</Link>}
+        <span>履歴 {page}ページ目（種類ごとに80件）</span>
+        {hasNextPage && <Link prefetch={false} href={pageHref(page + 1)} className="rounded-lg border border-gray-700 px-3 py-2">古い履歴へ</Link>}
+      </nav>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="font-display text-2xl font-bold text-white">取引履歴</h1>
         <div className="flex flex-wrap gap-2 text-xs">
@@ -360,7 +383,7 @@ export default function TransactionsClient({
                     <div className="flex flex-wrap gap-2 lg:justify-end">
                       <ActionButton
                         tone="success"
-                        disabled={loading === `deferred-order-settle:${order.id}`}
+                        disabled={Boolean(loading)}
                         onClick={() =>
                           runAction({
                             key: `deferred-order-settle:${order.id}`,
@@ -377,7 +400,7 @@ export default function TransactionsClient({
                       </ActionButton>
                       <ActionButton
                         tone="danger"
-                        disabled={loading === `order-refund:${order.id}`}
+                        disabled={Boolean(loading)}
                         onClick={() =>
                           runAction({
                             key: `order-refund:${order.id}`,
@@ -391,7 +414,7 @@ export default function TransactionsClient({
                       </ActionButton>
                       <ActionButton
                         tone="danger"
-                        disabled={loading === `order-cancel:${order.id}`}
+                        disabled={Boolean(loading)}
                         onClick={() =>
                           runAction({
                             key: `order-cancel:${order.id}`,
@@ -435,7 +458,7 @@ export default function TransactionsClient({
                     <div className="flex flex-wrap gap-2 lg:justify-end">
                       <ActionButton
                         tone="success"
-                        disabled={loading === `order-settle:${order.id}`}
+                        disabled={Boolean(loading)}
                         onClick={() =>
                           runAction({
                             key: `order-settle:${order.id}`,
@@ -449,7 +472,7 @@ export default function TransactionsClient({
                       </ActionButton>
                       <ActionButton
                         tone="danger"
-                        disabled={loading === `order-refund:${order.id}`}
+                        disabled={Boolean(loading)}
                         onClick={() =>
                           runAction({
                             key: `order-refund:${order.id}`,
@@ -490,7 +513,7 @@ export default function TransactionsClient({
                     <div className="flex flex-wrap gap-2 lg:justify-end">
                       <ActionButton
                         tone="success"
-                        disabled={loading === `charge-settle:${charge.id}`}
+                        disabled={Boolean(loading)}
                         onClick={() =>
                           runAction({
                             key: `charge-settle:${charge.id}`,
@@ -504,7 +527,7 @@ export default function TransactionsClient({
                       </ActionButton>
                       <ActionButton
                         tone="danger"
-                        disabled={loading === `charge-refund:${charge.id}`}
+                        disabled={Boolean(loading)}
                         onClick={() =>
                           runAction({
                             key: `charge-refund:${charge.id}`,
@@ -562,7 +585,7 @@ export default function TransactionsClient({
                     <div className="flex flex-wrap gap-2 lg:justify-end">
                       <ActionButton
                         tone="success"
-                        disabled={loading === `subscription-settle:${payment.id}`}
+                        disabled={Boolean(loading)}
                         onClick={() =>
                           runAction({
                             key: `subscription-settle:${payment.id}`,
@@ -579,7 +602,7 @@ export default function TransactionsClient({
                       </ActionButton>
                       <ActionButton
                         tone="danger"
-                        disabled={loading === `subscription-cancel:${payment.id}`}
+                        disabled={Boolean(loading)}
                         onClick={() => requestSubscriptionPaymentCancel(payment)}
                       >
                         支払取消
@@ -623,7 +646,7 @@ export default function TransactionsClient({
                     <div className="flex flex-wrap gap-2 lg:justify-end">
                       <ActionButton
                         tone="danger"
-                        disabled={loading === `charge-reject:${charge.id}`}
+                        disabled={Boolean(loading)}
                         onClick={() =>
                           runAction({
                             key: `charge-reject:${charge.id}`,
@@ -636,7 +659,7 @@ export default function TransactionsClient({
                       </ActionButton>
                       <ActionButton
                         tone="success"
-                        disabled={loading === `charge-approve:${charge.id}`}
+                        disabled={Boolean(loading)}
                         onClick={() =>
                           runAction({
                             key: `charge-approve:${charge.id}`,
@@ -733,7 +756,7 @@ export default function TransactionsClient({
                         <div className="flex flex-wrap gap-2 lg:justify-end">
                           {order.payment_method === 'cash' && order.payment_status === 'completed' && (
                             <ActionButton
-                              disabled={loading === `order-unsettle:${order.id}`}
+                              disabled={Boolean(loading)}
                               onClick={() =>
                                 runAction({
                                   key: `order-unsettle:${order.id}`,
@@ -753,7 +776,7 @@ export default function TransactionsClient({
                             (order.deferred_settlement_method ?? 'cash') === 'cash' &&
                             order.settlement_source === 'individual_deferred_order' && (
                               <ActionButton
-                                disabled={loading === `deferred-order-unsettle:${order.id}`}
+                                disabled={Boolean(loading)}
                                 onClick={() =>
                                   runAction({
                                     key: `deferred-order-unsettle:${order.id}`,
@@ -772,7 +795,7 @@ export default function TransactionsClient({
                           {['pending', 'completed'].includes(order.payment_status) && (
                             <ActionButton
                               tone="danger"
-                              disabled={loading === `order-refund:${order.id}`}
+                              disabled={Boolean(loading)}
                               onClick={() =>
                                 runAction({
                                   key: `order-refund:${order.id}`,
@@ -789,7 +812,7 @@ export default function TransactionsClient({
                             order.payment_status === 'completed' && (
                               <ActionButton
                                 tone="danger"
-                                disabled={loading === `order-cancel:${order.id}`}
+                                disabled={Boolean(loading)}
                                 onClick={() =>
                                   runAction({
                                     key: `order-cancel:${order.id}`,
@@ -858,7 +881,7 @@ export default function TransactionsClient({
                             charge.is_cash_settled &&
                             charge.settlement_source === 'individual_cash_charge' && (
                             <ActionButton
-                              disabled={loading === `charge-unsettle:${charge.id}`}
+                              disabled={Boolean(loading)}
                               onClick={() =>
                                 runAction({
                                   key: `charge-unsettle:${charge.id}`,
@@ -877,7 +900,7 @@ export default function TransactionsClient({
                           {charge.status === 'approved' && (
                             <ActionButton
                               tone="danger"
-                              disabled={loading === `charge-refund:${charge.id}`}
+                              disabled={Boolean(loading)}
                               onClick={() =>
                                 runAction({
                                   key: `charge-refund:${charge.id}`,
@@ -934,7 +957,7 @@ export default function TransactionsClient({
                         {settlement.status === 'completed' && (
                           <div className="flex flex-wrap gap-2 lg:justify-end">
                             <ActionButton
-                              disabled={loading === `settlement-revert:${settlement.id}`}
+                              disabled={Boolean(loading)}
                               onClick={() =>
                                 runAction({
                                   key: `settlement-revert:${settlement.id}`,
@@ -1009,7 +1032,7 @@ export default function TransactionsClient({
                       <div className="flex flex-wrap gap-2 lg:justify-end">
                         {payment.cash_due_amount > 0 && payment.payment_status === 'completed' && (
                           <ActionButton
-                            disabled={loading === `subscription-unsettle:${payment.id}`}
+                            disabled={Boolean(loading)}
                             onClick={() =>
                               runAction({
                                 key: `subscription-unsettle:${payment.id}`,
@@ -1028,7 +1051,7 @@ export default function TransactionsClient({
                         {payment.cash_due_amount > 0 && payment.payment_status === 'pending_cash_settlement' && (
                           <ActionButton
                             tone="success"
-                            disabled={loading === `subscription-settle:${payment.id}`}
+                            disabled={Boolean(loading)}
                             onClick={() =>
                               runAction({
                                 key: `subscription-settle:${payment.id}`,
@@ -1047,7 +1070,7 @@ export default function TransactionsClient({
                         {canCancel && (
                           <ActionButton
                             tone="danger"
-                            disabled={loading === `subscription-cancel:${payment.id}`}
+                            disabled={Boolean(loading)}
                             onClick={() => requestSubscriptionPaymentCancel(payment)}
                           >
                             支払取消

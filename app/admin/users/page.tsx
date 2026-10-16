@@ -1,3 +1,4 @@
+import { requireAdminPage } from '@/lib/admin-page-session';
 import { createAdminClient } from '@/lib/supabase/server';
 import {
   buildCashCollectionEntries,
@@ -10,6 +11,7 @@ import UsersClient from './UsersClient';
 export const dynamic = 'force-dynamic';
 
 export default async function AdminUsersPage() {
+  await requireAdminPage();
   const supabase = createAdminClient();
   const [{ data: users }, { data: pendingCashOrders }, { data: pendingSubscriptionPayments }] =
     await Promise.all([

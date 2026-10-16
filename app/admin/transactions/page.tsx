@@ -1,7 +1,9 @@
+import { requireAdminPage } from '@/lib/admin-page-session';
 import { createAdminClient } from '@/lib/supabase/server';
 import { ORDER_ITEMS_SELECT_ENHANCED, ORDER_ITEMS_SELECT_LEGACY } from '@/lib/item-select';
 import { needsLegacyOrderSelect } from '@/lib/orders';
 import { fetchRecentAndPendingRows } from '@/lib/transaction-history';
+import { TransactionFilter } from '@/lib/transaction-filter';
 import TransactionsClient from './TransactionsClient';
 
 export const dynamic = 'force-dynamic';
@@ -78,14 +80,15 @@ type SubscriptionPaymentFetchRow = {
 
 async function fetchOrdersWithSelect(
   select: string,
-  options: { settlementTracking: boolean; deferredMethod: boolean }
+  options: { settlementTracking: boolean; deferredMethod: boolean },
+  filter: TransactionFilter
 ) {
   const supabase = createAdminClient();
   const queryOrders = () =>
-    supabase.from('orders').select(select).order('created_at', { ascending: false }).order('id', { ascending: false });
+    filter.apply(supabase.from('orders').select(select)).order('created_at', { ascending: false }).order('id', { ascending: false });
 
   const orders = await fetchRecentAndPendingRows<OrderFetchRow>({
-    recent: queryOrders().limit(80),
+    recent: filter.recent(queryOrders()),
     pending: [
       (from, to) =>
         queryOrders().eq('payment_method', 'cash').eq('payment_status', 'pending').range(from, to),
@@ -112,12 +115,12 @@ async function fetchOrdersWithSelect(
   }));
 }
 
-async function fetchOrders() {
+async function fetchOrders(filter: TransactionFilter) {
   try {
     return await fetchOrdersWithSelect(ORDER_SELECT, {
       settlementTracking: true,
       deferredMethod: true,
-    });
+    }, filter);
   } catch (error) {
     const message = error && typeof error === 'object' && 'message' in error
       ? String(error.message)
@@ -130,52 +133,66 @@ async function fetchOrders() {
     return fetchOrdersWithSelect(fullLegacy ? ORDER_SELECT_FULL_LEGACY : ORDER_SELECT_NO_SETTLEMENT, {
       settlementTracking: false,
       deferredMethod: !fullLegacy,
-    });
+    }, filter);
   }
 }
 
-export default async function AdminTransactionsPage() {
+async function fetchUserChoices(supabase: any) {
+  const users: { id: string; name: string }[] = [];
+  while (true) {
+    const { data, error } = await supabase.from('users').select('id, name').order('name').order('id').range(users.length, users.length + 199);
+    if (error) throw error;
+    if (!data?.length) return users;
+    users.push(...data);
+  }
+}
+
+export default async function AdminTransactionsPage({ searchParams = {} }: { searchParams?: { user?: string; page?: string } }) {
+  await requireAdminPage();
+  const filter = new TransactionFilter(searchParams);
   const supabase = createAdminClient();
 
   const queryCharges = () =>
-    supabase
+    filter.apply(supabase
       .from('charge_requests')
-      .select('id, user_id, amount, method, status, note, created_at, approved_at, settled_at, settlement_source, user:users!charge_requests_user_id_fkey(id, name, avatar_url)')
+      .select('id, user_id, amount, method, status, note, created_at, approved_at, settled_at, settlement_source, user:users!charge_requests_user_id_fkey(id, name, avatar_url)'))
       .order('created_at', { ascending: false })
       .order('id', { ascending: false });
   const querySubscriptionPayments = () =>
-    supabase
+    filter.apply(supabase
       .from('subscription_payments')
-      .select('id, user_id, user_subscription_id, amount, payment_method, payment_status, points_used, balance_used, cash_due_amount, billing_period_start_at, billing_period_end_at, created_at, user:users!subscription_payments_user_id_fkey(id, name, avatar_url), subscription_product:subscription_products!subscription_payments_subscription_product_id_fkey(id, name, english_name), user_subscription:user_subscriptions!subscription_payments_user_subscription_id_fkey(status)')
+      .select('id, user_id, user_subscription_id, amount, payment_method, payment_status, points_used, balance_used, cash_due_amount, billing_period_start_at, billing_period_end_at, created_at, user:users!subscription_payments_user_id_fkey(id, name, avatar_url), subscription_product:subscription_products!subscription_payments_subscription_product_id_fkey(id, name, english_name), user_subscription:user_subscriptions!subscription_payments_user_subscription_id_fkey(status)'))
       .order('created_at', { ascending: false })
       .order('id', { ascending: false });
 
-  const [orders, charges, { data: settlements }, subscriptionPayments] =
+  const [orders, charges, settlementsResult, subscriptionPayments, userChoices] =
     await Promise.all([
-      fetchOrders(),
+      fetchOrders(filter),
       fetchRecentAndPendingRows<ChargeFetchRow>({
-        recent: queryCharges().limit(80),
+        recent: filter.recent(queryCharges()),
         pending: [
           (from, to) => queryCharges().eq('status', 'pending').range(from, to),
           (from, to) =>
             queryCharges().eq('method', 'cash').eq('status', 'approved').is('settled_at', null).range(from, to),
         ],
       }),
-      supabase
+      filter.recent(filter.apply(supabase
         .from('settlements')
         .select(
           'id, user_id, amount, method, status, period_start, period_end, created_at, user:users!settlements_user_id_fkey(id, name, avatar_url)'
-        )
-        .order('created_at', { ascending: false })
-        .limit(80),
+        ))
+        .order('created_at', { ascending: false }).order('id', { ascending: false })),
       fetchRecentAndPendingRows<SubscriptionPaymentFetchRow>({
-        recent: querySubscriptionPayments().limit(80),
+        recent: filter.recent(querySubscriptionPayments()),
         pending: [
           (from, to) => querySubscriptionPayments().eq('payment_status', 'pending_cash_settlement').range(from, to),
         ],
       }),
+      fetchUserChoices(supabase),
     ]);
 
+  if (settlementsResult.error) throw settlementsResult.error;
+  const settlements = settlementsResult.data;
   const normalizedCharges = charges.map((charge) => ({
     ...charge,
     is_cash_settled: charge.method === 'cash' ? Boolean(charge.settled_at) : false,
@@ -183,6 +200,10 @@ export default async function AdminTransactionsPage() {
 
   return (
     <TransactionsClient
+      selectedUserId={filter.userId}
+      userChoices={userChoices}
+      page={filter.page}
+      hasNextPage={filter.hasNextPage}
       orders={orders}
       charges={normalizedCharges}
       settlements={settlements ?? []}

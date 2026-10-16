@@ -75,7 +75,9 @@ export function setAdminSession() {
   document.cookie = `${SESSION_KEY}=${expiry}; path=/; max-age=${COOKIE_MAX_AGE}; samesite=lax`;
 }
 
-export function clearAdminSession() {
+export async function clearAdminSession() {
+  const response = await fetch('/api/admin/auth', { method: 'DELETE' });
+  if (!response.ok) throw new Error('ログアウトに失敗しました');
   sessionStorage.removeItem(SESSION_KEY);
   document.cookie = `${SESSION_KEY}=; path=/; max-age=0; samesite=lax`;
 }

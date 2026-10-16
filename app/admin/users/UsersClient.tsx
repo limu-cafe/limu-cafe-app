@@ -24,11 +24,13 @@ export default function UsersClient({
   const [balanceAmount, setBalanceAmount] = useState('');
   const [pendingOnly, setPendingOnly] = useState(searchParams.get('pending') === '1');
 
+  const [search, setSearch] = useState('');
+  const matchesSearch = (user: User) => `${user.name} ${user.email ?? ''}`.toLowerCase().includes(search.trim().toLowerCase());
   const pending = users.filter(u => !u.is_approved && u.is_active);
   const active = users.filter(u => u.is_approved && u.is_active);
   const inactive = users.filter(u => !u.is_active);
-  const visibleActive = pendingOnly ? [] : active;
-  const visibleInactive = pendingOnly ? [] : inactive;
+  const visibleActive = pendingOnly ? [] : active.filter(matchesSearch);
+  const visibleInactive = pendingOnly ? [] : inactive.filter(matchesSearch);
 
   const handleApprove = async (userId: string) => {
     setLoading(userId + 'approve');
@@ -113,6 +115,7 @@ export default function UsersClient({
           >
             pt
           </Link>
+          <Link prefetch={false} href={`/admin/transactions?user=${encodeURIComponent(user.id)}`} className="rounded-lg px-2 py-1 text-xs text-gray-300 underline">取引を見る</Link>
           {/* 残高追加 */}
           {addBalanceUserId === user.id ? (
             <div className="flex items-center gap-1">
@@ -169,6 +172,7 @@ export default function UsersClient({
         <p className="text-gray-400 text-sm mt-1">メンバー {active.length}人</p>
       </div>
 
+      <input aria-label="ユーザーを検索" type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="名前・メールで検索" className="w-full rounded-xl border border-gray-700 bg-gray-900 px-4 py-3 text-sm text-white"/>
       <label className="inline-flex items-center gap-2 text-sm text-gray-300">
         <input
           type="checkbox"
@@ -185,7 +189,7 @@ export default function UsersClient({
           <h2 className="text-sm font-medium text-amber-400 uppercase tracking-wider flex items-center gap-2">
             ⏳ 承認待ち ({pending.length}人)
           </h2>
-          {pending.map((user) => (
+          {pending.filter(matchesSearch).map((user) => (
             <div key={user.id} className="bg-gray-900 border border-amber-500/30 rounded-xl p-4 flex items-center gap-3">
               {user.avatar_url ? (
                 <img src={user.avatar_url} className="w-10 h-10 rounded-full" alt="" />
