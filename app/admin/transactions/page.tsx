@@ -1,6 +1,5 @@
 import { requireAdminPage } from '@/lib/admin-page-session';
 import { createAdminClient } from '@/lib/supabase/server';
-import { ORDER_ITEMS_SELECT_ENHANCED, ORDER_ITEMS_SELECT_LEGACY } from '@/lib/item-select';
 import { needsLegacyOrderSelect } from '@/lib/orders';
 import { fetchRecentAndPendingRows } from '@/lib/transaction-history';
 import { TransactionFilter } from '@/lib/transaction-filter';
@@ -8,9 +7,11 @@ import TransactionsClient from './TransactionsClient';
 
 export const dynamic = 'force-dynamic';
 
-const ORDER_SELECT = `id, user_id, total_amount, points_used, payment_method, deferred_settlement_method, payment_status, settled_at, settlement_source, settlement_id, created_at, user:users!orders_user_id_fkey(id, name, avatar_url), ${ORDER_ITEMS_SELECT_ENHANCED}`;
-const ORDER_SELECT_NO_SETTLEMENT = `id, user_id, total_amount, points_used, payment_method, deferred_settlement_method, payment_status, created_at, user:users!orders_user_id_fkey(id, name, avatar_url), ${ORDER_ITEMS_SELECT_ENHANCED}`;
-const ORDER_SELECT_FULL_LEGACY = `id, user_id, total_amount, payment_method, payment_status, created_at, user:users!orders_user_id_fkey(id, name, avatar_url), ${ORDER_ITEMS_SELECT_LEGACY}`;
+// The collection only needs historical names/quantities. Full prices are loaded for one order on demand.
+const ORDER_LINES_SELECT = 'order_items(item_name, quantity)';
+const ORDER_SELECT = `id, user_id, total_amount, points_used, payment_method, deferred_settlement_method, payment_status, settled_at, settlement_source, settlement_id, created_at, user:users!orders_user_id_fkey(id, name, avatar_url), ${ORDER_LINES_SELECT}`;
+const ORDER_SELECT_NO_SETTLEMENT = `id, user_id, total_amount, points_used, payment_method, deferred_settlement_method, payment_status, created_at, user:users!orders_user_id_fkey(id, name, avatar_url), ${ORDER_LINES_SELECT}`;
+const ORDER_SELECT_FULL_LEGACY = `id, user_id, total_amount, payment_method, payment_status, created_at, user:users!orders_user_id_fkey(id, name, avatar_url), ${ORDER_LINES_SELECT}`;
 
 type OrderFetchRow = {
   id: string;

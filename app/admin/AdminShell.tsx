@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { usePathname } from 'next/navigation';
+import AdminLocation from '@/components/admin/AdminLocation';
 import { Menu, X } from 'lucide-react';
 
 export default function AdminShell({ sidebar, children }: { sidebar: ReactNode; children: ReactNode }) {
@@ -42,7 +43,7 @@ export default function AdminShell({ sidebar, children }: { sidebar: ReactNode; 
       </div>
     </div>}
     <main id="admin-content" className="min-w-0 flex-1 overflow-y-auto pt-14 lg:pt-0">
-      <div className="mx-auto max-w-7xl p-4 sm:p-6">{children}</div>
+      <div className="mx-auto max-w-7xl p-4 sm:p-6"><AdminLocation/>{children}</div>
     </main>
   </div>;
 }

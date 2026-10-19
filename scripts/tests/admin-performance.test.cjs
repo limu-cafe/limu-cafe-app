@@ -14,7 +14,10 @@ function load(file, mocks = {}, globals = {}) {
     const source = ts.transpileModule(fs.readFileSync(filename, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX } }).outputText;
     const localRequire = (name) => {
       if (name in mocks) return mocks[name];
-      if (name.startsWith('@/')) return compile(path.join(root, name.slice(2)) + '.ts');
+      if (name.startsWith('@/') || name.startsWith('.')) {
+        const target = (name.startsWith('@/') ? path.join(root, name.slice(2)) : path.resolve(path.dirname(filename), name));
+        return compile(target + (fs.existsSync(target + '.ts') ? '.ts' : '.tsx'));
+      }
       if (name === 'react') return { cache: (fn) => { let result; return () => result ??= fn(); } };
       throw new Error(`Unexpected import: ${name}`);
     };
@@ -131,6 +134,7 @@ test('middleware leaves public Slack/cron endpoints alone and rejects forged man
 
 test('product selection exposes contextual actions; a failed save keeps the draft and submits once', async () => {
   let cursor = 0, calls = 0, sent;
+  const browserLocation = { href: 'http://localhost/admin/items' };
   const hooks = [];
   const react = {
     useState(initial) { const i = cursor++; if (!(i in hooks)) hooks[i] = initial; return [hooks[i], (value) => { hooks[i] = typeof value === 'function' ? value(hooks[i]) : value; }]; },
@@ -140,12 +144,13 @@ test('product selection exposes contextual actions; a failed save keeps the draf
   const jsx = (type, props) => ({ type, props });
   const component = load('app/admin/items/ItemsClient.tsx', {
     react, 'react/jsx-runtime': { jsx, jsxs: jsx }, 'lucide-react': {},
-    'next/navigation': { useRouter: () => ({ refresh() { throw new Error('failed save must not refresh'); } }) },
+    'next/link': { default: 'link' },
+    'next/navigation': { useRouter: () => ({ refresh() { throw new Error('failed save must not refresh'); } }), useSearchParams: () => new URL(browserLocation.href).searchParams },
     'react-hot-toast': { default: { error() {}, success() {} } },
-  }, { fetch: async (_, options) => { calls++; sent = JSON.parse(options.body); return { ok: false, json: async () => ({ error: 'conflict' }) }; }, confirm: () => true }).default;
+  }, { window: { location: browserLocation, history: { pushState(_state, _title, url) { browserLocation.href = String(url); } } }, fetch: async (_, options) => { calls++; sent = JSON.parse(options.body); return { ok: false, json: async () => ({ error: 'conflict' }) }; }, confirm: () => true }).default;
   const props = { items: [{ id: 'item', name: 'Tea', price: 130, stock: 7, stock_alert_threshold: 3, is_available: true, is_unlimited_stock: false, updated_at: '2026-10-15T00:00:00Z' }], categories: [] };
   const render = () => { cursor = 0; return component(props); };
-  const nodes = (node) => !node || typeof node !== 'object' ? [] : Array.isArray(node) ? node.flatMap(nodes) : [node, ...nodes(node.props?.children)];
+  const nodes = (node) => !node || typeof node !== 'object' ? [] : Array.isArray(node) ? node.flatMap(nodes) : [node, ...nodes(node.props?.children), ...nodes(node.props?.collection), ...nodes(node.props?.detail)];
   const button = (label) => nodes(render()).find((node) => node.type === 'button' && node.props.children === label);
   button('Tea').props.onClick();
   assert.ok(nodes(render()).some((node) => node.props?.['aria-label'] === '選択した商品'));

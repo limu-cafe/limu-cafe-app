@@ -1,5 +1,5 @@
 const assert = require('node:assert/strict');
-const { readFileSync } = require('node:fs');
+const { readFileSync, existsSync } = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const { test } = require('node:test');
@@ -96,7 +96,7 @@ function load(relativePath, db) {
       if (name.endsWith('AdminSidebarData')) return { default: 'AdminSidebarData' };
       if (name.endsWith('AdminSidebar')) return { default: 'AdminSidebar' };
       const target = name.startsWith('@/') ? path.join(root, name.slice(2)) : path.resolve(path.dirname(filename), name);
-      return compile(target + '.ts');
+      return compile(target + (existsSync(target + '.ts') ? '.ts' : '.tsx'));
     };
     vm.runInNewContext(source, { exports: module.exports, module, require: localRequire, process: { env: {} } }, { filename });
     return module.exports;
@@ -179,10 +179,10 @@ test('dashboard renders four pending transactions and two reimbursements from th
     purchase_runs: [{ id: 'purchase-1', reimbursement_status: 'pending_reimbursement' }, { id: 'purchase-2', reimbursement_status: 'pending_reimbursement' }],
   });
   const page = await load('app/admin/page.tsx', db).default({});
-  const transactions = find(page, (node) => node.props?.href === '/admin/transactions');
-  const reimbursements = find(page, (node) => node.props?.href === '/admin/reimbursements');
-  assert.equal(textContent(transactions), '取引履歴4');
-  assert.equal(textContent(reimbursements), '立替管理2');
+  const transactions = find(page, (node) => node.props?.href === '/admin/transactions?state=pending');
+  const reimbursements = find(page, (node) => node.props?.href === '/admin/reimbursements?state=pending');
+  assert.equal(textContent(transactions), '未精算・承認待ちの取引4');
+  assert.equal(textContent(reimbursements), '未精算の立替2');
   const sidebar = await load('app/admin/AdminSidebarData.tsx', db).default({});
   assert.equal(sidebar.props.notifications.transactions, 4);
   assert.equal(sidebar.props.notifications.reimbursements, 2);
