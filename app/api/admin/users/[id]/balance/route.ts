@@ -1,33 +1,18 @@
 import { requireAdminSession } from '@/lib/admin-session';
-import { NextResponse } from 'next/server';
-import { revalidatePath } from 'next/cache';
 import { createAdminClient } from '@/lib/supabase/server';
+import { NextResponse } from 'next/server';
+import { paymentFailure, refreshPaymentViews } from '@/lib/payment-api';
+import { isObjectId } from '@/lib/admin-objects';
 
-export async function POST(
-  request: Request,
-  { params }: { params: { id: string } }
-) {
-  const adminAccess = await requireAdminSession();
-  if (!adminAccess.user) return NextResponse.json({ error: adminAccess.error }, { status: adminAccess.status });
-
-  const supabase = createAdminClient();
-  const { amount } = await request.json();
-
-  if (!amount || amount <= 0) {
-    return NextResponse.json({ error: '無効な金額です' }, { status: 400 });
-  }
-
-  const { data: targetUser } = await supabase
-    .from('users').select('balance').eq('id', params.id).single();
-
-  const { error } = await supabase
-    .from('users')
-    .update({ balance: (targetUser?.balance ?? 0) + amount })
-    .eq('id', params.id);
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
-  revalidatePath('/admin/users');
-
+export async function POST(request: Request, { params }: { params: { id: string } }) {
+  const access = await requireAdminSession();
+  if (!access.user) return NextResponse.json({ error: access.error }, { status: access.status });
+  const origin = request.headers.get('origin');
+  if (origin && origin !== new URL(request.url).origin) return NextResponse.json({ error: '不正な送信元です' }, { status: 403 });
+  const body = await request.json().catch(() => null);
+  if (!isObjectId(params.id) || !Number.isSafeInteger(body?.amount) || body.amount <= 0 || body.amount > 2147483647) return NextResponse.json({ error: '追加額を確認してください' }, { status: 400 });
+  const { error } = await createAdminClient().rpc('add_user_wallet_balance', { p_user_id: params.id, p_amount: body.amount });
+  if (error) return paymentFailure(error);
+  refreshPaymentViews();
   return NextResponse.json({ ok: true });
 }

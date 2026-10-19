@@ -31,3 +31,6 @@ next-env.d.ts
 
 # temporary exported data
 /tmp/
+
+# Supabase CLI cache
+/supabase/.temp/

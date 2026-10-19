@@ -247,10 +247,7 @@ export async function createSubscriptionBilling(
     }
 
     if (balanceApplied) {
-      await supabase
-        .from('users')
-        .update({ balance: fundingUser.balance })
-        .eq('id', context.subscription.user_id);
+      await supabase.rpc('add_user_wallet_balance', { p_user_id: context.subscription.user_id, p_amount: funding.balanceUsed });
     }
 
     await supabase
@@ -318,12 +315,7 @@ export async function cancelSubscriptionPayment(
   }
 
   if (payment.balance_used > 0) {
-    const { error } = await supabase
-      .from('users')
-      .update({
-        balance: (fundingUser?.balance ?? 0) + payment.balance_used,
-      })
-      .eq('id', payment.user_id);
+    const { error } = await supabase.rpc('add_user_wallet_balance', { p_user_id: payment.user_id, p_amount: payment.balance_used });
 
     if (error) {
       throw new Error(error.message);

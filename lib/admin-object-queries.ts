@@ -8,7 +8,7 @@ export class AdminObjectReadRepository {
     let query;
     if (kind === 'items' && relation === 'stock') query = this.db.from('stock_history').select('id, change_amount, reason, note, order_id, created_at').eq('item_id', id);
     else if (kind === 'items') query = this.db.from('order_items').select('id, order_id, item_name, quantity, item_price, subtotal, created_at, order:orders!order_items_order_id_fkey(id, user_id, total_amount, payment_method, payment_status, created_at, user:users!orders_user_id_fkey(id, name))').eq('item_id', id);
-    else if (relation === 'orders') query = this.db.from('orders').select('id, user_id, total_amount, payment_method, payment_status, created_at, order_items(item_name, quantity)').eq('user_id', id);
+    else if (relation === 'orders') query = this.db.from('orders').select('id, user_id, total_amount, points_used, payment_method, payment_status, deferred_settlement_method, settled_at, settlement_source, created_at, order_items(item_name, quantity)').eq('user_id', id);
     else if (relation === 'charges') query = this.db.from('charge_requests').select('id, amount, method, status, note, created_at').eq('user_id', id);
     else if (relation === 'points') query = this.db.from('point_transactions').select('id, delta, reason_type, note, created_at').eq('user_id', id);
     else query = this.db.from('user_subscriptions').select('id, status, end_month, next_billing_at, created_at, product:subscription_products!user_subscriptions_subscription_product_id_fkey(id, name)').eq('user_id', id);
@@ -19,8 +19,8 @@ export class AdminObjectReadRepository {
 
   async order(id: string): Promise<AdminOrder | null> {
     if (!isObjectId(id)) return null;
-    const base = 'id, user_id, total_amount, payment_method, payment_status, created_at, user:users!orders_user_id_fkey(id, name, avatar_url), order_items(id, item_id, item_name, item_price, quantity, subtotal)';
-    let result = await this.db.from('orders').select(`${base}, points_used, deferred_settlement_method, settled_at, settlement_source`).eq('id', id).maybeSingle();
+    const base = 'id, user_id, total_amount, payment_method, payment_status, created_at, user:users!orders_user_id_fkey(id, name, avatar_url, balance, deferred_balance), order_items(id, item_id, item_name, item_price, quantity, subtotal)';
+    let result = await this.db.from('orders').select(`${base}, points_used, deferred_settlement_method, settled_at, settlement_source, settlement_id, cash_confirmed_at, accounting_ready`).eq('id', id).maybeSingle();
     if (result.error) {
       const message = String(result.error.message ?? '');
       if (!['points_used', 'deferred_settlement_method', 'settled_at', 'settlement_source'].some((column) => message.includes(column))) throw result.error;

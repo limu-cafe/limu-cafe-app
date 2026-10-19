@@ -17,6 +17,7 @@ export async function POST(request: Request) {
   const { data: req, error } = await adminSupabase
     .from('charge_requests')
     .insert({
+      accounting_ready: false,
       user_id: user.id,
       amount,
       method,
@@ -73,6 +74,9 @@ export async function POST(request: Request) {
       console.error('[charge] point reward record failed', rewardRecordError);
     }
   }
+
+  const ready = await adminSupabase.from('charge_requests').update({ accounting_ready: true }).eq('id', req.id);
+  if (ready.error) console.warn('[charge] accounting readiness unavailable', { code: ready.error.code });
 
   revalidatePath('/mypage');
   revalidatePath('/admin');
