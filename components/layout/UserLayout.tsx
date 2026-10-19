@@ -4,7 +4,7 @@ import { UserLocaleProvider } from '@/components/user/UserLocaleProvider';
 type LayoutUser = {
   id: string;
   name: string;
-  balance: number;
+  balance: number | null;
 };
 
 export default function UserLayout({

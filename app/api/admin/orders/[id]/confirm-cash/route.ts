@@ -1,3 +1,4 @@
+import { requireAdminSession } from '@/lib/admin-session';
 import { NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
 import { createAdminClient, createClient } from '@/lib/supabase/server';
@@ -8,6 +9,9 @@ export async function POST(
   _request: Request,
   { params }: { params: { id: string } }
 ) {
+  const adminAccess = await requireAdminSession();
+  if (!adminAccess.user) return NextResponse.json({ error: adminAccess.error }, { status: adminAccess.status });
+
   const sessionClient = await createClient();
   const { data: { user } } = await sessionClient.auth.getUser();
   const supabase = createAdminClient();

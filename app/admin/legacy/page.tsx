@@ -1,3 +1,4 @@
+import { requireAdminPage } from '@/lib/admin-page-session';
 import { createAdminClient } from '@/lib/supabase/server';
 import LegacyTransferClient from './LegacyTransferClient';
 
@@ -15,6 +16,7 @@ type PurchaseSummary = {
 };
 
 export default async function AdminLegacyPage() {
+  await requireAdminPage();
   const supabase = createAdminClient();
 
   const [{ data: requests }, { data: legacyUsers }, { data: purchaseRows }] = await Promise.all([

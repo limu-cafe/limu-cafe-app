@@ -1,6 +1,10 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
+import Link from 'next/link';
+import ObjectWorkspace, { useObjectSelection } from '@/components/admin/ObjectWorkspace';
+import ObjectDetailNavigation, { useObjectDetailView } from '@/components/admin/ObjectDetailNavigation';
+import UserPointAdjustment from '@/components/admin/UserPointAdjustment';
 import { format } from 'date-fns';
 import { ja } from 'date-fns/locale';
 import toast from 'react-hot-toast';
@@ -22,8 +26,11 @@ export default function PointsClient({
   transactions: Array<PointTransaction & { user?: { name?: string } | null }>;
 }) {
   const router = useRouter();
+  const [view,setView]=useObjectDetailView(['policy','campaigns','history']);
+  const [campaignId,selectCampaign]=useObjectSelection('campaign');
+  const [creating,setCreating]=useState(false);
+  const selectedCampaign=campaigns.find(campaign=>campaign.id===campaignId);
   const searchParams = useSearchParams();
-  const initialUserId = searchParams.get('user') ?? users[0]?.id ?? '';
   const [settingsForm, setSettingsForm] = useState({
     is_enabled: settings.is_enabled,
     base_points_per_unit: settings.base_points_per_unit,
@@ -38,28 +45,11 @@ export default function PointsClient({
     apply_immediately: false,
     note: '',
   });
-  const [search, setSearch] = useState('');
-  const [selectedUserId, setSelectedUserId] = useState(initialUserId);
-  const [manualDelta, setManualDelta] = useState(10);
-  const [manualNote, setManualNote] = useState('');
   const [loading, setLoading] = useState<string | null>(null);
 
   const activeCampaign = getActivePointCampaign(campaigns);
   const currentMultiplier = getCurrentPointMultiplier(campaigns);
-  const filteredUsers = useMemo(() => {
-    const keyword = search.trim().toLowerCase();
-    if (!keyword) return users;
-    return users.filter(
-      (user) =>
-        user.name.toLowerCase().includes(keyword) ||
-        (user.email ?? '').toLowerCase().includes(keyword)
-    );
-  }, [search, users]);
-
-  const selectedUser =
-    filteredUsers.find((user) => user.id === selectedUserId) ??
-    users.find((user) => user.id === selectedUserId) ??
-    null;
+  const selectedUser = users.find(user => user.id === searchParams.get('user')) ?? null;
 
   const saveSettings = async () => {
     setLoading('settings');
@@ -72,39 +62,6 @@ export default function PointsClient({
       const payload = await res.json();
       if (!res.ok) throw new Error(payload.error);
       toast.success('ポイント付与設定を保存しました');
-      router.refresh();
-    } catch (error: any) {
-      toast.error(error.message);
-    } finally {
-      setLoading(null);
-    }
-  };
-
-  const submitManualDelta = async () => {
-    if (!selectedUserId) {
-      toast.error('対象ユーザーを選択してください');
-      return;
-    }
-    if (!manualNote.trim()) {
-      toast.error('理由メモを入力してください');
-      return;
-    }
-
-    setLoading('manual');
-    try {
-      const res = await fetch('/api/admin/points/manual', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          user_id: selectedUserId,
-          delta: manualDelta,
-          note: manualNote,
-        }),
-      });
-      const payload = await res.json();
-      if (!res.ok) throw new Error(payload.error);
-      toast.success('ポイントを更新しました');
-      setManualNote('');
       router.refresh();
     } catch (error: any) {
       toast.error(error.message);
@@ -177,31 +134,9 @@ export default function PointsClient({
     }
   };
 
-  return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="font-display font-bold text-2xl text-white">ポイント管理</h1>
-        <p className="mt-1 text-sm text-gray-400">
-          チャージ特典の付与率、キャンペーン、手動付与/減算をここでまとめて管理できます。
-        </p>
-      </div>
-
-      <div className="grid gap-4 xl:grid-cols-3">
-        <MetricCard label="基本付与率" value={formatPointRule(settingsForm)} />
-        <MetricCard
-          label="現在の倍率"
-          value={`${currentMultiplier.toFixed(2).replace(/\.00$/, '')}x`}
-          hint={activeCampaign ? activeCampaign.name : '通常時'}
-        />
-        <MetricCard
-          label="即時キャンペーン"
-          value={campaigns.filter((campaign) => campaign.apply_immediately && campaign.is_enabled).length.toString()}
-          hint="有効件数"
-        />
-      </div>
-
-      <div className="grid gap-6 xl:grid-cols-[1fr_1fr]">
-        <section className="rounded-2xl border border-gray-800 bg-gray-900 p-5 space-y-4">
+  if(searchParams.get('user')&&selectedUser)return <div className="mx-auto max-w-2xl space-y-5"><Link href={'/admin/users?user='+selectedUser.id+'&view=points'} className="text-sm text-sky-300 underline">この利用者のポイントへ戻る →</Link><h1 className="text-2xl font-bold text-white">{selectedUser.name}のポイント</h1><UserPointAdjustment key={selectedUser.id} user={selectedUser}/></div>;
+  return <div className="mx-auto max-w-5xl space-y-5"><header><h1 className="text-2xl font-bold text-white">ポイント制度</h1><p className="mt-1 text-sm text-gray-400">全体の付与ルールとキャンペーンを管理します。個人の調整は利用者の詳細で行います。</p></header><ObjectDetailNavigation value={view} onChange={setView} options={[{id:'policy',label:'付与ルール'},{id:'campaigns',label:'キャンペーン'},{id:'history',label:'付与履歴'}]}/>
+    {view==='policy'&&<section className="max-w-2xl space-y-5 rounded-xl border border-gray-800 bg-gray-900 p-5"><h2 className="font-semibold text-white">基本付与ルール</h2><p className="text-lg text-white">{formatPointRule(settings)}</p><p className="text-sm text-gray-400">{settings.is_enabled?'有効':'停止中'} · 現在の倍率 {currentMultiplier}x · {activeCampaign?.name??'通常時'}</p><p className="text-sm text-gray-400">即時キャンペーン {campaigns.filter(campaign=>campaign.apply_immediately&&campaign.is_enabled).length}件</p><details><summary className="cursor-pointer text-sm text-sky-300">付与ルールを編集</summary><div className="mt-4">        <section className="rounded-2xl border border-gray-800 bg-gray-900 p-5 space-y-4">
           <div>
             <h2 className="text-lg font-semibold text-white">基本付与率</h2>
             <p className="mt-1 text-sm text-gray-400">購入利用レートは 1pt = 1円 固定です。</p>
@@ -264,66 +199,8 @@ export default function PointsClient({
           >
             {loading === 'settings' ? '保存中...' : '付与率を保存'}
           </button>
-        </section>
-
-        <section className="rounded-2xl border border-gray-800 bg-gray-900 p-5 space-y-4">
-          <div>
-            <h2 className="text-lg font-semibold text-white">手動付与・減算</h2>
-            <p className="mt-1 text-sm text-gray-400">買い出しのお礼や調整に使えます。</p>
-          </div>
-          <div className="grid gap-4">
-            <input
-              type="text"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="ユーザー名で検索"
-              className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder:text-gray-500 focus:outline-none"
-            />
-            <select
-              value={selectedUserId}
-              onChange={(event) => setSelectedUserId(event.target.value)}
-              className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:outline-none"
-            >
-              {filteredUsers.map((user) => (
-                <option key={user.id} value={user.id}>
-                  {user.name} ({user.points_balance}pt)
-                </option>
-              ))}
-            </select>
-            {selectedUser && (
-              <div className="rounded-xl border border-gray-800 bg-gray-950/40 px-4 py-3 text-sm text-gray-300">
-                現在のポイント: <span className="font-mono text-white">{selectedUser.points_balance.toLocaleString()}pt</span>
-              </div>
-            )}
-            <div className="grid gap-4 md:grid-cols-[160px_1fr]">
-              <input
-                type="number"
-                value={manualDelta}
-                onChange={(event) => setManualDelta(Number(event.target.value || 0))}
-                className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:outline-none"
-              />
-              <input
-                type="text"
-                value={manualNote}
-                onChange={(event) => setManualNote(event.target.value)}
-                placeholder="理由メモ（例: 買い出し協力のお礼）"
-                className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder:text-gray-500 focus:outline-none"
-              />
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={submitManualDelta}
-            disabled={loading === 'manual'}
-            className="rounded-lg bg-emerald-500/20 px-4 py-2 text-sm font-medium text-emerald-300 transition hover:bg-emerald-500/30 disabled:opacity-50"
-          >
-            {loading === 'manual' ? '更新中...' : 'ポイントを反映'}
-          </button>
-        </section>
-      </div>
-
-      <div className="grid gap-6 xl:grid-cols-[1fr_1fr]">
-        <section className="rounded-2xl border border-gray-800 bg-gray-900 p-5 space-y-4">
+        </section></div></details></section>}
+    {view==='campaigns'&&<div className="space-y-4"><button type="button" onClick={()=>setCreating(value=>!value)} className="rounded-lg bg-white px-4 py-2 text-sm text-gray-950">{creating?'追加を閉じる':'キャンペーンを追加'}</button>{creating&&<div className="max-w-2xl">        <section className="rounded-2xl border border-gray-800 bg-gray-900 p-5 space-y-4">
           <div>
             <h2 className="text-lg font-semibold text-white">キャンペーン追加</h2>
             <p className="mt-1 text-sm text-gray-400">即時倍率アップと、予約キャンペーンの両方に使えます。</p>
@@ -405,75 +282,15 @@ export default function PointsClient({
             disabled={loading === 'campaign-create'}
             className="rounded-lg bg-sky-500/20 px-4 py-2 text-sm font-medium text-sky-300 transition hover:bg-sky-500/25 disabled:opacity-50"
           >
-            {loading === 'campaign-create' ? '保存中...' : 'キャンペーンを追加'}
+            {loading === 'campaign-create' ? '保存中...' : 'キャンペーンを作成'}
           </button>
-        </section>
-
-        <section className="rounded-2xl border border-gray-800 bg-gray-900 p-5 space-y-4">
-          <div>
-            <h2 className="text-lg font-semibold text-white">キャンペーン一覧</h2>
-            <p className="mt-1 text-sm text-gray-400">
-              現在有効: {activeCampaign ? `${activeCampaign.name} (${activeCampaign.multiplier}x)` : '通常倍率'}
-            </p>
-          </div>
-          <div className="space-y-3">
-            {campaigns.length === 0 ? (
-              <div className="rounded-xl border border-gray-800 bg-gray-950/40 px-4 py-6 text-sm text-gray-500">
-                まだキャンペーンはありません。
-              </div>
-            ) : (
-              campaigns.map((campaign) => (
-                <div key={campaign.id} className="rounded-xl border border-gray-800 bg-gray-950/40 p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="font-medium text-white">{campaign.name}</p>
-                      <p className="mt-1 text-sm text-gray-400">
-                        {campaign.multiplier}x
-                        {campaign.apply_immediately
-                          ? ' · 即時適用'
-                          : campaign.starts_at
-                            ? ` · ${format(new Date(campaign.starts_at), 'M/d HH:mm', { locale: ja })} 〜 ${
-                                campaign.ends_at
-                                  ? format(new Date(campaign.ends_at), 'M/d HH:mm', { locale: ja })
-                                  : '終了未設定'
-                              }`
-                            : ' · 開始待ち'}
-                      </p>
-                      {campaign.note ? (
-                        <p className="mt-2 text-xs text-gray-500">{campaign.note}</p>
-                      ) : null}
-                    </div>
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          updateCampaign(campaign.id, {
-                            is_enabled: !campaign.is_enabled,
-                          })
-                        }
-                        disabled={loading === `campaign-${campaign.id}`}
-                        className="rounded-lg bg-gray-800 px-3 py-2 text-xs font-medium text-gray-300 transition hover:bg-gray-700 disabled:opacity-50"
-                      >
-                        {campaign.is_enabled ? '停止' : '再開'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => deleteCampaign(campaign.id)}
-                        disabled={loading === `campaign-delete-${campaign.id}`}
-                        className="rounded-lg bg-red-500/15 px-3 py-2 text-xs font-medium text-red-300 transition hover:bg-red-500/25 disabled:opacity-50"
-                      >
-                        削除
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </section>
-      </div>
-
-      <section className="rounded-2xl border border-gray-800 bg-gray-900 p-5 space-y-4">
+        </section></div>}<ObjectWorkspace selected={Boolean(selectedCampaign)} label="キャンペーンの詳細" onClose={()=>selectCampaign(null)} collection={<div className="divide-y divide-gray-800 rounded-xl border border-gray-800 bg-gray-900">{campaigns.map(campaign=><button key={campaign.id} type="button" aria-pressed={campaign.id===campaignId} onClick={()=>selectCampaign(campaign.id)} className="block w-full px-4 py-4 text-left"><span className="text-sm text-white">{campaign.name}</span><small className="mt-1 block text-gray-400">{campaign.multiplier}x · {campaign.is_enabled?'有効':'停止中'} · {campaign.apply_immediately?'即時適用':campaign.starts_at??'開始待ち'}</small></button>)}{!campaigns.length&&<p className="p-6 text-sm text-gray-400">キャンペーンはありません</p>}</div>} detail={selectedCampaign&&<section className="space-y-5">
+  <h2 className="text-lg font-semibold text-white">{selectedCampaign.name}</h2>
+  <dl className="grid grid-cols-[6rem_1fr] gap-3 text-sm"><dt className="text-gray-400">状態</dt><dd className="text-white">{selectedCampaign.is_enabled?'有効':'停止中'}</dd><dt className="text-gray-400">倍率</dt><dd className="font-mono text-white">{selectedCampaign.multiplier}x</dd><dt className="text-gray-400">適用期間</dt><dd className="text-white">{selectedCampaign.apply_immediately?'即時適用':selectedCampaign.starts_at?format(new Date(selectedCampaign.starts_at),'yyyy/M/d HH:mm',{locale:ja}):'開始待ち'}{!selectedCampaign.apply_immediately&&<> ～ {selectedCampaign.ends_at?format(new Date(selectedCampaign.ends_at),'yyyy/M/d HH:mm',{locale:ja}):'終了未設定'}</>}</dd></dl>
+  {selectedCampaign.note&&<p className="whitespace-pre-wrap break-words text-sm text-gray-300">{selectedCampaign.note}</p>}
+  <div className="flex gap-3 border-t border-gray-800 pt-5"><button type="button" onClick={()=>updateCampaign(selectedCampaign.id,{is_enabled:!selectedCampaign.is_enabled})} disabled={loading!==null} className="rounded-lg bg-white px-4 py-2 text-sm text-gray-950 disabled:opacity-50">{selectedCampaign.is_enabled?'停止':'再開'}</button><button type="button" onClick={()=>deleteCampaign(selectedCampaign.id)} disabled={loading!==null} className="rounded-lg bg-red-500/15 px-4 py-2 text-sm text-red-300 disabled:opacity-50">削除</button></div>
+</section>}/></div>}
+    {view==='history'&&      <section className="rounded-2xl border border-gray-800 bg-gray-900 p-5 space-y-4">
         <div>
           <h2 className="text-lg font-semibold text-white">最近のポイント履歴</h2>
           <p className="mt-1 text-sm text-gray-400">ポイントの増減をここから追えます。</p>
@@ -495,7 +312,7 @@ export default function PointsClient({
                   <td className="px-4 py-3 text-gray-500 text-xs">
                     {format(new Date(transaction.created_at), 'M/d HH:mm', { locale: ja })}
                   </td>
-                  <td className="px-4 py-3 text-gray-300">{transaction.user?.name ?? '-'}</td>
+                  <td className="px-4 py-3 text-gray-300"><Link href={'/admin/users?user='+transaction.user_id+'&view=points'} className="text-sky-300 underline">{transaction.user?.name??'利用者'}</Link></td>
                   <td className="px-4 py-3 text-gray-300">
                     {POINT_REASON_LABELS[transaction.reason_type]}
                     {transaction.note ? (
@@ -518,17 +335,6 @@ export default function PointsClient({
             </tbody>
           </table>
         </div>
-      </section>
-    </div>
-  );
-}
-
-function MetricCard({ label, value, hint }: { label: string; value: string; hint?: string }) {
-  return (
-    <div className="rounded-2xl border border-gray-800 bg-gray-900 px-5 py-4">
-      <p className="text-xs text-gray-400">{label}</p>
-      <p className="mt-1 font-display text-2xl font-bold text-white">{value}</p>
-      {hint ? <p className="mt-1 text-xs text-gray-500">{hint}</p> : null}
-    </div>
-  );
+      </section>}
+  </div>;
 }

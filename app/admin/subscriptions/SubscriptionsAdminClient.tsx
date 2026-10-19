@@ -1,6 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import ObjectWorkspace, { useObjectSelection } from '@/components/admin/ObjectWorkspace';
+import ObjectDetailNavigation, { useObjectDetailView } from '@/components/admin/ObjectDetailNavigation';
 import { useRouter } from 'next/navigation';
 import { ChevronDown, Repeat2, Users } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -85,6 +88,14 @@ export default function SubscriptionsAdminClient({
   products: SubscriptionProduct[];
 }) {
   const router = useRouter();
+  const [selectedId,selectProduct]=useObjectSelection('product');
+  const [memberId,selectMember]=useObjectSelection('member');
+  const [detailView,setDetailView]=useObjectDetailView(['overview','members']);
+  const [creating,setCreating]=useState(false);
+  const [search,setSearch]=useState('');
+  const [memberErrors,setMemberErrors]=useState<Record<string,string>>({});
+  const selected=products.find(product=>product.id===selectedId);
+
   const [createForm, setCreateForm] = useState<ProductDraft>({
     name: '',
     english_name: '',
@@ -99,7 +110,6 @@ export default function SubscriptionsAdminClient({
   const [productDrafts, setProductDrafts] = useState<Record<string, ProductDraft>>(() =>
     Object.fromEntries(products.map((product) => [product.id, createProductDraft(product)]))
   );
-  const [openMembers, setOpenMembers] = useState<Record<string, boolean>>({});
   const [membersByProduct, setMembersByProduct] = useState<Record<string, SubscriptionMember[]>>({});
   const [memberDrafts, setMemberDrafts] = useState<Record<string, MemberDraft>>({});
   const [loading, setLoading] = useState<string | null>(null);
@@ -175,11 +185,9 @@ export default function SubscriptionsAdminClient({
   };
 
   const toggleMembers = async (productId: string) => {
-    const nextOpen = !openMembers[productId];
-    setOpenMembers((current) => ({ ...current, [productId]: nextOpen }));
-
-    if (nextOpen && !membersByProduct[productId]) {
+    if (!membersByProduct[productId]) {
       setLoading(`load-members:${productId}`);
+      setMemberErrors(current=>({...current,[productId]:''}));
       try {
         const res = await fetch(`/api/admin/subscriptions/${productId}/members`);
         const payload = await res.json();
@@ -196,6 +204,7 @@ export default function SubscriptionsAdminClient({
           return next;
         });
       } catch (error: any) {
+        setMemberErrors(current=>({...current,[productId]:error.message}));
         toast.error(error.message);
       } finally {
         setLoading(null);
@@ -270,20 +279,17 @@ export default function SubscriptionsAdminClient({
     });
   };
 
-  return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="font-display text-2xl font-bold text-white">サブスク管理</h1>
-      </div>
-
-      <section className="rounded-2xl border border-gray-800 bg-gray-900 p-5">
-        <div className="grid gap-4 xl:grid-cols-[1.2fr_1fr_1fr_1fr]">
+  useEffect(()=>{if(selectedId&&detailView==='members')void toggleMembers(selectedId);},[selectedId,detailView]);
+  return <div className={`space-y-5 ${selected?'':'mx-auto max-w-3xl'}`}>
+    <header className="flex flex-wrap items-center justify-between gap-3"><div><h1 className="text-2xl font-bold text-white">サブスク商品</h1><p className="mt-1 text-sm text-gray-400">商品を選び、その商品情報と契約者を確認します。</p></div><button type="button" onClick={()=>setCreating(value=>!value)} className="rounded-lg bg-white px-4 py-2 text-sm text-gray-950">{creating?'追加を閉じる':'サブスク商品を追加'}</button></header>
+    {creating&&<section className="rounded-2xl border border-gray-800 bg-gray-900 p-5">
+        <div className="grid gap-4 sm:grid-cols-2">
           <input
             type="text"
             value={createForm.name}
             onChange={(event) => setCreateForm((current) => ({ ...current, name: event.target.value }))}
-            placeholder="サブスク名"
-            className="rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder:text-gray-500 focus:outline-none"
+            aria-label="サブスク名" placeholder="サブスク名"
+            className="min-w-0 w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder:text-gray-500 focus:outline-none"
           />
           <input
             type="text"
@@ -291,36 +297,36 @@ export default function SubscriptionsAdminClient({
             onChange={(event) =>
               setCreateForm((current) => ({ ...current, english_name: event.target.value }))
             }
-            placeholder="英語名"
-            className="rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder:text-gray-500 focus:outline-none"
+            aria-label="英語名" placeholder="英語名"
+            className="min-w-0 w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder:text-gray-500 focus:outline-none"
           />
           <input
             type="number"
             min={1}
             value={createForm.price}
             onChange={(event) => setCreateForm((current) => ({ ...current, price: event.target.value }))}
-            placeholder="価格"
-            className="rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:outline-none"
+            aria-label="価格" placeholder="価格"
+            className="min-w-0 w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:outline-none"
           />
-          <div className="grid grid-cols-[1fr_1fr_auto] gap-2">
+          <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] gap-2">
             <input
               type="number"
               min={1}
-              value={createForm.billing_interval_count}
+              aria-label="請求間隔" value={createForm.billing_interval_count}
               onChange={(event) =>
                 setCreateForm((current) => ({ ...current, billing_interval_count: event.target.value }))
               }
-              className="rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:outline-none"
+              className="min-w-0 w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:outline-none"
             />
             <select
-              value={createForm.billing_interval_unit}
+              aria-label="請求単位" value={createForm.billing_interval_unit}
               onChange={(event) =>
                 setCreateForm((current) => ({
                   ...current,
                   billing_interval_unit: event.target.value as SubscriptionBillingIntervalUnit,
                 }))
               }
-              className="rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:outline-none"
+              className="min-w-0 w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:outline-none"
             >
               <option value="day">日</option>
               <option value="week">週</option>
@@ -330,7 +336,7 @@ export default function SubscriptionsAdminClient({
               type="button"
               onClick={createSubscriptionProduct}
               disabled={loading === 'create-product'}
-              className="rounded-lg bg-amber-400 px-4 py-2 text-sm font-medium text-gray-950 transition hover:bg-amber-300 disabled:opacity-60"
+              className="whitespace-nowrap rounded-lg bg-amber-400 px-4 py-2 text-sm font-medium text-gray-950 transition hover:bg-amber-300 disabled:opacity-60"
             >
               {loading === 'create-product' ? '...' : '追加'}
             </button>
@@ -341,9 +347,9 @@ export default function SubscriptionsAdminClient({
           <textarea
             value={createForm.description}
             onChange={(event) => setCreateForm((current) => ({ ...current, description: event.target.value }))}
-            placeholder="説明"
+            aria-label="説明" placeholder="説明"
             rows={3}
-            className="rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder:text-gray-500 focus:outline-none"
+            className="min-w-0 w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder:text-gray-500 focus:outline-none"
           />
           <div className="grid gap-2 text-sm text-gray-300">
             <label className="inline-flex items-center gap-2 rounded-lg border border-gray-800 bg-gray-950/40 px-3 py-2">
@@ -376,67 +382,67 @@ export default function SubscriptionsAdminClient({
             </label>
           </div>
         </div>
-      </section>
-
-      <div className="space-y-4">
-        {products.map((product) => {
+      </section>}
+    <ObjectWorkspace selected={Boolean(selected)} label="サブスク商品の詳細" onClose={()=>selectProduct(null)} collection={<div className="overflow-hidden rounded-xl border border-gray-800 bg-gray-900"><label className="block border-b border-gray-800 p-4"><span className="sr-only">サブスク商品を検索</span><input value={search} onChange={event=>setSearch(event.target.value)} placeholder="サブスク名で検索" className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white"/></label>{products.filter(product=>product.name.includes(search)).map(product=><button key={product.id} type="button" aria-pressed={product.id===selectedId} onClick={()=>selectProduct(product.id)} className="flex w-full items-center gap-4 border-b border-gray-800 px-4 py-4 text-left hover:bg-gray-800"><span className="min-w-0 flex-1 text-white">{getSubscriptionDisplayName(product,'ja')}<small className="mt-1 block text-gray-400">{product.is_active?'表示中':'非表示'}</small></span><span className="text-sm text-gray-200">¥{product.price.toLocaleString()} / {formatSubscriptionInterval(product.billing_interval_count,product.billing_interval_unit)}</span></button>)}</div>} detail={<>
+        {products.filter(product=>product.id===selectedId).map((product) => {
           const draft = productDrafts[product.id] ?? createProductDraft(product);
           const members = membersByProduct[product.id] ?? [];
-          const isOpen = openMembers[product.id] ?? false;
           const visibleName = getSubscriptionDisplayName(product, 'ja');
 
-          return (
-            <section key={product.id} className="rounded-2xl border border-gray-800 bg-gray-900 p-5">
-              <div className="grid gap-4 xl:grid-cols-[1.2fr_1fr_1fr_1fr_auto]">
+          return <section key={product.id}>
+            <h2 className="text-xl font-bold text-white">{visibleName}</h2><p className="mt-2 text-sm text-gray-400">¥{product.price.toLocaleString()} / {formatSubscriptionInterval(product.billing_interval_count,product.billing_interval_unit)} · {product.is_active?'表示中':'非表示'}</p>
+            <ObjectDetailNavigation value={detailView} onChange={setDetailView} options={[{id:'overview',label:'商品情報'},{id:'members',label:'契約者'}]}/>
+            {detailView==='overview'&&<><p className="mt-4 whitespace-pre-wrap text-sm text-gray-300">{product.description||'説明なし'}</p><p className="mt-3 text-sm text-gray-400">ポイント {product.points_enabled?'利用可':'利用不可'} · 残高 {product.balance_enabled?'利用可':'利用不可'}</p><details className="mt-5"><summary className="cursor-pointer text-sm text-sky-300">商品情報を編集</summary><div className="mt-4 space-y-4">
+              <div className="grid gap-4 sm:grid-cols-2">
                 <input
                   type="text"
-                  value={draft.name}
+                  aria-label="商品名" value={draft.name}
                   onChange={(event) =>
                     setProductDrafts((current) => ({
                       ...current,
                       [product.id]: { ...draft, name: event.target.value },
                     }))
                   }
-                  className="rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:outline-none"
+                  className="min-w-0 w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:outline-none"
                 />
                 <input
                   type="text"
-                  value={draft.english_name}
+                  aria-label="英語名" value={draft.english_name}
                   onChange={(event) =>
                     setProductDrafts((current) => ({
                       ...current,
                       [product.id]: { ...draft, english_name: event.target.value },
                     }))
                   }
-                  className="rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:outline-none"
+                  className="min-w-0 w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:outline-none"
                 />
                 <input
                   type="number"
                   min={1}
-                  value={draft.price}
+                  aria-label="価格" value={draft.price}
                   onChange={(event) =>
                     setProductDrafts((current) => ({
                       ...current,
                       [product.id]: { ...draft, price: event.target.value },
                     }))
                   }
-                  className="rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:outline-none"
+                  className="min-w-0 w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:outline-none"
                 />
                 <div className="grid grid-cols-2 gap-2">
                   <input
                     type="number"
                     min={1}
-                    value={draft.billing_interval_count}
+                    aria-label="請求間隔" value={draft.billing_interval_count}
                     onChange={(event) =>
                       setProductDrafts((current) => ({
                         ...current,
                         [product.id]: { ...draft, billing_interval_count: event.target.value },
                       }))
                     }
-                    className="rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:outline-none"
+                    className="min-w-0 w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:outline-none"
                   />
                   <select
-                    value={draft.billing_interval_unit}
+                    aria-label="請求単位" value={draft.billing_interval_unit}
                     onChange={(event) =>
                       setProductDrafts((current) => ({
                         ...current,
@@ -446,7 +452,7 @@ export default function SubscriptionsAdminClient({
                         },
                       }))
                     }
-                    className="rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:outline-none"
+                    className="min-w-0 w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:outline-none"
                   >
                     <option value="day">日</option>
                     <option value="week">週</option>
@@ -463,9 +469,9 @@ export default function SubscriptionsAdminClient({
                 </button>
               </div>
 
-              <div className="mt-4 grid gap-3 xl:grid-cols-[1.2fr_1fr]">
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
                 <textarea
-                  value={draft.description}
+                  aria-label="説明" value={draft.description}
                   onChange={(event) =>
                     setProductDrafts((current) => ({
                       ...current,
@@ -473,7 +479,7 @@ export default function SubscriptionsAdminClient({
                     }))
                   }
                   rows={3}
-                  className="rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:outline-none"
+                  className="min-w-0 w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:outline-none"
                 />
                 <div className="grid gap-2 text-sm text-gray-300">
                   <div className="rounded-lg border border-gray-800 bg-gray-950/40 px-3 py-2 text-white">
@@ -530,24 +536,10 @@ export default function SubscriptionsAdminClient({
                 </div>
               </div>
 
-              <div className="mt-4 flex justify-end">
-                <button
-                  type="button"
-                  onClick={() => toggleMembers(product.id)}
-                  className="inline-flex items-center gap-2 rounded-lg border border-gray-700 px-3 py-2 text-sm font-medium text-gray-300 transition hover:bg-gray-800"
-                >
-                  <Users size={15} />
-                  {visibleName}の契約者
-                  <ChevronDown
-                    size={15}
-                    className={isOpen ? 'rotate-180 transition-transform' : 'transition-transform'}
-                  />
-                </button>
-              </div>
-
-              {isOpen && (
+            </div></details></>}
+              {detailView==='members' && (
                 <div className="mt-4 space-y-3 border-t border-gray-800 pt-4">
-                  {loading === `load-members:${product.id}` ? (
+                  {memberErrors[product.id] ? <div role="alert" className="text-sm text-amber-300">{memberErrors[product.id]}<button type="button" onClick={()=>void toggleMembers(product.id)} className="ml-3 underline">再試行</button></div> : loading === `load-members:${product.id}` ? (
                     <div className="rounded-xl border border-gray-800 bg-gray-950/40 px-4 py-6 text-sm text-gray-500">
                       読み込み中...
                     </div>
@@ -556,13 +548,14 @@ export default function SubscriptionsAdminClient({
                       契約者はいません
                     </div>
                   ) : (
-                    members.map((member) => {
+                    <><div className="divide-y divide-gray-800 rounded-xl border border-gray-800">{members.map(member=><button key={member.id} type="button" aria-pressed={memberId===member.id} onClick={()=>selectMember(member.id)} className="flex w-full flex-wrap items-center gap-3 px-4 py-3 text-left text-sm hover:bg-gray-800"><span className="min-w-0 flex-1 text-white">{member.user?.name??'利用者'}<small className="mt-1 block text-gray-400">{SUBSCRIPTION_STATUS_LABELS[member.status]} · 終了 {storageDateToMonthValue(member.end_month)}</small></span><span className="text-sky-300">契約の詳細 →</span></button>)}</div>
+                    {members.filter(member=>member.id===memberId).map((member) => {
                       const draftMember = memberDrafts[member.id] ?? createMemberDraft(member);
                       return (
-                        <div key={member.id} className="rounded-xl border border-gray-800 bg-gray-950/40 p-4">
-                          <div className="grid gap-4 xl:grid-cols-[1.2fr_1fr_1fr_1fr_auto]">
+                        <div key={member.id} aria-label="選択した契約" className="rounded-xl border border-gray-800 bg-gray-950/40 p-4">
+                          <div className="grid gap-4 sm:grid-cols-2">
                             <div>
-                              <p className="font-medium text-white">{member.user?.name ?? '不明なユーザー'}</p>
+                              <h3 className="font-medium text-white">{member.user?.name ?? '不明なユーザー'}の契約</h3>{(member.user?.id??member.user_id)&&<Link href={`/admin/users?user=${member.user?.id??member.user_id}&view=subscriptions`} className="mt-2 inline-block text-xs text-sky-300 underline">この利用者の契約を見る →</Link>}
                               <p className="mt-1 text-xs text-gray-500">
                                 次回 {member.next_billing_at?.slice(0, 10) ?? '-'} / 有効期限 {member.current_period_end_at?.slice(0, 10) ?? '-'}
                               </p>
@@ -607,10 +600,10 @@ export default function SubscriptionsAdminClient({
                                 className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white focus:outline-none"
                               />
                             </label>
-                            <div className="grid grid-cols-3 gap-2">
+                            <div className="grid grid-cols-3 gap-2"><p className="col-span-3 text-xs text-gray-400">支払いの優先順位（左から1・2・3）</p>
                               {SUBSCRIPTION_PRIORITY_OPTIONS.map((_, index) => (
                                 <select
-                                  key={`${member.id}:${index}`}
+                                  aria-label={`支払い優先順位 ${index+1}`} key={`${member.id}:${index}`}
                                   value={draftMember.paymentPriority[index]}
                                   onChange={(event) =>
                                     updateMemberPriority(
@@ -619,7 +612,7 @@ export default function SubscriptionsAdminClient({
                                       event.target.value as SubscriptionPaymentPriority
                                     )
                                   }
-                                  className="rounded-lg border border-gray-700 bg-gray-800 px-2 py-2 text-sm text-white focus:outline-none"
+                                  className="min-w-0 w-full rounded-lg border border-gray-700 bg-gray-800 px-2 py-2 text-sm text-white focus:outline-none"
                                 >
                                   {SUBSCRIPTION_PRIORITY_OPTIONS.map((method) => (
                                     <option key={method} value={method}>
@@ -658,14 +651,12 @@ export default function SubscriptionsAdminClient({
                           </div>
                         </div>
                       );
-                    })
+                    })}</>
                   )}
                 </div>
               )}
-            </section>
-          );
+          </section>;
         })}
-      </div>
-    </div>
-  );
+    </>}/>
+  </div>;
 }

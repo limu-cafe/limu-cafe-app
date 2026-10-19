@@ -2,130 +2,31 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import {
-  ArrowLeft,
-  ClipboardList,
-  Coins,
-  LayoutDashboard,
-  LogOut,
-  MessageSquare,
-  Package,
-  Repeat2,
-  Receipt,
-  ScrollText,
-  Users,
-  Vault,
-  Wallet,
-  type LucideIcon,
-} from 'lucide-react';
+import toast from 'react-hot-toast';
+import { ArrowLeft, LogOut } from 'lucide-react';
 import { clearAdminSession } from './AdminAuthGuard';
 
-type NotificationKey =
-  | 'items'
-  | 'reimbursements'
-  | 'transactions'
-  | 'users'
-  | 'points'
-  | 'requests'
-  | 'legacy';
+import { ADMIN_NAVIGATION, type SidebarNotifications } from '@/lib/admin-navigation';
 
-type SidebarNotifications = Record<NotificationKey, number>;
-
-type NavItem = {
-  href: string;
-  label: string;
-  icon: LucideIcon;
-  count?: number;
-};
-
-type NavSection = {
-  label: string;
-  items: NavItem[];
-};
-
-export default function AdminSidebar({
-  notifications,
-}: {
-  notifications: SidebarNotifications;
+export default function AdminSidebar({ notifications = {}, status = 'ready' }: {
+  notifications?: Partial<SidebarNotifications>;
+  status?: 'ready' | 'loading' | 'error';
 }) {
   const pathname = usePathname();
   const router = useRouter();
+  const sections = ADMIN_NAVIGATION;
 
-  const sections: NavSection[] = [
-    {
-      label: '基本',
-      items: [
-        { href: '/admin', label: '管理トップ', icon: LayoutDashboard },
-      ],
-    },
-    {
-      label: '日常業務',
-      items: [
-        {
-          href: '/admin/items',
-          label: '商品管理',
-          icon: Package,
-          count: notifications.items,
-        },
-        {
-          href: '/admin/subscriptions',
-          label: 'サブスク管理',
-          icon: Repeat2,
-        },
-        {
-          href: '/admin/reimbursements',
-          label: '立替管理',
-          icon: ClipboardList,
-          count: notifications.reimbursements,
-        },
-        {
-          href: '/admin/transactions',
-          label: '取引履歴',
-          icon: Receipt,
-          count: notifications.transactions,
-        },
-        { href: '/admin/cashbox', label: '金庫確認', icon: Vault },
-      ],
-    },
-    {
-      label: '運営',
-      items: [
-        {
-          href: '/admin/users',
-          label: 'ユーザー管理',
-          icon: Users,
-          count: notifications.users,
-        },
-        {
-          href: '/admin/points',
-          label: 'ポイント管理',
-          icon: Coins,
-          count: notifications.points,
-        },
-        {
-          href: '/admin/requests',
-          label: '商品要望',
-          icon: MessageSquare,
-          count: notifications.requests,
-        },
-        {
-          href: '/admin/legacy',
-          label: '旧データ移行',
-          icon: Wallet,
-          count: notifications.legacy,
-        },
-        { href: '/admin/audit', label: '監査ログ', icon: ScrollText },
-      ],
-    },
-  ];
-
-  const handleLogout = () => {
-    clearAdminSession();
-    router.push('/admin/login');
+  const handleLogout = async () => {
+    try {
+      await clearAdminSession();
+      router.push('/admin/login');
+    } catch {
+      toast.error('ログアウトに失敗しました。もう一度お試しください');
+    }
   };
 
   return (
-    <aside className="h-screen w-72 shrink-0 overflow-y-auto border-r border-gray-800 bg-gray-950">
+    <aside className="h-full max-h-[100dvh] w-72 shrink-0 overflow-y-auto border-r border-gray-800 bg-gray-950">
       <div className="border-b border-gray-800 px-5 py-5">
         <div className="flex items-center gap-3">
           <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/10 text-xl">
@@ -138,6 +39,7 @@ export default function AdminSidebar({
         </div>
       </div>
 
+      {status !== 'ready' && <p role="status" className="px-5 py-2 text-xs text-gray-400">{status === 'loading' ? '件数を読み込み中…' : '件数を取得できませんでした'}</p>}
       <nav className="space-y-6 px-4 py-5">
         {sections.map((section) => (
           <section key={section.label} className="space-y-2">
@@ -146,14 +48,17 @@ export default function AdminSidebar({
             </p>
             <div className="space-y-1">
               {section.items.map((item) => {
-                const active =
-                  pathname === item.href ||
-                  (item.href !== '/admin' && pathname.startsWith(`${item.href}/`));
+                const active = [item.href, ...(item.activePaths ?? [])].some((href) =>
+                  pathname === href || (href !== '/admin' && pathname.startsWith(`${href}/`))
+                );
                 const Icon = item.icon;
+                const count = item.notificationKey ? notifications[item.notificationKey] ?? 0 : 0;
                 return (
                   <Link
                     key={item.href}
                     href={item.href}
+                    prefetch={false}
+                    aria-current={active ? 'page' : undefined}
                     className={`flex items-center justify-between rounded-2xl px-3 py-3 text-sm transition-colors ${
                       active
                         ? 'bg-white text-gray-950'
@@ -164,13 +69,13 @@ export default function AdminSidebar({
                       <Icon size={16} />
                       {item.label}
                     </span>
-                    {(item.count ?? 0) > 0 && (
+                    {count > 0 && (
                       <span
                         className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
                           active ? 'bg-gray-950/10 text-gray-950' : 'bg-amber-500/20 text-amber-300'
                         }`}
                       >
-                        {item.count}
+                        {count}
                       </span>
                     )}
                   </Link>

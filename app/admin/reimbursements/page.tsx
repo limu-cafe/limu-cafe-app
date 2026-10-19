@@ -1,3 +1,4 @@
+import { requireAdminPage } from '@/lib/admin-page-session';
 import { createAdminClient } from '@/lib/supabase/server';
 import ReimbursementsClient from './ReimbursementsClient';
 
@@ -12,7 +13,8 @@ type PurchaseRunListRow = {
   note: string | null;
 };
 
-export default async function AdminReimbursementsPage() {
+export default async function AdminReimbursementsPage({searchParams}: {searchParams?: {run?:string}}) {
+  await requireAdminPage();
   const supabase = createAdminClient();
 
   const [{ data: items }, { data: purchaseRuns }, { data: miscExpenseNotes }] = await Promise.all([
@@ -36,7 +38,14 @@ export default async function AdminReimbursementsPage() {
       .limit(30),
   ]);
 
-  const purchaseRunData = purchaseRuns ?? [];
+  const purchaseRunData = [...(purchaseRuns ?? [])];
+  const selectedId = searchParams?.run;
+  // A contextual link must still find an older record beyond the recent list.
+  if (selectedId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(selectedId) && !purchaseRunData.some(run=>run.id===selectedId)) {
+    const {data: selectedRun,error} = await supabase.from('purchase_runs').select('id, total_amount, payment_source, reimbursement_status, vendor, note, created_at, reimbursed_at, created_by_user:users!purchase_runs_created_by_fkey(name), purchase_run_items(item_name, quantity)').eq('id',selectedId).eq('payment_source','personal_advance').maybeSingle();
+    if(error) throw error;
+    if(selectedRun) purchaseRunData.unshift(selectedRun);
+  }
 
   const miscExamples = Array.from(
     new Set(

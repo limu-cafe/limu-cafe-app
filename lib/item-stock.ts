@@ -22,7 +22,7 @@ export function isItemLowStock(item: StockLikeItem | null | undefined) {
   const stock = item.stock ?? 0;
   const threshold = item.stock_alert_threshold ?? 0;
 
-  return stock > 0 && stock <= threshold;
+  return stock <= threshold;
 }
 
 export function isItemPurchasable(item: StockLikeItem | null | undefined) {

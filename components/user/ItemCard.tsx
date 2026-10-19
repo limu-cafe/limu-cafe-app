@@ -123,6 +123,7 @@ export default function ItemCard({
                 src={item.image_url}
                 alt={displayName}
                 fill
+                sizes="64px"
                 className="object-contain p-1.5"
               />
             ) : (
@@ -194,6 +195,7 @@ export default function ItemCard({
             src={item.image_url}
             alt={displayName}
             fill
+            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 280px"
             className="object-contain p-3 transition-transform duration-300 group-hover:scale-[1.02]"
           />
         ) : (

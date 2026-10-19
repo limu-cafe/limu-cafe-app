@@ -1,3 +1,4 @@
+import { requireAdminPage } from '@/lib/admin-page-session';
 import { createAdminClient } from '@/lib/supabase/server';
 import PointsClient from './PointsClient';
 import { DEFAULT_POINT_SETTINGS } from '@/lib/points';
@@ -5,6 +6,7 @@ import { DEFAULT_POINT_SETTINGS } from '@/lib/points';
 export const dynamic = 'force-dynamic';
 
 export default async function AdminPointsPage() {
+  await requireAdminPage();
   const supabase = createAdminClient();
 
   const [{ data: settings }, { data: campaigns }, { data: users }, { data: transactions }] =
