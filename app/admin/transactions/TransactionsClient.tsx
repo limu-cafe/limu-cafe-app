@@ -2,6 +2,7 @@
 
 import { useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
+import OrderBalanceCollection from '@/components/admin/OrderBalanceCollection';
 import OrderRecord from '@/components/admin/OrderRecord';
 import { isPendingCashOrder, isPendingDeferredOrder, type AdminOrder } from '@/lib/admin-objects';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -169,6 +170,7 @@ export default function TransactionsClient({
   const [historyFilter, setHistoryFilter] = useState<HistoryFilter>('all');
   const [loading, setLoading] = useState<string | null>(null);
   const actionLock = useRef(false);
+  const [batchBusy, setBatchBusy] = useState(false);
   const people = useMemo(() => userChoices.length ? userChoices : Array.from(new Map([...orders, ...charges, ...settlements, ...subscriptionPayments].filter((row) => row.user).map((row) => [row.user_id, row.user!])).values()).sort((a, b) => a.name.localeCompare(b.name, 'ja')), [userChoices, orders, charges, settlements, subscriptionPayments]);
   const pageHref = (next: number) => `/admin/transactions?page=${next}${selectedUserId ? `&user=${encodeURIComponent(selectedUserId)}` : ''}${pendingOnly ? '&state=pending' : ''}`;
 
@@ -180,6 +182,13 @@ export default function TransactionsClient({
     () => orders.filter(isPendingDeferredOrder),
     [orders]
   );
+  const pendingOrderGroups = useMemo(() => {
+    const groups = new Map<string, OrderSummary[]>();
+    for (const order of [...pendingDeferredOrders, ...pendingCashOrders].sort((a,b) => b.created_at.localeCompare(a.created_at))) {
+      groups.set(order.user_id, [...(groups.get(order.user_id) ?? []), order]);
+    }
+    return Array.from(groups, ([userId, rows]) => ({ user: rows[0].user ?? { id: userId, name: '利用者' }, orders: rows }));
+  }, [pendingDeferredOrders, pendingCashOrders]);
   const pendingChargeRequests = useMemo(
     () => charges.filter((charge) => charge.status === 'pending'),
     [charges]
@@ -246,7 +255,7 @@ export default function TransactionsClient({
     success: string;
     confirmMessage?: string;
   }) => {
-    if (actionLock.current) return;
+    if (actionLock.current || batchBusy) return;
     if (confirmMessage && !confirm(confirmMessage)) {
       return;
     }
@@ -322,8 +331,7 @@ export default function TransactionsClient({
           </div>
         ) : (
           <div className="space-y-3">
-            {pendingDeferredOrders.map((order) => <OrderRecord key={order.id} order={order} returnTo={pageHref(page)}/>)}
-            {pendingCashOrders.map((order) => <OrderRecord key={order.id} order={order} returnTo={pageHref(page)}/>)}
+            {pendingOrderGroups.map(group => <OrderBalanceCollection key={`${group.user.id}:${group.user.balance}:${group.orders.map(o=>`${o.id}:${o.total_amount}:${o.points_used}:${o.payment_status}:${o.payment_method}:${o.settled_at}:${o.accounting_ready}:${o.cash_confirmed_at}:${o.settlement_source}:${o.settlement_id}`).join(',')}`} user={group.user} orders={group.orders} returnTo={pageHref(page)} disabled={Boolean(loading) || batchBusy} onBusyChange={setBatchBusy}/>)}
 
             {pendingCashCharges.map((charge) => (
               <div key={charge.id} className="rounded-2xl border border-gray-800 bg-gray-900 px-4 py-4">
@@ -348,7 +356,7 @@ export default function TransactionsClient({
                     <div className="flex flex-wrap gap-2 lg:justify-end">
                       <ActionButton
                         tone="success"
-                        disabled={Boolean(loading)}
+                        disabled={Boolean(loading) || batchBusy}
                         onClick={() =>
                           runAction({
                             key: `charge-settle:${charge.id}`,
@@ -362,7 +370,7 @@ export default function TransactionsClient({
                       </ActionButton>
                       <ActionButton
                         tone="danger"
-                        disabled={Boolean(loading)}
+                        disabled={Boolean(loading) || batchBusy}
                         onClick={() =>
                           runAction({
                             key: `charge-refund:${charge.id}`,
@@ -420,7 +428,7 @@ export default function TransactionsClient({
                     <div className="flex flex-wrap gap-2 lg:justify-end">
                       <ActionButton
                         tone="success"
-                        disabled={Boolean(loading)}
+                        disabled={Boolean(loading) || batchBusy}
                         onClick={() =>
                           runAction({
                             key: `subscription-settle:${payment.id}`,
@@ -437,7 +445,7 @@ export default function TransactionsClient({
                       </ActionButton>
                       <ActionButton
                         tone="danger"
-                        disabled={Boolean(loading)}
+                        disabled={Boolean(loading) || batchBusy}
                         onClick={() => requestSubscriptionPaymentCancel(payment)}
                       >
                         支払取消
@@ -481,7 +489,7 @@ export default function TransactionsClient({
                     <div className="flex flex-wrap gap-2 lg:justify-end">
                       <ActionButton
                         tone="danger"
-                        disabled={Boolean(loading)}
+                        disabled={Boolean(loading) || batchBusy}
                         onClick={() =>
                           runAction({
                             key: `charge-reject:${charge.id}`,
@@ -494,7 +502,7 @@ export default function TransactionsClient({
                       </ActionButton>
                       <ActionButton
                         tone="success"
-                        disabled={Boolean(loading)}
+                        disabled={Boolean(loading) || batchBusy}
                         onClick={() =>
                           runAction({
                             key: `charge-approve:${charge.id}`,
@@ -598,7 +606,7 @@ export default function TransactionsClient({
                             charge.is_cash_settled &&
                             charge.settlement_source === 'individual_cash_charge' && (
                             <ActionButton
-                              disabled={Boolean(loading)}
+                              disabled={Boolean(loading) || batchBusy}
                               onClick={() =>
                                 runAction({
                                   key: `charge-unsettle:${charge.id}`,
@@ -617,7 +625,7 @@ export default function TransactionsClient({
                           {charge.status === 'approved' && (
                             <ActionButton
                               tone="danger"
-                              disabled={Boolean(loading)}
+                              disabled={Boolean(loading) || batchBusy}
                               onClick={() =>
                                 runAction({
                                   key: `charge-refund:${charge.id}`,
@@ -674,7 +682,7 @@ export default function TransactionsClient({
                         {settlement.status === 'completed' && (
                           <div className="flex flex-wrap gap-2 lg:justify-end">
                             <ActionButton
-                              disabled={Boolean(loading)}
+                              disabled={Boolean(loading) || batchBusy}
                               onClick={() =>
                                 runAction({
                                   key: `settlement-revert:${settlement.id}`,
@@ -749,7 +757,7 @@ export default function TransactionsClient({
                       <div className="flex flex-wrap gap-2 lg:justify-end">
                         {payment.cash_due_amount > 0 && payment.payment_status === 'completed' && (
                           <ActionButton
-                            disabled={Boolean(loading)}
+                            disabled={Boolean(loading) || batchBusy}
                             onClick={() =>
                               runAction({
                                 key: `subscription-unsettle:${payment.id}`,
@@ -768,7 +776,7 @@ export default function TransactionsClient({
                         {payment.cash_due_amount > 0 && payment.payment_status === 'pending_cash_settlement' && (
                           <ActionButton
                             tone="success"
-                            disabled={Boolean(loading)}
+                            disabled={Boolean(loading) || batchBusy}
                             onClick={() =>
                               runAction({
                                 key: `subscription-settle:${payment.id}`,
@@ -787,7 +795,7 @@ export default function TransactionsClient({
                         {canCancel && (
                           <ActionButton
                             tone="danger"
-                            disabled={Boolean(loading)}
+                            disabled={Boolean(loading) || batchBusy}
                             onClick={() => requestSubscriptionPaymentCancel(payment)}
                           >
                             支払取消
