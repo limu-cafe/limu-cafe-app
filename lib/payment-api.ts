@@ -28,6 +28,7 @@ export async function runAdminPayment(request: Request, rpc: string, input: (act
   if (error) return paymentFailure(error);
   if (!data?.ok) return paymentFailure({});
   refreshPaymentViews(typeof params.p_order_id === 'string' ? params.p_order_id : typeof params.p_target_id === 'string' && params.p_kind !== 'cash_charge' ? params.p_target_id : undefined);
+  if (Array.isArray(params.p_orders)) for (const entry of params.p_orders as { id: string }[]) revalidatePath(`/admin/orders/${entry.id}`);
   return NextResponse.json(data, { headers: { 'Cache-Control': 'private, no-store' } });
 }
 
