@@ -34,9 +34,10 @@ test('order wallet payment and cash collection preserve the financial ledger', {
     -- Existing Supabase projects may still grant ALL on every new table by default.
     ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO anon,authenticated,service_role;
   `);
-  const snapshot = async (tables = ['users','orders','charge_requests','items','order_items','stock_history','settlements','cashbox_entries','point_transactions','admin_audit_logs','order_balance_payments']) => Promise.all(tables.map(async table => (await db.query(`SELECT coalesce(jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text),'[]') AS rows FROM ${table} t`)).rows[0].rows));
+  const snapshot = async (tables = ['users','orders','charge_requests','items','order_items','stock_history','settlements','cashbox_entries','point_transactions','admin_audit_logs','order_balance_payments','admin_order_balance_batches']) => Promise.all(tables.map(async table => (await db.query(`SELECT coalesce(jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text),'[]') AS rows FROM ${table} t`)).rows[0].rows));
   const historical = await snapshot(['users','orders','charge_requests','items','order_items']);
   await db.exec(fs.readFileSync(path.join(dir,'20261019070015_admin_order_balance_payment.sql'),'utf8'));
+  await db.exec(fs.readFileSync(path.join(dir,'20261019090835_admin_batch_order_balance_payment.sql'),'utf8'));
   const after = await snapshot(['users','orders','charge_requests','items','order_items']);
   for (const index of [1,2]) for (const row of after[index]) { assert.equal(row.accounting_ready,true); delete row.accounting_ready; }
   assert.deepEqual(after,historical);
@@ -163,6 +164,60 @@ test('order wallet payment and cash collection preserve the financial ledger', {
   });
   await isolated('missing actor or reason cannot debit any wallet',async()=>{
     for(const [actor,reason] of [[null,'確認'],[admin,''],[admin,' '.repeat(5)],[admin,'a'.repeat(301)]]) await fails(()=>db.query('SELECT public.admin_pay_order_from_balance($1,130,1000,$2,$3)',[order,actor,reason]),'22023');
+  });
+  const operation=ids[15], extraOrder=ids[8];
+  const batch=async(entries=[{id:order,expected_amount:130},{id:extraOrder,expected_amount:130}],balance=1000,op=operation,reason='本人からの依頼') => (await db.query('SELECT public.admin_pay_orders_from_balance($1,$2,$3,$4,$5,$6) AS r',[op,user,JSON.stringify(entries),balance,admin,reason])).rows[0].r;
+  const addOrder=async(id=extraOrder,owner=user,patch={})=>{
+    await db.query("INSERT INTO orders(id,user_id,accounting_ready) VALUES($1,$2,true)",[id,owner]);
+    await db.query("INSERT INTO order_items(order_id,item_id,quantity,item_name,item_price,subtotal) VALUES($1,$2,1,'historical name',130,130)",[id,item]);
+    await db.query('UPDATE users SET deferred_balance=deferred_balance+130 WHERE id=$1',[owner]);
+  };
+  await isolated('five selected orders debit their combined total once; exact retry with a different order sequence is idempotent',async()=>{
+    const selected=[order,...ids.slice(8,12)];for(const id of selected.slice(1))await addOrder(id);
+    const unchanged=await snapshot(['items','order_items','stock_history','point_transactions','charge_requests']);
+    const entries=selected.map(id=>({id,expected_amount:130}));
+    await db.exec('SET LOCAL ROLE service_role');
+    const result=await batch(entries);assert.equal(result.count,5);assert.equal(result.amount,650);assert.equal(result.balance,350);
+    assert.deepEqual(await profile(),{balance:350,deferred_balance:1000,points_balance:30});
+    assert.deepEqual(await snapshot(['items','order_items','stock_history','point_transactions','charge_requests']),unchanged);
+    const once=await snapshot();assert.equal((await batch([...entries].reverse())).already_paid,true);assert.deepEqual(await snapshot(),once);
+    await fails(()=>batch(entries,1000,operation,'changed reason'));
+    assert.equal((await db.query('SELECT count(*)::int AS n FROM order_balance_payments')).rows[0].n,5);
+    assert.equal((await db.query('SELECT count(*)::int AS n FROM admin_order_balance_batches')).rows[0].n,1);
+    assert.equal((await db.query('SELECT count(*)::int AS n FROM cashbox_entries')).rows[0].n,0);
+  });
+  await isolated('a later order with a stale amount, cash receipt, missing readiness or another owner rolls back the entire selection',async()=>{
+    await addOrder();await fails(()=>batch([{id:order,expected_amount:130},{id:extraOrder,expected_amount:129}]));
+    await db.query('UPDATE orders SET accounting_ready=false WHERE id=$1',[extraOrder]);await fails(()=>batch());
+    await db.query('UPDATE orders SET accounting_ready=true,cash_confirmed_at=now() WHERE id=$1',[extraOrder]);await fails(()=>batch());
+    await db.query('UPDATE orders SET cash_confirmed_at=null,user_id=$2 WHERE id=$1',[extraOrder,other]);await fails(()=>batch(),'P0002');
+  });
+  await isolated('one paid order invalidates a new batch rather than silently skipping it',async()=>{
+    await addOrder();await pay();await fails(()=>batch(undefined,870));
+    assert.equal((await profile()).balance,870);
+  });
+  await isolated('insufficient balance, duplicate IDs and stale balance never create partial batch receipts',async()=>{
+    await addOrder();await fails(()=>batch(undefined,999));
+    await db.query('UPDATE users SET balance=200 WHERE id=$1',[user]);await fails(()=>batch(undefined,200),'22023');
+    await fails(()=>batch([{id:order,expected_amount:130},{id:order,expected_amount:130}],200),'22023');
+  });
+  await isolated('failure at the final batch audit rolls back even the earlier individual order payments',async()=>{
+    await addOrder();await db.exec("CREATE FUNCTION fail_batch_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.action_type='admin_orders_paid_from_balance' THEN RAISE EXCEPTION 'fixture batch audit failure'; END IF; RETURN NEW; END; $$; CREATE TRIGGER fail_batch_fixture BEFORE INSERT ON admin_audit_logs FOR EACH ROW EXECUTE FUNCTION fail_batch_audit();");
+    await fails(()=>batch());
+  });
+  await isolated('mixed unpaid cash and deferred orders subtract points once and keep unpaid charge debt',async()=>{
+    await addOrder();await db.query("UPDATE orders SET payment_method='cash',payment_status='pending',points_used=30 WHERE id=$1",[extraOrder]);
+    await db.query('UPDATE users SET deferred_balance=1130 WHERE id=$1',[user]);
+    await batch([{id:order,expected_amount:130},{id:extraOrder,expected_amount:100}]);
+    assert.deepEqual(await profile(),{balance:770,deferred_balance:1000,points_balance:30});
+  });
+  await isolated('browser roles cannot execute batches or read receipts; service role cannot modify evidence',async()=>{
+    await addOrder();
+    for(const role of ['anon','authenticated']){
+      await db.exec(`SET LOCAL ROLE ${role}`);await db.exec('SAVEPOINT denied_batch');await assert.rejects(()=>batch(),e=>e.code==='42501');await db.exec('ROLLBACK TO SAVEPOINT denied_batch');await db.exec('RESET ROLE');
+    }
+    await db.exec('SET LOCAL ROLE service_role');await batch();
+    await fails(()=>db.query('DELETE FROM admin_order_balance_batches'),'42501');
   });
   await isolated('browser roles cannot execute collection functions or alter immutable payment evidence',async()=>{
     for (const role of ['anon','authenticated']) {
