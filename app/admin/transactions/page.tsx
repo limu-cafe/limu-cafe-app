@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic';
 
 // The collection only needs historical names/quantities. Full prices are loaded for one order on demand.
 const ORDER_LINES_SELECT = 'order_items(item_name, quantity)';
-const ORDER_SELECT = `id, user_id, total_amount, points_used, payment_method, deferred_settlement_method, payment_status, settled_at, settlement_source, settlement_id, created_at, user:users!orders_user_id_fkey(id, name, avatar_url), ${ORDER_LINES_SELECT}`;
+const ORDER_SELECT = `id, user_id, total_amount, points_used, payment_method, deferred_settlement_method, payment_status, settled_at, settlement_source, settlement_id, accounting_ready, cash_confirmed_at, created_at, user:users!orders_user_id_fkey(id, name, avatar_url, balance), ${ORDER_LINES_SELECT}`;
 const ORDER_SELECT_NO_SETTLEMENT = `id, user_id, total_amount, points_used, payment_method, deferred_settlement_method, payment_status, created_at, user:users!orders_user_id_fkey(id, name, avatar_url), ${ORDER_LINES_SELECT}`;
 const ORDER_SELECT_FULL_LEGACY = `id, user_id, total_amount, payment_method, payment_status, created_at, user:users!orders_user_id_fkey(id, name, avatar_url), ${ORDER_LINES_SELECT}`;
 

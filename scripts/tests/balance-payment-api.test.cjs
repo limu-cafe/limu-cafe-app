@@ -66,3 +66,18 @@ test('payment conflicts and unavailable schema do not fall back to partial write
     assert.equal((await api.POST(request(reviewed),{params:{id:order}})).status,status);assert.equal(calls,1);assert.equal(api.calls.length,0);
   }
 });
+
+const batchRoute='app/api/admin/users/[id]/order-balance-payments/route.ts';
+const batchBody={operation_id:'00000000-0000-4000-8000-000000000009',orders:[{id:order,expected_amount:130}],expected_balance:1000,reason:'本人に確認',confirm_unpaid:true};
+test('batch API scopes the target person and actor, validates every quote, and invalidates all selected order details',async()=>{
+  const calls=[];const api=load(batchRoute,{rpc:async(name,args)=>{calls.push([name,plain(args)]);return{data:{ok:true}};}});
+  assert.equal((await api.POST(request({...batchBody,user_id:other,actor_id:user}),{params:{id:user}})).status,200);
+  assert.deepEqual(calls,[['admin_pay_orders_from_balance',{p_operation_id:batchBody.operation_id,p_user_id:user,p_orders:batchBody.orders,p_expected_balance:1000,p_actor_id:other,p_reason:'本人に確認'}]]);
+  assert.ok(api.calls.includes(`/admin/orders/${order}`));
+});
+test('batch API refuses missing proof, cross origin, empty/duplicate/invalid orders and missing acknowledgement before any RPC',async()=>{
+  const db={rpc(){throw Error('unexpected write');}};
+  assert.equal((await load(batchRoute,db,{admin:{user:null,status:403}}).POST(request(batchBody),{params:{id:user}})).status,403);
+  const api=load(batchRoute,db);assert.equal((await api.POST(request(batchBody,'https://attacker.test'),{params:{id:user}})).status,403);
+  for(const body of [{...batchBody,orders:[]},{...batchBody,orders:[...batchBody.orders,...batchBody.orders]},{...batchBody,orders:[{id:order,expected_amount:-1}]},{...batchBody,operation_id:'bad'},{...batchBody,confirm_unpaid:false},{...batchBody,reason:''},{...batchBody,expected_balance:'1000'}]) assert.equal((await api.POST(request(body),{params:{id:user}})).status,400);
+});
