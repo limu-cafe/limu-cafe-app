@@ -8,11 +8,7 @@ type LegacyUserRow = {
   transferred_at: string | null;
 };
 
-type CurrentUserRow = {
-  id: string;
-  balance: number;
-  deferred_balance: number;
-};
+
 
 export async function applyLegacyTransfer(
   supabase: SupabaseClient<any, any, any>,
@@ -48,7 +44,6 @@ export async function applyLegacyTransfer(
   }
 
   const typedLegacyUser = legacyUser as LegacyUserRow;
-  const typedCurrentUser = currentUser as CurrentUserRow;
 
   if (typedLegacyUser.transferred_at) {
     throw new Error('この旧データはすでに引き継ぎ済みです');
@@ -61,13 +56,9 @@ export async function applyLegacyTransfer(
   const positiveBalance = Math.max(typedLegacyUser.legacy_balance, 0);
   const deferredBalance = Math.max(-typedLegacyUser.legacy_balance, 0);
 
-  const { error: userUpdateError } = await supabase
-    .from('users')
-    .update({
-      balance: typedCurrentUser.balance + positiveBalance,
-      deferred_balance: typedCurrentUser.deferred_balance + deferredBalance,
-    })
-    .eq('id', currentUserId);
+  const { error: userUpdateError } = await supabase.rpc('adjust_wallet_balances', {
+    p_user_id: currentUserId, p_balance_delta: positiveBalance, p_deferred_delta: deferredBalance,
+  });
 
   if (userUpdateError) {
     throw new Error(userUpdateError.message);

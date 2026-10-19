@@ -193,10 +193,10 @@ test('order details submit the selected order once; failure retains an actionabl
   const props = { order: { id: orderId, user_id: userId, total_amount: 130, payment_method: 'deferred', payment_status: 'completed', created_at: '2026-10-16' }, returnTo: '/admin/transactions' };
   const nodes = (node) => !node || typeof node !== 'object' ? [] : Array.isArray(node) ? node.flatMap(nodes) : [node, ...nodes(node.props?.children)];
   const render = () => { cursor = 0; return Detail(props); };
-  const button = nodes(render()).find((node) => node.type === 'button' && node.props.children === '精算完了');
+  const button = nodes(render()).find((node) => node.type === 'button' && node.props.children === '現金を受領');
   const first = button.props.onClick(); await button.props.onClick(); await first;
   assert.equal(calls, 1); assert.equal(successes, 0); assert.equal(refreshes, 0);
-  assert.ok(nodes(render()).find((node) => node.type === 'button' && node.props.children === '精算完了' && !node.props.disabled));
+  assert.ok(nodes(render()).find((node) => node.type === 'button' && node.props.children === '現金を受領' && !node.props.disabled));
 });
 
 test('point adjustment reviews the selected person before sending; duplicate confirmation and failure cannot apply twice or report success', async () => {
