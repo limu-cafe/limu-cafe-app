@@ -153,6 +153,7 @@ export async function POST(request: Request) {
   // トランザクション的に処理
   // 1. 注文作成
   const baseOrderPayload = {
+    accounting_ready: false,
     user_id: user.id,
     total_amount,
     points_used: requestedPointsUsed,
@@ -174,6 +175,7 @@ export async function POST(request: Request) {
     orderInsert = await adminSupabase
       .from('orders')
       .insert({
+        accounting_ready: false,
         user_id: user.id,
         total_amount,
         payment_method: normalizedPaymentMethod,
@@ -193,6 +195,7 @@ export async function POST(request: Request) {
     orderInsert = await adminSupabase
       .from('orders')
       .insert({
+        accounting_ready: false,
         user_id: user.id,
         total_amount,
         payment_method: normalizedPaymentMethod,
@@ -341,6 +344,10 @@ export async function POST(request: Request) {
     console.error('[orders] failed to finalize order', error);
     return NextResponse.json({ error: '注文処理に失敗しました' }, { status: 500 });
   }
+
+  // Receipt/wallet settlement must not race a partially finalized checkout.
+  const ready = await adminSupabase.from('orders').update({ accounting_ready: true }).eq('id', order.id);
+  if (ready.error) console.warn('[orders] accounting readiness unavailable', { code: ready.error.code });
 
   // 注文自体は成立させ、通知失敗ではロールバックしない
   await notifyOrderSideEffects({

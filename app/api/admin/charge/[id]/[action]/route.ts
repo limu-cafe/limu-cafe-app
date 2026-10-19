@@ -3,6 +3,7 @@ import { revalidatePath } from 'next/cache';
 import { createAdminClient } from '@/lib/supabase/server';
 import { logAdminAction } from '@/lib/admin-audit';
 import { requireAdminSession } from '@/lib/admin-session';
+import { paymentFailure } from '@/lib/payment-api';
 import { notifyChargeReviewed } from '@/lib/slack';
 
 type PointSettingsRow = {
@@ -60,33 +61,10 @@ export async function POST(
       );
     }
 
-    const nextBalance = (targetUser.balance ?? 0) + req.amount;
-    const nextDeferredBalance = (targetUser.deferred_balance ?? 0) + req.amount;
-
-    const { error: approveError } = await supabase
-      .from('charge_requests')
-      .update({
-        status: 'approved',
-        approved_at: new Date().toISOString(),
-        approved_by: adminSession.user.id,
-      })
-      .eq('id', id);
-
-    if (approveError) {
-      return NextResponse.json({ error: approveError.message }, { status: 500 });
-    }
-
-    const { error: balanceError } = await supabase
-      .from('users')
-      .update({
-        balance: nextBalance,
-        deferred_balance: nextDeferredBalance,
-      })
-      .eq('id', req.user_id);
-
-    if (balanceError) {
-      return NextResponse.json({ error: balanceError.message }, { status: 500 });
-    }
+    const { error: approveError } = await supabase.rpc('approve_pending_wallet_charge', {
+      p_charge_id: id, p_actor_id: adminSession.user.id,
+    });
+    if (approveError) return paymentFailure(approveError);
 
     const pointSettings =
       settingsResponse.data && (settingsResponse.data as PointSettingsRow).is_enabled
@@ -132,17 +110,17 @@ export async function POST(
       }
     }
   } else {
-    const { error: rejectError } = await supabase
+    const { data: rejected, error: rejectError } = await supabase
       .from('charge_requests')
       .update({
         status: 'rejected',
         approved_at: new Date().toISOString(),
         approved_by: adminSession.user.id,
       })
-      .eq('id', id);
+      .eq('id', id).eq('status', 'pending').select('id').maybeSingle();
 
-    if (rejectError) {
-      return NextResponse.json({ error: rejectError.message }, { status: 500 });
+    if (rejectError || !rejected) {
+      return NextResponse.json({ error: rejectError?.message ?? 'この申請は処理済みです' }, { status: 500 });
     }
   }
 

@@ -5,16 +5,18 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { orderActions, orderStateLabel, paymentLabel, type AdminOrder } from '@/lib/admin-objects';
+import OrderBalancePayment from '@/components/admin/OrderBalancePayment';
 import { money, recordDate } from '@/components/admin/ObjectRelatedRecords';
 
-export default function OrderDetailClient({ order, returnTo }: { order: AdminOrder; returnTo: string }) {
+export default function OrderDetailClient({ order, returnTo, balancePayment }: { order: AdminOrder; returnTo: string; balancePayment?: { amount: number; original_payment_method: string; balance_before: number; balance_after: number; reason: string; created_at: string } | null }) {
   const router = useRouter();
   const busy = useRef(false);
   const [loading, setLoading] = useState<string | null>(null);
   const actions = orderActions(order);
+  const [balanceBusy, setBalanceBusy] = useState(false);
   const returnLabel = returnTo.startsWith('/admin/cashbox') ? '金庫の出納記録へ戻る' : returnTo.startsWith('/admin/users') ? '利用者の詳細へ戻る' : returnTo.startsWith('/admin/items') ? '商品の詳細へ戻る' : '取引一覧へ戻る';
   const act = async (action: typeof actions[number]) => {
-    if (busy.current) return;
+    if (busy.current || balanceBusy) return;
     if (!confirm(`${order.user?.name ?? '利用者'} の ${recordDate(order.created_at)} の注文（${money(order.total_amount)}）を「${action.label}」にしますか？`)) return;
     busy.current = true;
     setLoading(action.id);
@@ -36,6 +38,7 @@ export default function OrderDetailClient({ order, returnTo }: { order: AdminOrd
       <dl className="mt-5 grid gap-4 text-sm sm:grid-cols-2"><div><dt className="text-gray-400">支払い方法</dt><dd className="mt-1 text-white">{paymentLabel(order.payment_method)}{order.deferred_settlement_method ? `（${paymentLabel(order.deferred_settlement_method)}で精算）` : ''}</dd></div><div><dt className="text-gray-400">利用ポイント</dt><dd className="mt-1 text-white">{order.points_used ?? 0}pt</dd></div><div><dt className="text-gray-400">精算日時</dt><dd className="mt-1 text-white">{order.settled_at ? recordDate(order.settled_at) : '—'}</dd></div><div><dt className="text-gray-400">注文ID</dt><dd className="mt-1 break-all font-mono text-xs text-gray-300">{order.id}</dd></div></dl>
       <Link prefetch={false} href={`/admin/transactions?user=${order.user_id}`} className="mt-5 inline-block text-sm text-sky-300 underline underline-offset-4">この利用者の取引・未精算をすべて見る →</Link>
     </section>
-    <section className="rounded-2xl border border-gray-800 bg-gray-900 p-5" aria-label="この注文の操作"><h2 className="font-semibold text-white">この注文の操作</h2><p className="mt-2 text-sm text-gray-400">注文内容と実際の受領状況を確認してから操作してください。</p><div className="mt-4 flex flex-wrap gap-3">{actions.map((action) => <button key={action.id} type="button" disabled={Boolean(loading)} onClick={() => act(action)} className={`rounded-xl px-4 py-3 text-sm disabled:opacity-40 ${action.danger ? 'border border-red-900 text-red-300 hover:bg-red-500/10' : 'bg-white text-gray-950 hover:bg-gray-200'}`}>{loading === action.id ? '処理中…' : action.label}</button>)}</div>{actions.length === 0 && <p className="mt-3 text-sm text-gray-400">この状態の注文に対する操作はありません。</p>}</section>
+    {balancePayment && <section className="rounded-2xl border border-gray-800 bg-gray-900 p-5" aria-label="残高精算の記録"><h2 className="font-semibold text-white">残高精算の記録</h2><p className="mt-2 text-sm text-gray-300">{recordDate(balancePayment.created_at)} · {money(balancePayment.amount)}を残高から精算</p><p className="mt-2 text-sm text-gray-400">元の支払い方法：{paymentLabel(balancePayment.original_payment_method)} · 当時の残高：{money(balancePayment.balance_before)} → {money(balancePayment.balance_after)}</p><p className="mt-2 whitespace-pre-wrap break-words text-sm text-gray-300">理由：{balancePayment.reason}</p></section>}
+    <section className="rounded-2xl border border-gray-800 bg-gray-900 p-5" aria-label="この注文の操作"><h2 className="font-semibold text-white">この注文の操作</h2><p className="mt-2 text-sm text-gray-400">注文内容と実際の受領状況を確認してから操作してください。</p><div className="mt-4 flex flex-wrap gap-3">{actions.map((action) => <button key={action.id} type="button" disabled={Boolean(loading) || balanceBusy} onClick={() => act(action)} className={`rounded-xl px-4 py-3 text-sm disabled:opacity-40 ${action.danger ? 'border border-red-900 text-red-300 hover:bg-red-500/10' : 'bg-white text-gray-950 hover:bg-gray-200'}`}>{loading === action.id ? '処理中…' : action.label}</button>)}</div><OrderBalancePayment key={`${order.id}:${order.user?.balance}:${order.payment_method}:${order.payment_status}:${order.settled_at ?? ''}`} order={order} disabled={Boolean(loading)} onBusyChange={setBalanceBusy}/>{actions.length === 0 && <p className="mt-3 text-sm text-gray-400">この状態の注文に対する操作はありません。</p>}</section>
   </div>;
 }
