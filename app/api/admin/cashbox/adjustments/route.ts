@@ -1,3 +1,4 @@
+import { requireAdminSession } from '@/lib/admin-session';
 import { NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
 import { createAdminClient, createClient } from '@/lib/supabase/server';
@@ -5,6 +6,9 @@ import { insertCashboxEntry } from '@/lib/cashbox';
 import { logAdminAction } from '@/lib/admin-audit';
 
 export async function POST(request: Request) {
+  const adminAccess = await requireAdminSession();
+  if (!adminAccess.user) return NextResponse.json({ error: adminAccess.error }, { status: adminAccess.status });
+
   const sessionClient = await createClient();
   const { data: { user } } = await sessionClient.auth.getUser();
   const supabase = createAdminClient();

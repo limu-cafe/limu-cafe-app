@@ -1,3 +1,4 @@
+import { requireAdminPage } from '@/lib/admin-page-session';
 import { createAdminClient } from '@/lib/supabase/server';
 import { calculateCashboxBalance } from '@/lib/cashbox';
 import {
@@ -16,6 +17,7 @@ type BalanceRow = {
 };
 
 export default async function CashboxPage() {
+  await requireAdminPage();
   const supabase = createAdminClient();
 
   const [

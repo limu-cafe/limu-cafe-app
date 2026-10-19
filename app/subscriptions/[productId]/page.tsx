@@ -64,7 +64,7 @@ export default async function SubscriptionDetailPage({
       user.user_metadata?.name ??
       user.email ??
       'LIMU Member',
-    balance: profile?.balance ?? 0,
+    balance: profile?.balance ?? null,
   };
 
   return (

@@ -1,12 +1,13 @@
 'use client';
 
-import { Fragment, useState } from 'react';
+import { Fragment, useRef, useState } from 'react';
 import { Plus, Archive, Receipt, Wallet } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { format } from 'date-fns';
 import { ja } from 'date-fns/locale';
 import type { Item } from '@/types';
+import { RestockSubmission } from '@/lib/restock';
 import { isItemLowStock, isUnlimitedStockItem } from '@/lib/item-stock';
 
 interface Props { items: Item[]; history: any[]; }
@@ -21,6 +22,8 @@ type PurchaseDraft = {
 
 export default function StockClient({ items, history }: Props) {
   const router = useRouter();
+  const restockRequests = useRef(new RestockSubmission());
+  const restockBusy = useRef(false);
   const searchParams = useSearchParams();
   const [quantities, setQuantities] = useState<Record<string, string>>({});
   const [purchaseDrafts, setPurchaseDrafts] = useState<Record<string, PurchaseDraft>>({});
@@ -55,33 +58,26 @@ export default function StockClient({ items, history }: Props) {
       return;
     }
     const qty = Number(quantities[item.id]);
-    if (!qty || qty <= 0) { toast.error('数量を入力してください'); return; }
+    if (!Number.isInteger(qty) || qty <= 0) { toast.error('数量を入力してください'); return; }
     const draft = getDraft(item.id);
     if (draft.enabled && draft.total_amount === '') {
       toast.error('仕入れ合計額を入力してください');
       return;
     }
+    if (restockBusy.current) return;
+    restockBusy.current = true;
     setLoading(item.id);
+    const input = {
+      item_id: item.id, quantity: qty, note: '入荷',
+      purchase: draft.enabled ? { record: true, payment_source: draft.payment_source, total_amount: Number(draft.total_amount), vendor: draft.vendor, note: draft.note } : null,
+    };
     try {
       const res = await fetch('/api/admin/stock', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          item_id: item.id,
-          quantity: qty,
-          note: '入荷',
-          purchase: draft.enabled
-            ? {
-                record: true,
-                payment_source: draft.payment_source,
-                total_amount: Number(draft.total_amount),
-                vendor: draft.vendor,
-                note: draft.note,
-              }
-            : null,
-        }),
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...input, request_id: restockRequests.current.requestId(input) }),
       });
       if (!res.ok) throw new Error((await res.json()).error);
+      restockRequests.current.complete(input);
       toast.success(
         draft.enabled
           ? `${item.name} の入荷と仕入れ記録を保存しました`
@@ -100,7 +96,7 @@ export default function StockClient({ items, history }: Props) {
       }));
       router.refresh();
     } catch (e: any) { toast.error(e.message); }
-    finally { setLoading(null); }
+    finally { restockBusy.current = false; setLoading(null); }
   };
 
   const handleMiscExpense = async () => {

@@ -12,7 +12,7 @@ import { useUserLocale } from '@/components/user/UserLocaleProvider';
 type NavbarUser = {
   id: string;
   name: string;
-  balance: number;
+  balance: number | null;
 };
 
 export default function Navbar({ initialUser = null }: { initialUser?: NavbarUser | null }) {
@@ -22,6 +22,9 @@ export default function Navbar({ initialUser = null }: { initialUser?: NavbarUse
   const cartCount = useCartStore((s) => s.count());
   const hasHydrated = useCartStore((s) => s.hasHydrated);
   const [user, setUser] = useState<NavbarUser | null>(initialUser);
+  const initialId = initialUser?.id;
+  const initialName = initialUser?.name;
+  const initialBalance = initialUser?.balance;
   const copy =
     locale === 'en'
       ? {
@@ -58,39 +61,21 @@ export default function Navbar({ initialUser = null }: { initialUser?: NavbarUse
         };
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const cachedUser = sessionStorage.getItem('limu-navbar-user');
-      if (cachedUser) {
-        try {
-          setUser(JSON.parse(cachedUser));
-        } catch {
-          sessionStorage.removeItem('limu-navbar-user');
-        }
-      }
-    }
-
+    let cancelled = false;
+    const serverUser = initialId ? { id: initialId, name: initialName ?? 'LIMU Member', balance: initialBalance ?? null } : null;
+    setUser(serverUser);
+    // Server-provided balances already belong to the authenticated user and this request.
+    if (serverUser && serverUser.balance !== null) return;
     const supabase = createClient();
-    supabase.auth.getUser().then(async ({ data }) => {
-      if (data.user) {
-        const { data: profile } = await supabase
-          .from('users')
-          .select('id, name, balance')
-          .eq('id', data.user.id)
-          .single();
-        const fallbackUser = {
-          id: data.user.id,
-          name: data.user.user_metadata?.full_name ?? data.user.user_metadata?.name ?? data.user.email ?? 'LIMU Member',
-          balance: 0,
-        };
-        const navbarUser = profile ?? fallbackUser;
-        setUser(navbarUser);
-        sessionStorage.setItem('limu-navbar-user', JSON.stringify(navbarUser));
-      } else {
-        setUser(null);
-        sessionStorage.removeItem('limu-navbar-user');
-      }
-    });
-  }, [initialUser]);
+    const load = async () => {
+      const authUser = serverUser ?? (await supabase.auth.getUser()).data.user;
+      if (!authUser) { if (!cancelled) setUser(null); return; }
+      const { data: profile } = await supabase.from('users').select('id, name, balance').eq('id', authUser.id).single();
+      if (!cancelled && profile) setUser(profile);
+    };
+    load().catch((error) => console.error('failed to load navigation profile', error));
+    return () => { cancelled = true; };
+  }, [initialId, initialName, initialBalance]);
 
   const handleLogout = async () => {
     const supabase = createClient();
@@ -139,7 +124,7 @@ export default function Navbar({ initialUser = null }: { initialUser?: NavbarUse
             >
               <span className="text-[10px] tracking-[0.12em] text-espresso-400">{copy.balance}</span>
               <span className="font-mono text-xs font-semibold text-espresso">
-                ¥{user.balance.toLocaleString()}
+                {user.balance === null ? '—' : `¥${user.balance.toLocaleString()}`}
               </span>
             </Link>
           )}
@@ -220,7 +205,7 @@ export default function Navbar({ initialUser = null }: { initialUser?: NavbarUse
             >
               <span className="text-[11px] tracking-[0.16em] text-espresso-400">{copy.balance}</span>
               <span className="font-mono text-sm font-semibold text-espresso">
-                ¥{user.balance.toLocaleString()}
+                {user.balance === null ? '—' : `¥${user.balance.toLocaleString()}`}
               </span>
             </Link>
           )}

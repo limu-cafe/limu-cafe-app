@@ -33,16 +33,16 @@ async function RequestPageData({
 }: {
   user: AuthUser;
 }) {
-  await syncUserProfile(user);
+  const profileSync = syncUserProfile(user);
   const adminClient = createAdminClient();
 
-  const { data: requests } = await adminClient
+  const [{ data: requests }] = await Promise.all([adminClient
     .from('item_requests')
     .select(
       'id, user_id, item_name, reason, desired_price, status, admin_note, created_at, updated_at, user:users!item_requests_user_id_fkey(id, name, avatar_url)'
     )
     .order('created_at', { ascending: false })
-    .limit(24);
+    .limit(24), profileSync]);
 
   const requestIds = (requests ?? []).map((request: { id: string }) => request.id);
 
@@ -87,7 +87,7 @@ export default async function RequestPage() {
   const layoutUser = {
     id: user.id,
     name: user.user_metadata?.full_name ?? user.user_metadata?.name ?? user.email ?? 'LIMU Member',
-    balance: 0,
+    balance: null,
   };
 
   return (

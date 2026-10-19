@@ -12,20 +12,14 @@ import {
   isMissingItemEnhancementColumns,
 } from '@/lib/item-select';
 
-async function MyPageContent({ user }: { user: AuthUser }) {
-  await syncUserProfile(user);
+async function MyPageContent({ user, profile }: { user: AuthUser; profile: any }) {
+  const profileSync = syncUserProfile(user);
   const adminClient = createAdminClient();
 
   const [
-    { data: profile },
     initialFavoritesQuery,
     { data: legacyTransferRequests },
   ] = await Promise.all([
-    adminClient
-      .from('users')
-      .select('name, email, avatar_url, balance, deferred_balance, points_balance')
-      .eq('id', user.id)
-      .single(),
     adminClient
       .from('favorite_items')
       .select(FAVORITE_ITEM_SELECT_ENHANCED)
@@ -37,6 +31,7 @@ async function MyPageContent({ user }: { user: AuthUser }) {
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
       .limit(1),
+    profileSync,
   ]);
 
   let favorites = initialFavoritesQuery.data;
@@ -79,7 +74,7 @@ export default async function MyPage() {
   const adminClient = createAdminClient();
   const { data: profile } = await adminClient
     .from('users')
-    .select('name, balance')
+    .select('name, email, avatar_url, balance, deferred_balance, points_balance')
     .eq('id', user.id)
     .single();
 
@@ -91,13 +86,13 @@ export default async function MyPage() {
       user.user_metadata?.name ??
       user.email ??
       'LIMU Member',
-    balance: profile?.balance ?? 0,
+    balance: profile?.balance ?? null,
   };
 
   return (
     <UserLayout initialUser={layoutUser}>
       <Suspense fallback={<DeferredDataPlaceholder blocks={3} titleWidthClassName="w-40" />}>
-        <MyPageContent user={user} />
+        <MyPageContent user={user} profile={profile} />
       </Suspense>
     </UserLayout>
   );

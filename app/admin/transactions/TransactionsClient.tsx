@@ -1,7 +1,10 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
+import OrderRecord from '@/components/admin/OrderRecord';
+import { isPendingCashOrder, isPendingDeferredOrder, type AdminOrder } from '@/lib/admin-objects';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { format } from 'date-fns';
 import { ja } from 'date-fns/locale';
 import toast from 'react-hot-toast';
@@ -12,21 +15,7 @@ type UserSummary = {
   avatar_url?: string | null;
 };
 
-type OrderSummary = {
-  id: string;
-  user_id: string;
-  user?: UserSummary | null;
-  total_amount: number;
-  points_used?: number;
-  payment_method: string;
-  deferred_settlement_method?: string | null;
-  payment_status: string;
-  settled_at?: string | null;
-  settlement_source?: 'individual_deferred_order' | 'deferred_settlement' | null;
-  settlement_id?: string | null;
-  created_at: string;
-  order_items?: Array<{ item_name: string; quantity: number }>;
-};
+type OrderSummary = AdminOrder;
 
 type ChargeSummary = {
   id: string;
@@ -93,18 +82,6 @@ const subscriptionPaymentMethodLabel: Record<string, string> = {
   balance: '残高',
   cash: '現金',
   mixed: '複合',
-};
-
-const deferredMethodLabel: Record<string, string> = {
-  cash: '現金で精算',
-  stripe: 'クレカで精算',
-};
-
-const orderStatusLabel: Record<string, string> = {
-  pending: '未精算',
-  completed: '完了',
-  cancelled: 'キャンセル',
-  refunded: '返金済み',
 };
 
 const chargeStatusLabel: Record<string, string> = {
@@ -176,29 +153,31 @@ export default function TransactionsClient({
   charges,
   settlements,
   subscriptionPayments,
+  selectedUserId = null, page = 1, hasNextPage = false,
+  userChoices = [],
 }: {
+  selectedUserId?: string | null; page?: number; hasNextPage?: boolean;
+  userChoices?: { id: string; name: string }[];
   orders: OrderSummary[];
   charges: ChargeSummary[];
   settlements: SettlementSummary[];
   subscriptionPayments: SubscriptionPaymentSummary[];
 }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const pendingOnly = searchParams.get('state') === 'pending';
   const [historyFilter, setHistoryFilter] = useState<HistoryFilter>('all');
   const [loading, setLoading] = useState<string | null>(null);
+  const actionLock = useRef(false);
+  const people = useMemo(() => userChoices.length ? userChoices : Array.from(new Map([...orders, ...charges, ...settlements, ...subscriptionPayments].filter((row) => row.user).map((row) => [row.user_id, row.user!])).values()).sort((a, b) => a.name.localeCompare(b.name, 'ja')), [userChoices, orders, charges, settlements, subscriptionPayments]);
+  const pageHref = (next: number) => `/admin/transactions?page=${next}${selectedUserId ? `&user=${encodeURIComponent(selectedUserId)}` : ''}${pendingOnly ? '&state=pending' : ''}`;
 
   const pendingCashOrders = useMemo(
-    () => orders.filter((order) => order.payment_method === 'cash' && order.payment_status === 'pending'),
+    () => orders.filter(isPendingCashOrder),
     [orders]
   );
   const pendingDeferredOrders = useMemo(
-    () =>
-      orders.filter(
-        (order) =>
-          order.payment_method === 'deferred' &&
-          order.payment_status === 'completed' &&
-          (order.deferred_settlement_method ?? 'cash') === 'cash' &&
-          !order.settled_at
-      ),
+    () => orders.filter(isPendingDeferredOrder),
     [orders]
   );
   const pendingChargeRequests = useMemo(
@@ -221,13 +200,7 @@ export default function TransactionsClient({
     const normalizedOrders = orders
       .filter(
         (order) =>
-          !(order.payment_method === 'cash' && order.payment_status === 'pending') &&
-          !(
-            order.payment_method === 'deferred' &&
-            order.payment_status === 'completed' &&
-            (order.deferred_settlement_method ?? 'cash') === 'cash' &&
-            !order.settled_at
-          )
+          !isPendingCashOrder(order) && !isPendingDeferredOrder(order)
       )
       .map((order) => ({ kind: 'order' as const, created_at: order.created_at, order }));
 
@@ -245,7 +218,7 @@ export default function TransactionsClient({
       settlement,
     }));
 
-    const normalizedSubscriptions = subscriptionPayments.map((payment) => ({
+    const normalizedSubscriptions = subscriptionPayments.filter((payment) => payment.payment_status !== 'pending_cash_settlement').map((payment) => ({
       kind: 'subscription' as const,
       created_at: payment.created_at,
       payment,
@@ -273,10 +246,12 @@ export default function TransactionsClient({
     success: string;
     confirmMessage?: string;
   }) => {
+    if (actionLock.current) return;
     if (confirmMessage && !confirm(confirmMessage)) {
       return;
     }
 
+    actionLock.current = true;
     setLoading(key);
     try {
       const response = await request();
@@ -289,6 +264,7 @@ export default function TransactionsClient({
     } catch (error: any) {
       toast.error(error.message);
     } finally {
+      actionLock.current = false;
       setLoading(null);
     }
   };
@@ -308,9 +284,12 @@ export default function TransactionsClient({
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="font-display text-2xl font-bold text-white">取引履歴</h1>
+    <div className="mx-auto max-w-3xl space-y-6">
+      <div className="space-y-3">
+        <p className="text-xs text-gray-500">会計 / 取引</p>
+        <h1 className="font-display text-2xl font-bold text-white">{selectedUserId ? `${people.find(person => person.id === selectedUserId)?.name ?? '選択した利用者'}の取引` : '取引'}</h1>
+        {selectedUserId && <Link prefetch={false} href={`/admin/users?user=${selectedUserId}&view=orders`} className="inline-block text-sm text-sky-300 underline underline-offset-4">この利用者の詳細へ戻る →</Link>}
+        {pendingOnly && <div className="flex flex-wrap items-center gap-4 text-sm"><span className="text-amber-300">未精算・承認待ちのみ表示中</span><Link prefetch={false} href={`/admin/transactions${selectedUserId ? `?user=${selectedUserId}` : ''}`} className="text-sky-300 underline underline-offset-4">精算済みの履歴も見る</Link></div>}
         <div className="flex flex-wrap gap-2 text-xs">
           <span className="rounded-full bg-gray-900 px-3 py-2 text-gray-300">後払い注文 {pendingDeferredOrders.length}</span>
           <span className="rounded-full bg-gray-900 px-3 py-2 text-gray-300">現金注文 {pendingCashOrders.length}</span>
@@ -319,6 +298,15 @@ export default function TransactionsClient({
           <span className="rounded-full bg-gray-900 px-3 py-2 text-gray-300">承認待ち {pendingChargeRequests.length}</span>
         </div>
       </div>
+      <form action="/admin/transactions" className="flex flex-wrap items-center gap-3 rounded-2xl border border-gray-800 bg-gray-900 p-4">
+        {pendingOnly && <input type="hidden" name="state" value="pending"/>}
+        <label htmlFor="transaction-user" className="text-sm text-gray-300">ユーザー</label>
+        <select key={selectedUserId ?? 'all'} id="transaction-user" name="user" defaultValue={selectedUserId ?? ''} className="max-w-full rounded-xl border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white"><option value="">全員</option>{people.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}{selectedUserId && !people.some((person) => person.id === selectedUserId) && <option value={selectedUserId}>選択中のユーザー</option>}</select>
+        <button className="rounded-xl bg-white px-4 py-2 text-sm text-gray-950">絞り込む</button>
+        {selectedUserId && <Link prefetch={false} href="/admin/transactions" className="text-sm text-gray-300 underline">全員に戻す</Link>}
+        <p className="w-full text-xs text-gray-400">{selectedUserId ? '選択したユーザーの取引を表示中。' : '全員の取引を表示中。'}未処理の取引は期間に関係なく表示します。</p>
+      </form>
+
 
       <section className="space-y-3">
         <div className="flex items-center justify-between">
@@ -334,138 +322,8 @@ export default function TransactionsClient({
           </div>
         ) : (
           <div className="space-y-3">
-            {pendingDeferredOrders.map((order) => (
-              <div key={order.id} className="rounded-2xl border border-gray-800 bg-gray-900 px-4 py-4">
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                  <div className="min-w-0 space-y-2">
-                    <div className="flex items-center gap-3">
-                      <Avatar user={order.user} />
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <p className="font-medium text-white">{order.user?.name ?? '不明なユーザー'}</p>
-                          <span className="rounded-full bg-rose-500/10 px-2 py-0.5 text-[11px] font-medium text-rose-300">
-                            後払い注文
-                          </span>
-                        </div>
-                        <p className="text-xs text-gray-500">{formatDateTime(order.created_at)}</p>
-                      </div>
-                    </div>
-                    <p className="text-sm text-gray-300">
-                      {(order.order_items ?? []).map((item) => `${item.item_name} × ${item.quantity}`).join(' / ') ||
-                        '明細なし'}
-                    </p>
-                  </div>
-                  <div className="space-y-3 lg:text-right">
-                    <p className="font-display text-2xl font-bold text-white">{formatMoney(order.total_amount)}</p>
-                    <div className="flex flex-wrap gap-2 lg:justify-end">
-                      <ActionButton
-                        tone="success"
-                        disabled={loading === `deferred-order-settle:${order.id}`}
-                        onClick={() =>
-                          runAction({
-                            key: `deferred-order-settle:${order.id}`,
-                            request: () =>
-                              fetch(`/api/admin/orders/${order.id}/deferred-settlement`, {
-                                method: 'POST',
-                              }),
-                            success: '精算済みにしました',
-                            confirmMessage: 'この後払い注文を精算済みにしますか？',
-                          })
-                        }
-                      >
-                        精算完了
-                      </ActionButton>
-                      <ActionButton
-                        tone="danger"
-                        disabled={loading === `order-refund:${order.id}`}
-                        onClick={() =>
-                          runAction({
-                            key: `order-refund:${order.id}`,
-                            request: () => fetch(`/api/admin/orders/${order.id}/refund`, { method: 'POST' }),
-                            success: '返金しました',
-                            confirmMessage: 'この後払い注文を返金しますか？',
-                          })
-                        }
-                      >
-                        返金
-                      </ActionButton>
-                      <ActionButton
-                        tone="danger"
-                        disabled={loading === `order-cancel:${order.id}`}
-                        onClick={() =>
-                          runAction({
-                            key: `order-cancel:${order.id}`,
-                            request: () => fetch(`/api/admin/orders/${order.id}/cancel`, { method: 'POST' }),
-                            success: 'キャンセルしました',
-                            confirmMessage: 'この後払い注文をキャンセルしますか？',
-                          })
-                        }
-                      >
-                        キャンセル
-                      </ActionButton>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
-
-            {pendingCashOrders.map((order) => (
-              <div key={order.id} className="rounded-2xl border border-gray-800 bg-gray-900 px-4 py-4">
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                  <div className="min-w-0 space-y-2">
-                    <div className="flex items-center gap-3">
-                      <Avatar user={order.user} />
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <p className="font-medium text-white">{order.user?.name ?? '不明なユーザー'}</p>
-                          <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-300">
-                            現金注文
-                          </span>
-                        </div>
-                        <p className="text-xs text-gray-500">{formatDateTime(order.created_at)}</p>
-                      </div>
-                    </div>
-                    <p className="text-sm text-gray-300">
-                      {(order.order_items ?? []).map((item) => `${item.item_name} × ${item.quantity}`).join(' / ') ||
-                        '明細なし'}
-                    </p>
-                  </div>
-                  <div className="space-y-3 lg:text-right">
-                    <p className="font-display text-2xl font-bold text-white">{formatMoney(order.total_amount)}</p>
-                    <div className="flex flex-wrap gap-2 lg:justify-end">
-                      <ActionButton
-                        tone="success"
-                        disabled={loading === `order-settle:${order.id}`}
-                        onClick={() =>
-                          runAction({
-                            key: `order-settle:${order.id}`,
-                            request: () => fetch(`/api/admin/orders/${order.id}/cash-settlement`, { method: 'POST' }),
-                            success: '精算済みにしました',
-                            confirmMessage: '現金注文を精算済みにしますか？',
-                          })
-                        }
-                      >
-                        精算完了
-                      </ActionButton>
-                      <ActionButton
-                        tone="danger"
-                        disabled={loading === `order-refund:${order.id}`}
-                        onClick={() =>
-                          runAction({
-                            key: `order-refund:${order.id}`,
-                            request: () => fetch(`/api/admin/orders/${order.id}/refund`, { method: 'POST' }),
-                            success: '返金しました',
-                            confirmMessage: 'この現金注文を返金しますか？',
-                          })
-                        }
-                      >
-                        返金
-                      </ActionButton>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
+            {pendingDeferredOrders.map((order) => <OrderRecord key={order.id} order={order} returnTo={pageHref(page)}/>)}
+            {pendingCashOrders.map((order) => <OrderRecord key={order.id} order={order} returnTo={pageHref(page)}/>)}
 
             {pendingCashCharges.map((charge) => (
               <div key={charge.id} className="rounded-2xl border border-gray-800 bg-gray-900 px-4 py-4">
@@ -475,7 +333,7 @@ export default function TransactionsClient({
                       <Avatar user={charge.user} />
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
-                          <p className="font-medium text-white">{charge.user?.name ?? '不明なユーザー'}</p>
+                          <Link prefetch={false} href={`/admin/users?user=${charge.user_id}`} className="font-medium text-sky-300 underline underline-offset-4">{charge.user?.name ?? '不明なユーザー'}</Link>
                           <span className="rounded-full bg-sky-500/10 px-2 py-0.5 text-[11px] font-medium text-sky-300">
                             現金チャージ
                           </span>
@@ -490,7 +348,7 @@ export default function TransactionsClient({
                     <div className="flex flex-wrap gap-2 lg:justify-end">
                       <ActionButton
                         tone="success"
-                        disabled={loading === `charge-settle:${charge.id}`}
+                        disabled={Boolean(loading)}
                         onClick={() =>
                           runAction({
                             key: `charge-settle:${charge.id}`,
@@ -504,7 +362,7 @@ export default function TransactionsClient({
                       </ActionButton>
                       <ActionButton
                         tone="danger"
-                        disabled={loading === `charge-refund:${charge.id}`}
+                        disabled={Boolean(loading)}
                         onClick={() =>
                           runAction({
                             key: `charge-refund:${charge.id}`,
@@ -530,7 +388,7 @@ export default function TransactionsClient({
                       <Avatar user={payment.user} />
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
-                          <p className="font-medium text-white">{payment.user?.name ?? '不明なユーザー'}</p>
+                          <Link prefetch={false} href={`/admin/users?user=${payment.user_id}`} className="font-medium text-sky-300 underline underline-offset-4">{payment.user?.name ?? '不明なユーザー'}</Link>
                           <span className="rounded-full bg-purple-500/10 px-2 py-0.5 text-[11px] font-medium text-purple-300">
                             サブスク現金
                           </span>
@@ -562,7 +420,7 @@ export default function TransactionsClient({
                     <div className="flex flex-wrap gap-2 lg:justify-end">
                       <ActionButton
                         tone="success"
-                        disabled={loading === `subscription-settle:${payment.id}`}
+                        disabled={Boolean(loading)}
                         onClick={() =>
                           runAction({
                             key: `subscription-settle:${payment.id}`,
@@ -579,7 +437,7 @@ export default function TransactionsClient({
                       </ActionButton>
                       <ActionButton
                         tone="danger"
-                        disabled={loading === `subscription-cancel:${payment.id}`}
+                        disabled={Boolean(loading)}
                         onClick={() => requestSubscriptionPaymentCancel(payment)}
                       >
                         支払取消
@@ -608,7 +466,7 @@ export default function TransactionsClient({
                       <Avatar user={charge.user} />
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
-                          <p className="font-medium text-white">{charge.user?.name ?? '不明なユーザー'}</p>
+                          <Link prefetch={false} href={`/admin/users?user=${charge.user_id}`} className="font-medium text-sky-300 underline underline-offset-4">{charge.user?.name ?? '不明なユーザー'}</Link>
                           <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-300">
                             承認待ちチャージ
                           </span>
@@ -623,7 +481,7 @@ export default function TransactionsClient({
                     <div className="flex flex-wrap gap-2 lg:justify-end">
                       <ActionButton
                         tone="danger"
-                        disabled={loading === `charge-reject:${charge.id}`}
+                        disabled={Boolean(loading)}
                         onClick={() =>
                           runAction({
                             key: `charge-reject:${charge.id}`,
@@ -636,7 +494,7 @@ export default function TransactionsClient({
                       </ActionButton>
                       <ActionButton
                         tone="success"
-                        disabled={loading === `charge-approve:${charge.id}`}
+                        disabled={Boolean(loading)}
                         onClick={() =>
                           runAction({
                             key: `charge-approve:${charge.id}`,
@@ -656,7 +514,7 @@ export default function TransactionsClient({
         </section>
       )}
 
-      <section className="space-y-3">
+      {!pendingOnly && <><section className="space-y-3">
         <div className="flex flex-wrap gap-2">
           {[
             { id: 'all' as const, label: 'すべて' },
@@ -688,125 +546,7 @@ export default function TransactionsClient({
           <div className="space-y-3">
             {historyEntries.map((entry) => {
               if (entry.kind === 'order') {
-                const order = entry.order;
-                const paymentLabel =
-                  order.payment_method === 'deferred' && order.deferred_settlement_method
-                    ? `${paymentMethodLabel[order.payment_method]} / ${deferredMethodLabel[order.deferred_settlement_method] ?? order.deferred_settlement_method}`
-                    : paymentMethodLabel[order.payment_method] ?? order.payment_method;
-                const orderLabel =
-                  order.payment_method === 'deferred' &&
-                  (order.deferred_settlement_method ?? 'cash') === 'cash' &&
-                  order.settled_at
-                    ? order.settlement_source === 'individual_deferred_order'
-                      ? '個別精算済み'
-                      : '精算済み'
-                    : orderStatusLabel[order.payment_status] ?? order.payment_status;
-
-                return (
-                  <div key={`order:${order.id}`} className="rounded-2xl border border-gray-800 bg-gray-900 px-4 py-4">
-                    <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                      <div className="min-w-0 space-y-2">
-                        <div className="flex items-center gap-3">
-                          <Avatar user={order.user} />
-                          <div className="min-w-0">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <p className="font-medium text-white">{order.user?.name ?? '不明なユーザー'}</p>
-                              <span className="rounded-full bg-gray-800 px-2 py-0.5 text-[11px] text-gray-300">注文</span>
-                              <span className="rounded-full bg-white/5 px-2 py-0.5 text-[11px] text-gray-400">
-                                {orderLabel}
-                              </span>
-                            </div>
-                            <p className="text-xs text-gray-500">{formatDateTime(order.created_at)}</p>
-                          </div>
-                        </div>
-                        <p className="text-sm text-gray-300">
-                          {(order.order_items ?? []).map((item) => `${item.item_name} × ${item.quantity}`).join(' / ') ||
-                            '明細なし'}
-                        </p>
-                        <p className="text-xs text-gray-500">{paymentLabel}</p>
-                        {(order.points_used ?? 0) > 0 && (
-                          <p className="text-xs text-sky-300">利用ポイント {order.points_used}pt</p>
-                        )}
-                      </div>
-                      <div className="space-y-3 lg:text-right">
-                        <p className="font-display text-2xl font-bold text-white">{formatMoney(order.total_amount)}</p>
-                        <div className="flex flex-wrap gap-2 lg:justify-end">
-                          {order.payment_method === 'cash' && order.payment_status === 'completed' && (
-                            <ActionButton
-                              disabled={loading === `order-unsettle:${order.id}`}
-                              onClick={() =>
-                                runAction({
-                                  key: `order-unsettle:${order.id}`,
-                                  request: () =>
-                                    fetch(`/api/admin/orders/${order.id}/cash-settlement`, {
-                                      method: 'DELETE',
-                                    }),
-                                  success: '未精算に戻しました',
-                                  confirmMessage: 'この現金注文を未精算に戻しますか？',
-                                })
-                              }
-                            >
-                              未精算に戻す
-                            </ActionButton>
-                          )}
-                          {order.payment_method === 'deferred' &&
-                            (order.deferred_settlement_method ?? 'cash') === 'cash' &&
-                            order.settlement_source === 'individual_deferred_order' && (
-                              <ActionButton
-                                disabled={loading === `deferred-order-unsettle:${order.id}`}
-                                onClick={() =>
-                                  runAction({
-                                    key: `deferred-order-unsettle:${order.id}`,
-                                    request: () =>
-                                      fetch(`/api/admin/orders/${order.id}/deferred-settlement`, {
-                                        method: 'DELETE',
-                                      }),
-                                    success: '未精算に戻しました',
-                                    confirmMessage: 'この後払い注文を未精算に戻しますか？',
-                                  })
-                                }
-                              >
-                                未精算に戻す
-                              </ActionButton>
-                            )}
-                          {['pending', 'completed'].includes(order.payment_status) && (
-                            <ActionButton
-                              tone="danger"
-                              disabled={loading === `order-refund:${order.id}`}
-                              onClick={() =>
-                                runAction({
-                                  key: `order-refund:${order.id}`,
-                                  request: () => fetch(`/api/admin/orders/${order.id}/refund`, { method: 'POST' }),
-                                  success: '返金しました',
-                                  confirmMessage: 'この注文を返金しますか？',
-                                })
-                              }
-                            >
-                              返金
-                            </ActionButton>
-                          )}
-                          {['balance', 'deferred'].includes(order.payment_method) &&
-                            order.payment_status === 'completed' && (
-                              <ActionButton
-                                tone="danger"
-                                disabled={loading === `order-cancel:${order.id}`}
-                                onClick={() =>
-                                  runAction({
-                                    key: `order-cancel:${order.id}`,
-                                    request: () => fetch(`/api/admin/orders/${order.id}/cancel`, { method: 'POST' }),
-                                    success: 'キャンセルしました',
-                                    confirmMessage: 'この注文をキャンセルしますか？',
-                                  })
-                                }
-                              >
-                                キャンセル
-                              </ActionButton>
-                            )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                );
+                return <OrderRecord key={`order:${entry.order.id}`} order={entry.order} returnTo={pageHref(page)}/>;
               }
 
               if (entry.kind === 'charge') {
@@ -836,7 +576,7 @@ export default function TransactionsClient({
                           <Avatar user={charge.user} />
                           <div className="min-w-0">
                             <div className="flex flex-wrap items-center gap-2">
-                              <p className="font-medium text-white">{charge.user?.name ?? '不明なユーザー'}</p>
+                              <Link prefetch={false} href={`/admin/users?user=${charge.user_id}`} className="font-medium text-sky-300 underline underline-offset-4">{charge.user?.name ?? '不明なユーザー'}</Link>
                               <span className="rounded-full bg-gray-800 px-2 py-0.5 text-[11px] text-gray-300">
                                 チャージ
                               </span>
@@ -858,7 +598,7 @@ export default function TransactionsClient({
                             charge.is_cash_settled &&
                             charge.settlement_source === 'individual_cash_charge' && (
                             <ActionButton
-                              disabled={loading === `charge-unsettle:${charge.id}`}
+                              disabled={Boolean(loading)}
                               onClick={() =>
                                 runAction({
                                   key: `charge-unsettle:${charge.id}`,
@@ -877,7 +617,7 @@ export default function TransactionsClient({
                           {charge.status === 'approved' && (
                             <ActionButton
                               tone="danger"
-                              disabled={loading === `charge-refund:${charge.id}`}
+                              disabled={Boolean(loading)}
                               onClick={() =>
                                 runAction({
                                   key: `charge-refund:${charge.id}`,
@@ -910,7 +650,7 @@ export default function TransactionsClient({
                           <Avatar user={settlement.user} />
                           <div className="min-w-0">
                             <div className="flex flex-wrap items-center gap-2">
-                              <p className="font-medium text-white">{settlement.user?.name ?? '不明なユーザー'}</p>
+                              <Link prefetch={false} href={`/admin/users?user=${settlement.user_id}`} className="font-medium text-sky-300 underline underline-offset-4">{settlement.user?.name ?? '不明なユーザー'}</Link>
                               <span className="rounded-full bg-gray-800 px-2 py-0.5 text-[11px] text-gray-300">
                                 精算
                               </span>
@@ -934,7 +674,7 @@ export default function TransactionsClient({
                         {settlement.status === 'completed' && (
                           <div className="flex flex-wrap gap-2 lg:justify-end">
                             <ActionButton
-                              disabled={loading === `settlement-revert:${settlement.id}`}
+                              disabled={Boolean(loading)}
                               onClick={() =>
                                 runAction({
                                   key: `settlement-revert:${settlement.id}`,
@@ -968,7 +708,7 @@ export default function TransactionsClient({
                         <Avatar user={payment.user} />
                         <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
-                            <p className="font-medium text-white">{payment.user?.name ?? '不明なユーザー'}</p>
+                            <Link prefetch={false} href={`/admin/users?user=${payment.user_id}`} className="font-medium text-sky-300 underline underline-offset-4">{payment.user?.name ?? '不明なユーザー'}</Link>
                             <span className="rounded-full bg-gray-800 px-2 py-0.5 text-[11px] text-gray-300">
                               サブスク
                             </span>
@@ -1009,7 +749,7 @@ export default function TransactionsClient({
                       <div className="flex flex-wrap gap-2 lg:justify-end">
                         {payment.cash_due_amount > 0 && payment.payment_status === 'completed' && (
                           <ActionButton
-                            disabled={loading === `subscription-unsettle:${payment.id}`}
+                            disabled={Boolean(loading)}
                             onClick={() =>
                               runAction({
                                 key: `subscription-unsettle:${payment.id}`,
@@ -1028,7 +768,7 @@ export default function TransactionsClient({
                         {payment.cash_due_amount > 0 && payment.payment_status === 'pending_cash_settlement' && (
                           <ActionButton
                             tone="success"
-                            disabled={loading === `subscription-settle:${payment.id}`}
+                            disabled={Boolean(loading)}
                             onClick={() =>
                               runAction({
                                 key: `subscription-settle:${payment.id}`,
@@ -1047,7 +787,7 @@ export default function TransactionsClient({
                         {canCancel && (
                           <ActionButton
                             tone="danger"
-                            disabled={loading === `subscription-cancel:${payment.id}`}
+                            disabled={Boolean(loading)}
                             onClick={() => requestSubscriptionPaymentCancel(payment)}
                           >
                             支払取消
@@ -1062,6 +802,11 @@ export default function TransactionsClient({
           </div>
         )}
       </section>
+      <nav aria-label="履歴のページ" className="flex flex-wrap items-center gap-4 text-sm text-gray-300">
+        {page > 1 && <Link prefetch={false} href={pageHref(page - 1)} className="rounded-lg border border-gray-700 px-3 py-2">新しい履歴へ</Link>}
+        <span>履歴 {page}ページ目（種類ごとに80件）</span>
+        {hasNextPage && <Link prefetch={false} href={pageHref(page + 1)} className="rounded-lg border border-gray-700 px-3 py-2">古い履歴へ</Link>}
+      </nav></>}
     </div>
   );
 }

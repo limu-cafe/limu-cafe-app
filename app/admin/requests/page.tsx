@@ -1,9 +1,11 @@
+import { requireAdminPage } from '@/lib/admin-page-session';
 import { createAdminClient } from '@/lib/supabase/server';
 import RequestsClient from './RequestsClient';
 
 export const dynamic = 'force-dynamic';
 
 export default async function AdminRequestsPage() {
+  await requireAdminPage();
   const supabase = createAdminClient();
   const { data: requests } = await supabase
     .from('item_requests')
