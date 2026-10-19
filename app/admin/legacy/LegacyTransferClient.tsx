@@ -1,6 +1,8 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import ObjectWorkspace, { useObjectSelection } from '@/components/admin/ObjectWorkspace';
+import ObjectDetailNavigation, { useObjectDetailView } from '@/components/admin/ObjectDetailNavigation';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { normalizeSearchText } from '@/lib/search';
@@ -37,6 +39,9 @@ export default function LegacyTransferClient({
   legacyUsers: LegacyUserRow[];
 }) {
   const router = useRouter();
+  const [view,setView]=useObjectDetailView(['requests','archive']);
+  const [requestId,selectRequest]=useObjectSelection('request');
+  const selected=requests.find(request=>request.id===requestId);
   const [selectedLegacyUser, setSelectedLegacyUser] = useState<Record<string, string>>({});
   const [rejectReason, setRejectReason] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState<string | null>(null);
@@ -134,41 +139,8 @@ export default function LegacyTransferClient({
     }
   };
 
-  return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="font-display text-2xl font-bold text-white">旧データ移行</h1>
-        <p className="mt-1 text-sm text-gray-400">
-          ユーザーからの引き継ぎ申請に対して、旧システムデータを照合して移行します
-        </p>
-      </div>
-
-      <div className="grid gap-4 lg:grid-cols-3">
-        <div className="rounded-2xl border border-gray-800 bg-gray-900 p-5">
-          <p className="text-xs text-gray-400">申請中</p>
-          <p className="mt-1 font-display text-2xl font-bold text-amber-400">{pendingRequests.length}件</p>
-        </div>
-        <div className="rounded-2xl border border-gray-800 bg-gray-900 p-5">
-          <p className="text-xs text-gray-400">未引き継ぎの旧ユーザー</p>
-          <p className="mt-1 font-display text-2xl font-bold text-sky-400">{unmatchedLegacyUsers.length}件</p>
-        </div>
-        <div className="rounded-2xl border border-gray-800 bg-gray-900 p-5">
-          <p className="text-xs text-gray-400">引き継ぎ完了</p>
-          <p className="mt-1 font-display text-2xl font-bold text-emerald-400">
-            {handledRequests.filter((request) => request.status === 'completed').length}件
-          </p>
-        </div>
-      </div>
-
-      <div className="space-y-4">
-        <h2 className="text-sm font-medium uppercase tracking-wider text-gray-400">申請一覧</h2>
-        {pendingRequests.length === 0 ? (
-          <div className="rounded-2xl border border-gray-800 bg-gray-900 p-10 text-center text-sm text-gray-500">
-            申請中のデータ引き継ぎはありません
-          </div>
-        ) : (
-          pendingRequests.map((request) => (
-            <div key={request.id} className="space-y-4 rounded-2xl border border-gray-800 bg-gray-900 p-5">
+  return <div className="mx-auto max-w-5xl space-y-5"><header><h1 className="text-2xl font-bold text-white">旧データ移行</h1><p className="mt-1 text-sm text-gray-400">申請 {pendingRequests.length}件 · 未引き継ぎ {unmatchedLegacyUsers.length}人 · 完了 {handledRequests.filter(request=>request.status==='completed').length}件</p></header><ObjectDetailNavigation value={view} onChange={setView} options={[{id:'requests',label:'移行申請'},{id:'archive',label:'旧利用者データ'}]}/>
+    {view==='requests'&&<ObjectWorkspace selected={Boolean(selected)} label="移行申請の詳細" onClose={()=>selectRequest(null)} collection={<div className="divide-y divide-gray-800 rounded-xl border border-gray-800 bg-gray-900">{requests.map(request=><button key={request.id} type="button" aria-pressed={request.id===requestId} onClick={()=>selectRequest(request.id)} className="block w-full px-4 py-4 text-left"><span className="text-sm text-white">{request.user?.name??request.legacy_name??'移行申請'}</span><small className="mt-1 block text-gray-400">{request.legacy_name} · {request.status==='pending'?'申請中':request.status==='completed'?'移行完了':'却下'}</small></button>)}{!requests.length&&<p className="p-6 text-sm text-gray-400">移行申請はありません</p>}</div>} detail={selected&&(()=>{const request=selected;return request.status==='pending'?            <div key={request.id} className="space-y-4 rounded-2xl border border-gray-800 bg-gray-900 p-5">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <p className="font-medium text-white">{request.user?.name}</p>
@@ -189,7 +161,7 @@ export default function LegacyTransferClient({
                 <div className="space-y-2">
                   <label className="text-xs text-gray-400">紐づける旧システムユーザー</label>
                   <select
-                    value={selectedLegacyUser[request.id] ?? ''}
+                    aria-label="紐づける旧システムユーザー" value={selectedLegacyUser[request.id] ?? ''}
                     onChange={(event) =>
                       setSelectedLegacyUser((current) => ({
                         ...current,
@@ -252,7 +224,7 @@ export default function LegacyTransferClient({
                 <div className="space-y-2">
                   <label className="text-xs text-gray-400">却下理由（任意）</label>
                   <textarea
-                    value={rejectReason[request.id] ?? ''}
+                    aria-label="却下理由（任意）" value={rejectReason[request.id] ?? ''}
                     onChange={(event) =>
                       setRejectReason((current) => ({
                         ...current,
@@ -281,14 +253,10 @@ export default function LegacyTransferClient({
                   {loading === request.id + 'approve' ? '引き継ぎ中...' : '引き継いで完了'}
                 </button>
               </div>
-            </div>
-          ))
-        )}
-      </div>
-
-      <div className="space-y-4">
+            </div>:<section><h2 className="font-bold text-white">{request.user?.name??'移行申請'}</h2><p className="mt-3 text-sm text-gray-400">{request.status==='completed'?'引き継ぎ完了':'却下'}</p><p className="mt-3 text-sm text-gray-300">旧システム名：{request.matched_legacy_user?.name??request.legacy_name}</p><p className="mt-3 text-sm text-gray-300">{request.rejection_reason??request.note}</p></section>;})()}/>}
+    {view==='archive'&&<div className="space-y-4">
         <h2 className="text-sm font-medium uppercase tracking-wider text-gray-400">旧データ一覧</h2>
-        <div className="overflow-hidden rounded-2xl border border-gray-800 bg-gray-900">
+        <div className="overflow-x-auto rounded-2xl border border-gray-800 bg-gray-900">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-800">
@@ -330,7 +298,6 @@ export default function LegacyTransferClient({
             </tbody>
           </table>
         </div>
-      </div>
-    </div>
-  );
+      </div>}
+  </div>;
 }

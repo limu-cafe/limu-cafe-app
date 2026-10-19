@@ -13,7 +13,7 @@ export const dynamic = 'force-dynamic';
 export default async function AdminUsersPage() {
   await requireAdminPage();
   const supabase = createAdminClient();
-  const [{ data: users }, { data: pendingCashOrders }, { data: pendingSubscriptionPayments }] =
+  const [usersResult, ordersResult, subscriptionsResult] =
     await Promise.all([
       supabase.from('users').select('*').order('created_at', { ascending: false }),
       supabase
@@ -30,6 +30,12 @@ export default async function AdminUsersPage() {
         .gt('cash_due_amount', 0),
     ]);
 
+  for (const result of [usersResult, ordersResult, subscriptionsResult]) {
+    if (result.error) throw result.error;
+  }
+  const users = usersResult.data;
+  const pendingCashOrders = ordersResult.data;
+  const pendingSubscriptionPayments = subscriptionsResult.data;
   const cashCollectionEntries = buildCashCollectionEntries({
     deferredUsers: ((users ?? []).filter((user: { deferred_balance?: number | null }) => (user.deferred_balance ?? 0) > 0) ??
       []) as DeferredCashCollectionRow[],

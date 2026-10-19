@@ -1,6 +1,9 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
+import ObjectDetailNavigation, { useObjectDetailView } from '@/components/admin/ObjectDetailNavigation';
+import ObjectWorkspace, { useObjectSelection } from '@/components/admin/ObjectWorkspace';
 import { useRouter } from 'next/navigation';
 import { format } from 'date-fns';
 import { ja } from 'date-fns/locale';
@@ -12,6 +15,8 @@ const DENOMINATIONS = [10000, 5000, 1000, 500, 100, 50, 10, 5, 1] as const;
 
 type Entry = {
   id: string;
+  order_id?:string|null;
+  purchase_run_id?:string|null;
   entry_type: keyof typeof cashboxEntryLabels;
   direction: 'in' | 'out';
   amount: number;
@@ -62,6 +67,15 @@ export default function CashboxClient({
   counts: Count[];
 }) {
   const router = useRouter();
+  const [view,setView]=useObjectDetailView(['overview','ledger','counts']);
+  const [entryId,selectEntry]=useObjectSelection('entry');
+  const [countId,selectCount]=useObjectSelection('count');
+  const [addingEntry,setAddingEntry]=useState(false),[addingCount,setAddingCount]=useState(false);
+  const [entryKind,setEntryKind]=useState('manual');
+  const selectedEntry=entries.find(entry=>entry.id===entryId),selectedCount=counts.find(count=>count.id===countId);
+  const [miscExpenseAmount,setMiscExpenseAmount]=useState<number|''>('');
+  const [miscExpenseName,setMiscExpenseName]=useState(''),[miscExpenseNote,setMiscExpenseNote]=useState('');
+
   const [adjustmentAmount, setAdjustmentAmount] = useState('');
   const [adjustmentNote, setAdjustmentNote] = useState('');
   const [adjustmentDirection, setAdjustmentDirection] = useState<'in' | 'out'>('in');
@@ -70,7 +84,7 @@ export default function CashboxClient({
   const [denominationCounts, setDenominationCounts] = useState<Record<string, string>>(
     Object.fromEntries(DENOMINATIONS.map((denomination) => [String(denomination), '']))
   );
-  const [loading, setLoading] = useState<'adjustment' | 'count' | `reimburse:${string}` | null>(null);
+  const [loading, setLoading] = useState<'adjustment' | 'count' | 'misc' | null>(null);
 
   const latestDifference = latestCount?.difference_amount ?? 0;
   const denominationTotal = DENOMINATIONS.reduce((sum, denomination) => {
@@ -161,18 +175,37 @@ export default function CashboxClient({
     }
   };
 
-  const handleReimburse = async (purchaseRunId: string) => {
-    setLoading(`reimburse:${purchaseRunId}`);
+  const handleMiscExpense = async () => {
+    if (!miscExpenseAmount || miscExpenseAmount <= 0) {
+      toast.error('金額を入力してください');
+      return;
+    }
+
+    if (!miscExpenseName.trim()) {
+      toast.error('雑費名を入力してください');
+      return;
+    }
+
+    setLoading('misc');
     try {
-      const res = await fetch(`/api/admin/purchases/${purchaseRunId}/reimburse`, {
+      const res = await fetch('/api/admin/cashbox/misc-expenses', {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount: miscExpenseAmount,
+          item_name: miscExpenseName,
+          note: miscExpenseNote,
+        }),
       });
 
       if (!res.ok) {
         throw new Error((await res.json()).error);
       }
 
-      toast.success('立替精算を記録しました');
+      toast.success('雑費を記録しました');
+      setMiscExpenseAmount('');
+      setMiscExpenseName('');
+      setMiscExpenseNote('');
       router.refresh();
     } catch (e: any) {
       toast.error(e.message);
@@ -181,126 +214,12 @@ export default function CashboxClient({
     }
   };
 
-  return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="font-display font-bold text-2xl text-white">金庫管理</h1>
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3 xl:grid-cols-6">
-        <div className="bg-gray-900 rounded-2xl border border-gray-800 p-5">
-          <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center mb-3">
-            <Calculator size={20} className="text-emerald-400" />
-          </div>
-          <p className="text-gray-400 text-xs mb-1">現在金庫にある見込み</p>
-          <p className="font-display font-bold text-2xl text-emerald-400">
-            ¥{expectedAmount.toLocaleString()}
-          </p>
-        </div>
-
-        <div className="bg-gray-900 rounded-2xl border border-gray-800 p-5">
-          <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center mb-3">
-            <Wallet size={20} className="text-blue-400" />
-          </div>
-          <p className="text-gray-400 text-xs mb-1">未回収の現金注文</p>
-          <p className="font-display font-bold text-2xl text-blue-400">
-            ¥{pendingCashOrderAmount.toLocaleString()}
-          </p>
-          <p className="mt-1 text-xs text-gray-500">{pendingCashOrdersCount}件</p>
-        </div>
-
-        <div className="bg-gray-900 rounded-2xl border border-gray-800 p-5">
-          <div className="w-10 h-10 rounded-xl bg-sky-500/10 flex items-center justify-center mb-3">
-            <Wallet size={20} className="text-sky-400" />
-          </div>
-          <p className="text-gray-400 text-xs mb-1">未回収の要回収</p>
-          <p className="font-display font-bold text-2xl text-sky-400">
-            ¥{totalCashCollectionAmount.toLocaleString()}
-          </p>
-          <p className="mt-1 text-xs text-gray-500">後払い・現金注文・サブスク現金を含む</p>
-        </div>
-
-        <div className="bg-gray-900 rounded-2xl border border-gray-800 p-5">
-          <div className="w-10 h-10 rounded-xl bg-cyan-500/10 flex items-center justify-center mb-3">
-            <Wallet size={20} className="text-cyan-400" />
-          </div>
-          <p className="text-gray-400 text-xs mb-1">未精算の立替</p>
-          <p className="font-display font-bold text-2xl text-cyan-400">
-            ¥{unreimbursedAdvanceAmount.toLocaleString()}
-          </p>
-        </div>
-
-        <div className="bg-gray-900 rounded-2xl border border-gray-800 p-5">
-          <div className="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center mb-3">
-            <Wallet size={20} className="text-indigo-400" />
-          </div>
-          <p className="text-gray-400 text-xs mb-1">最新の実測金額</p>
-          <p className="font-display font-bold text-2xl text-indigo-400">
-            ¥{(latestCount?.actual_amount ?? 0).toLocaleString()}
-          </p>
-        </div>
-
-        <div className="bg-gray-900 rounded-2xl border border-gray-800 p-5">
-          <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center mb-3">
-            <Scale size={20} className="text-amber-400" />
-          </div>
-          <p className="text-gray-400 text-xs mb-1">最新差額</p>
-          <p className={`font-display font-bold text-2xl ${latestDifference === 0 ? 'text-green-400' : latestDifference > 0 ? 'text-sky-400' : 'text-red-400'}`}>
-            {latestDifference > 0 ? '+' : ''}¥{latestDifference.toLocaleString()}
-          </p>
-        </div>
-      </div>
-
-      <div className="bg-gray-900 rounded-2xl border border-gray-800 overflow-hidden">
-        <div className="px-5 py-4 border-b border-gray-800">
-          <h2 className="font-medium text-white">未精算の立替</h2>
-        </div>
-        {unreimbursedPurchaseRuns.length === 0 ? (
-          <p className="px-5 py-8 text-sm text-gray-500 text-center">未精算の立替はありません</p>
-        ) : (
-          <div className="divide-y divide-gray-800">
-            {unreimbursedPurchaseRuns.map((purchaseRun) => (
-              <div key={purchaseRun.id} className="px-5 py-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="text-sm font-medium text-white">
-                      {purchaseRun.vendor || '購入先未入力'}
-                    </p>
-                    <span className="rounded-full bg-sky-500/10 px-2 py-0.5 text-[11px] font-medium text-sky-300">
-                      個人立替
-                    </span>
-                  </div>
-                  <p className="mt-1 text-sm text-gray-400">
-                    {(purchaseRun.purchase_run_items ?? [])
-                      .map((row) => `${row.item_name} ${row.quantity}個`)
-                      .join(' / ') || '明細なし'}
-                  </p>
-                  <p className="mt-2 text-xs text-gray-500">
-                    {format(new Date(purchaseRun.created_at), 'M/d HH:mm', { locale: ja })}
-                    {purchaseRun.created_by_user?.name ? ` ・ ${purchaseRun.created_by_user.name}` : ''}
-                    {purchaseRun.note ? ` ・ ${purchaseRun.note}` : ''}
-                  </p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <p className="font-mono text-sm font-bold text-sky-300">
-                    ¥{purchaseRun.total_amount.toLocaleString()}
-                  </p>
-                  <button
-                    onClick={() => handleReimburse(purchaseRun.id)}
-                    disabled={loading !== null}
-                    className="rounded-lg bg-white px-4 py-2 text-sm font-medium text-gray-950 transition-colors hover:bg-gray-100 disabled:opacity-50"
-                  >
-                    {loading === `reimburse:${purchaseRun.id}` ? '精算中...' : '金庫から精算'}
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <div className="grid xl:grid-cols-2 gap-6">
-        <div className="bg-gray-900 rounded-2xl border border-gray-800 p-5 space-y-4">
+  return <div className="mx-auto max-w-4xl space-y-5">
+    <header><h1 className="text-2xl font-bold text-white">金庫</h1><p className="mt-1 text-sm text-gray-400">金庫の状況、出納記録、確認記録を確認します。</p></header>
+    <ObjectDetailNavigation value={view} onChange={setView} options={[{id:'overview',label:'金庫の状況'},{id:'ledger',label:'出納台帳'},{id:'counts',label:'金庫確認'}]}/>
+    {view==='overview'&&<div className="space-y-5"><section className="rounded-xl border border-gray-800 bg-gray-900 p-5"><p className="text-sm text-gray-400">台帳上の金庫残高</p><p className="mt-2 font-mono text-3xl text-white">¥{expectedAmount.toLocaleString()}</p><dl className="mt-5 grid grid-cols-2 gap-4 border-t border-gray-800 pt-5"><div><dt className="text-xs text-gray-400">直近の実測</dt><dd className="mt-2 font-mono text-lg text-white">{latestCount?`¥${latestCount.actual_amount.toLocaleString()}`:'未確認'}</dd></div><div><dt className="text-xs text-gray-400">確認時の台帳との差</dt><dd className={`mt-2 font-mono text-lg ${latestDifference===0?'text-emerald-300':'text-amber-300'}`}>{latestCount?`${latestDifference>0?'+':''}¥${latestDifference.toLocaleString()}`:'未確認'}</dd></div></dl>{latestCount&&<p className="mt-3 text-xs text-gray-400">{format(new Date(latestCount.counted_at),'yyyy/M/d HH:mm',{locale:ja})} · {latestCount.counted_by_user?.name??'確認者未登録'}</p>}{(!latestCount||latestDifference!==0)&&<button type="button" onClick={()=>{setView('counts');if(latestCount)selectCount(latestCount.id);}} className="mt-4 text-sm text-sky-300 underline underline-offset-4">{latestCount?'差額のある確認記録を見る →':'金庫の確認記録へ →'}</button>}</section>
+      <section className="rounded-xl border border-gray-800 bg-gray-900 p-5"><h2 className="font-semibold text-white">金庫に入る予定・金庫から出る予定</h2><p className="mt-2 text-xs text-gray-400">以下の未回収・未精算額は、現在の金庫残高には加算・減算しません。</p><dl className="mt-4 space-y-4"><div><dt className="text-xs text-gray-400">未回収</dt><dd className="mt-1 font-mono text-white">¥{totalCashCollectionAmount.toLocaleString()}</dd><p className="mt-1 text-xs text-gray-400">うち現金注文 {pendingCashOrdersCount}件 · ¥{pendingCashOrderAmount.toLocaleString()}</p>{totalCashCollectionAmount>0&&<Link href="/admin/transactions?state=pending" className="mt-2 inline-block text-sm text-sky-300 underline">未精算の取引を確認 →</Link>}</div><div><dt className="text-xs text-gray-400">未精算の立替</dt><dd className="mt-1 font-mono text-white">¥{unreimbursedAdvanceAmount.toLocaleString()}</dd>{unreimbursedAdvanceAmount>0&&<Link href="/admin/reimbursements?state=pending&from=cashbox" className="mt-2 inline-block text-sm text-sky-300 underline">未精算の立替記録を確認 →</Link>}</div></dl>{unreimbursedPurchaseRuns.length>0&&<ul className="mt-4 divide-y divide-gray-800 border-t border-gray-800">{unreimbursedPurchaseRuns.map(run=><li key={run.id}><Link href={`/admin/reimbursements?run=${run.id}&from=cashbox`} className="flex items-center gap-4 py-3 text-sm"><span className="min-w-0 flex-1 text-sky-300">{run.vendor||'立替記録'}<small className="mt-1 block text-gray-400">{run.created_by_user?.name} · {(run.purchase_run_items??[]).map(line=>`${line.item_name} × ${line.quantity}`).join(' / ')||run.note}</small></span><span className="font-mono text-white">¥{run.total_amount.toLocaleString()}</span></Link></li>)}</ul>}</section></div>}
+    {view==='ledger'&&<div className="space-y-5"><button type="button" onClick={()=>setAddingEntry(value=>!value)} className="rounded-lg bg-white px-4 py-2 text-sm text-gray-950">{addingEntry?'追加を閉じる':'出納記録を追加'}</button>{addingEntry&&<section className="max-w-xl"><label className="mb-3 block text-sm text-gray-300">記録の種類<select value={entryKind} onChange={event=>setEntryKind(event.target.value)} className="ml-3 rounded-lg bg-gray-800 p-2"><option value="manual">手動入金・出金</option><option value="misc">金庫からの雑費</option></select></label>{entryKind==='manual'?        <div className="bg-gray-900 rounded-2xl border border-gray-800 p-5 space-y-4">
           <div>
             <h2 className="font-medium text-white">手動調整</h2>
           </div>
@@ -333,13 +252,13 @@ export default function CashboxClient({
             min={1}
             value={adjustmentAmount}
             onChange={(e) => setAdjustmentAmount(e.target.value)}
-            placeholder="金額"
+            aria-label="金額" placeholder="金額"
             className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-white/20"
           />
           <textarea
             value={adjustmentNote}
             onChange={(e) => setAdjustmentNote(e.target.value)}
-            placeholder="メモ（例: 金庫からつり銭を補充）"
+            aria-label="メモ（例: 金庫からつり銭を補充）" placeholder="メモ（例: 金庫からつり銭を補充）"
             rows={3}
             className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-white/20 resize-none"
           />
@@ -350,9 +269,10 @@ export default function CashboxClient({
           >
             {loading === 'adjustment' ? '記録中...' : '台帳に記録する'}
           </button>
-        </div>
-
-        <div className="bg-gray-900 rounded-2xl border border-gray-800 p-5 space-y-4">
+        </div>:<section className="space-y-4 rounded-xl border border-gray-800 bg-gray-900 p-5"><h2 className="font-semibold text-white">雑費の出金</h2><label className="block text-sm text-gray-300">雑費名<input value={miscExpenseName} onChange={event=>setMiscExpenseName(event.target.value)} className="mt-2 block w-full rounded-lg bg-gray-800 p-3"/></label><label className="block text-sm text-gray-300">金額<input type="number" min={1} value={miscExpenseAmount} onChange={event=>setMiscExpenseAmount(event.target.value?Number(event.target.value):'')} className="mt-2 block w-full rounded-lg bg-gray-800 p-3"/></label><label className="block text-sm text-gray-300">メモ<textarea value={miscExpenseNote} onChange={event=>setMiscExpenseNote(event.target.value)} className="mt-2 block w-full rounded-lg bg-gray-800 p-3"/></label><button type="button" disabled={loading!==null} onClick={handleMiscExpense} className="rounded-lg bg-white px-4 py-2 text-sm text-gray-950">雑費を記録</button></section>}</section>}
+      <ObjectWorkspace selected={Boolean(selectedEntry)} label="出納記録の詳細" onClose={()=>selectEntry(null)} collection={<div className="divide-y divide-gray-800 rounded-xl border border-gray-800 bg-gray-900">{entries.map(entry=><button key={entry.id} type="button" aria-pressed={entry.id===entryId} onClick={()=>selectEntry(entry.id)} className="flex w-full items-center gap-4 px-4 py-4 text-left text-sm hover:bg-gray-800"><span className="min-w-0 flex-1 text-white">{cashboxEntryLabels[entry.entry_type]}<small className="mt-1 block text-gray-400">{format(new Date(entry.created_at),'M/d HH:mm',{locale:ja})} · {entry.created_by_user?.name}</small></span><span className={`font-mono ${entry.direction==='in'?'text-emerald-300':'text-gray-200'}`}>{entry.direction==='in'?'+':'−'}¥{entry.amount.toLocaleString()}</span></button>)}{!entries.length&&<p className="p-6 text-sm text-gray-400">記録はまだありません</p>}</div>} detail={selectedEntry&&<><h2 className="text-lg font-semibold text-white">{cashboxEntryLabels[selectedEntry.entry_type]}</h2><p className="mt-3 font-mono text-2xl text-white">{selectedEntry.direction==='in'?'+':'−'}¥{selectedEntry.amount.toLocaleString()}</p><p className="mt-3 text-sm text-gray-400">{format(new Date(selectedEntry.created_at),'yyyy/M/d HH:mm',{locale:ja})} · {selectedEntry.created_by_user?.name}</p><p className="mt-4 whitespace-pre-wrap break-words text-sm text-gray-300">{selectedEntry.note||'メモなし'}</p>{selectedEntry.order_id&&<Link href={`/admin/orders/${selectedEntry.order_id}?from=${encodeURIComponent(`/admin/cashbox?view=ledger&entry=${selectedEntry.id}`)}`} className="mt-5 block text-sm text-sky-300 underline">この出納の注文を見る →</Link>}{selectedEntry.purchase_run_id&&<Link href={`/admin/reimbursements?run=${selectedEntry.purchase_run_id}&from=cashbox`} className="mt-5 block text-sm text-sky-300 underline">この出納の立替記録を見る →</Link>}</>}/>
+    </div>}
+    {view==='counts'&&<div className="space-y-5"><button type="button" onClick={()=>setAddingCount(value=>!value)} className="rounded-lg bg-white px-4 py-2 text-sm text-gray-950">{addingCount?'追加を閉じる':'金庫確認を記録'}</button>{addingCount&&<div className="max-w-xl">        <div className="bg-gray-900 rounded-2xl border border-gray-800 p-5 space-y-4">
           <div>
             <h2 className="font-medium text-white">金庫確認</h2>
           </div>
@@ -392,13 +312,13 @@ export default function CashboxClient({
             min={0}
             value={actualAmount}
             onChange={(e) => setActualAmount(e.target.value)}
-            placeholder="実測金額（枚数を使わない場合のみ）"
+            aria-label="実測金額（枚数を使わない場合のみ）" placeholder="実測金額（枚数を使わない場合のみ）"
             className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-white/20"
           />
           <textarea
             value={countNote}
             onChange={(e) => setCountNote(e.target.value)}
-            placeholder="メモ（例: 月末確認、つり銭補充前）"
+            aria-label="メモ（例: 月末確認、つり銭補充前）" placeholder="メモ（例: 月末確認、つり銭補充前）"
             rows={3}
             className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-white/20 resize-none"
           />
@@ -409,86 +329,6 @@ export default function CashboxClient({
           >
             {loading === 'count' ? '記録中...' : '確認結果を保存する'}
           </button>
-        </div>
-      </div>
-
-      <div className="grid xl:grid-cols-2 gap-6">
-        <div className="bg-gray-900 rounded-2xl border border-gray-800 overflow-hidden">
-          <div className="px-5 py-4 border-b border-gray-800">
-            <h2 className="font-medium text-white">金庫台帳</h2>
-          </div>
-          {entries.length === 0 ? (
-            <p className="px-5 py-10 text-sm text-gray-500 text-center">記録はまだありません</p>
-          ) : (
-            <div className="divide-y divide-gray-800">
-              {entries.map((entry) => (
-                <div key={entry.id} className="px-5 py-4 flex items-start justify-between gap-4">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      {entry.direction === 'in' ? (
-                        <ArrowUpRight size={16} className="text-emerald-400" />
-                      ) : (
-                        <ArrowDownLeft size={16} className="text-red-400" />
-                      )}
-                      <p className="text-sm font-medium text-white">
-                        {cashboxEntryLabels[entry.entry_type]}
-                      </p>
-                    </div>
-                    {entry.note && (
-                      <p className="text-sm text-gray-400 mt-1">{entry.note}</p>
-                    )}
-                    <p className="text-xs text-gray-500 mt-2">
-                      {format(new Date(entry.created_at), 'M/d HH:mm', { locale: ja })}
-                      {entry.created_by_user?.name ? ` ・ ${entry.created_by_user.name}` : ''}
-                    </p>
-                  </div>
-                  <div className={`font-mono font-bold text-sm ${entry.direction === 'in' ? 'text-emerald-400' : 'text-red-400'}`}>
-                    {entry.direction === 'in' ? '+' : '-'}¥{entry.amount.toLocaleString()}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className="bg-gray-900 rounded-2xl border border-gray-800 overflow-hidden">
-          <div className="px-5 py-4 border-b border-gray-800">
-            <h2 className="font-medium text-white">確認履歴</h2>
-          </div>
-          {counts.length === 0 ? (
-            <p className="px-5 py-10 text-sm text-gray-500 text-center">確認履歴はまだありません</p>
-          ) : (
-            <div className="divide-y divide-gray-800">
-              {counts.map((count) => (
-                <div key={count.id} className="px-5 py-4 space-y-2">
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-sm font-medium text-white">
-                      {format(new Date(count.counted_at), 'M/d HH:mm', { locale: ja })}
-                    </p>
-                    <p className={`font-mono text-sm font-bold ${count.difference_amount === 0 ? 'text-green-400' : count.difference_amount > 0 ? 'text-sky-400' : 'text-red-400'}`}>
-                      {count.difference_amount > 0 ? '+' : ''}¥{count.difference_amount.toLocaleString()}
-                    </p>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <p className="text-gray-500">理論</p>
-                      <p className="font-mono text-white">¥{count.expected_amount.toLocaleString()}</p>
-                    </div>
-                    <div>
-                      <p className="text-gray-500">実測</p>
-                      <p className="font-mono text-white">¥{count.actual_amount.toLocaleString()}</p>
-                    </div>
-                  </div>
-                  <p className="text-xs text-gray-500">
-                    {count.counted_by_user?.name ? `${count.counted_by_user.name} ・ ` : ''}
-                    {count.note || 'メモなし'}
-                  </p>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
+        </div></div>}<ObjectWorkspace selected={Boolean(selectedCount)} label="金庫確認の詳細" onClose={()=>selectCount(null)} collection={<div className="divide-y divide-gray-800 rounded-xl border border-gray-800 bg-gray-900">{counts.map(count=><button key={count.id} type="button" aria-pressed={count.id===countId} onClick={()=>selectCount(count.id)} className="flex w-full items-center gap-4 px-4 py-4 text-left text-sm hover:bg-gray-800"><span className="flex-1 text-white">{format(new Date(count.counted_at),'yyyy/M/d HH:mm',{locale:ja})}<small className="mt-1 block text-gray-400">{count.counted_by_user?.name}</small></span><span className={`font-mono ${count.difference_amount===0?'text-emerald-300':'text-amber-300'}`}>差額 {count.difference_amount>0?'+':''}¥{count.difference_amount.toLocaleString()}</span></button>)}{!counts.length&&<p className="p-6 text-sm text-gray-400">確認履歴はまだありません</p>}</div>} detail={selectedCount&&<><h2 className="font-semibold text-white">{format(new Date(selectedCount.counted_at),'yyyy/M/d HH:mm',{locale:ja})}の確認</h2><dl className="mt-5 grid grid-cols-[7rem_1fr] gap-3 text-sm"><dt className="text-gray-400">台帳の金額</dt><dd className="font-mono text-white">¥{selectedCount.expected_amount.toLocaleString()}</dd><dt className="text-gray-400">実測金額</dt><dd className="font-mono text-white">¥{selectedCount.actual_amount.toLocaleString()}</dd><dt className="text-gray-400">差額</dt><dd className="font-mono text-amber-300">¥{selectedCount.difference_amount.toLocaleString()}</dd></dl><p className="mt-4 text-sm text-gray-400">{selectedCount.counted_by_user?.name}</p><p className="mt-3 whitespace-pre-wrap break-words text-sm text-gray-300">{selectedCount.note||'メモなし'}</p></>}/></div>}
+  </div>;
 }

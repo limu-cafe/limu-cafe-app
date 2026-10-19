@@ -48,9 +48,9 @@ export default function AdminSidebar({ notifications = {}, status = 'ready' }: {
             </p>
             <div className="space-y-1">
               {section.items.map((item) => {
-                const active =
-                  pathname === item.href ||
-                  (item.href !== '/admin' && pathname.startsWith(`${item.href}/`));
+                const active = [item.href, ...(item.activePaths ?? [])].some((href) =>
+                  pathname === href || (href !== '/admin' && pathname.startsWith(`${href}/`))
+                );
                 const Icon = item.icon;
                 const count = item.notificationKey ? notifications[item.notificationKey] ?? 0 : 0;
                 return (

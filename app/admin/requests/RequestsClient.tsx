@@ -1,6 +1,8 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import Link from 'next/link';
+import ObjectWorkspace, { useObjectSelection } from '@/components/admin/ObjectWorkspace';
 import { CheckCircle, XCircle, PackagePlus } from 'lucide-react';
 import { format } from 'date-fns';
 import { ja } from 'date-fns/locale';
@@ -18,6 +20,8 @@ const STATUS_LABEL: Record<string, string> = {
 
 export default function RequestsClient({ requests }: { requests: any[] }) {
   const router = useRouter();
+  const [selectedId,select]=useObjectSelection('request');
+  const selected=requests.find(request=>request.id===selectedId);
   const searchParams = useSearchParams();
   const [loading, setLoading] = useState<string | null>(null);
   const [adminNote, setAdminNote] = useState<Record<string, string>>({});
@@ -85,13 +89,7 @@ export default function RequestsClient({ requests }: { requests: any[] }) {
     }
   };
 
-  return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="font-display font-bold text-2xl text-white">商品要望管理</h1>
-        <p className="text-gray-400 text-sm mt-1">検討中: {pending.length}件</p>
-      </div>
-
+  return <div className={selected?'space-y-5':'mx-auto max-w-3xl space-y-5'}><header><h1 className="text-2xl font-bold text-white">商品要望</h1><p className="mt-1 text-sm text-gray-400">検討中 {pending.length}件 · 要望を選んで内容と反応を確認します。</p></header>
       <label className="inline-flex items-center gap-2 text-sm text-gray-300">
         <input
           type="checkbox"
@@ -133,27 +131,10 @@ export default function RequestsClient({ requests }: { requests: any[] }) {
         </div>
       )}
 
-      {pending.length === 0 && visibleDone.length === 0 && (
-        <div className="text-center py-16 text-gray-500">
-          <p className="text-4xl mb-3">📭</p>
-          <p>要望がありません</p>
-        </div>
-      )}
-
-      {/* 検討中 */}
-      {pending.length > 0 && (
-        <div className="space-y-3">
-          <h2 className="text-sm font-medium text-gray-400 uppercase tracking-wider">検討中</h2>
-          {pending.map((req) => (
+    <ObjectWorkspace selected={Boolean(selected)} label="要望の詳細" onClose={()=>select(null)} collection={<div className="divide-y divide-gray-800 rounded-xl border border-gray-800 bg-gray-900">{[...pending,...visibleDone].map(req=><div key={req.id} className="flex items-center gap-3 px-4 py-4">{req.status==='pending'&&<input type="checkbox" aria-label={req.item_name+'を一括操作の対象にする'} checked={selectedIds.includes(req.id)} onChange={()=>handleToggleSelection(req.id)}/>}<button type="button" aria-pressed={selectedId===req.id} onClick={()=>select(req.id)} className="min-w-0 flex-1 text-left"><span className="block break-words text-sm text-white">{req.item_name}</span><span className="mt-1 block text-xs text-gray-400">{req.user?.name} · {STATUS_LABEL[req.status]} · 賛成 {req.votes?.length??0} / コメント {req.comments?.length??0}</span></button>{req.desired_price&&<span className="shrink-0 font-mono text-sm text-gray-300">¥{req.desired_price.toLocaleString()}</span>}</div>)}{!pending.length&&!visibleDone.length&&<p className="p-6 text-sm text-gray-400">要望はありません</p>}</div>} detail={selected&&(()=>{const req=selected;return <><p className="mb-3 text-sm text-gray-400">{STATUS_LABEL[req.status]}</p>
             <div key={req.id} className="bg-gray-900 border border-gray-800 rounded-2xl p-5 space-y-3">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={selectedIds.includes(req.id)}
-                    onChange={() => handleToggleSelection(req.id)}
-                    className="rounded border-gray-700 bg-gray-900 text-white"
-                  />
                   {req.user?.avatar_url ? (
                     <img src={req.user.avatar_url} className="w-7 h-7 rounded-full" alt="" />
                   ) : (
@@ -186,6 +167,7 @@ export default function RequestsClient({ requests }: { requests: any[] }) {
                 </span>
               </div>
 
+              {req.status==='pending'&&<>
               {/* 管理者コメント入力 */}
               {openNote === req.id && (
                 <textarea
@@ -227,50 +209,8 @@ export default function RequestsClient({ requests }: { requests: any[] }) {
                   </a>
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* 処理済み */}
-      {visibleDone.length > 0 && (
-        <div className="space-y-2">
-          <h2 className="text-sm font-medium text-gray-400 uppercase tracking-wider">処理済み</h2>
-          <div className="bg-gray-900 rounded-2xl border border-gray-800 overflow-hidden">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-800">
-                  {['商品名', '申請者', '希望価格', 'ステータス', '日時', '反応'].map(h => (
-                    <th key={h} className="px-4 py-3 text-left font-medium text-gray-400 text-xs">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {visibleDone.map((req) => (
-                  <tr key={req.id} className="border-b border-gray-800/50">
-                    <td className="px-4 py-3 text-white">{req.item_name}</td>
-                    <td className="px-4 py-3 text-gray-400">{req.user?.name}</td>
-                    <td className="px-4 py-3 text-gray-400 font-mono text-xs">
-                      {req.desired_price ? `¥${req.desired_price.toLocaleString()}` : '-'}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={`px-2 py-0.5 rounded-full text-xs ${STATUS_COLOR[req.status]}`}>
-                        {STATUS_LABEL[req.status]}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-gray-500 text-xs">
-                      {format(new Date(req.created_at), 'M/d', { locale: ja })}
-                    </td>
-                    <td className="px-4 py-3 text-gray-500 text-xs">
-                      賛成 {req.votes?.length ?? 0} / コメント {req.comments?.length ?? 0}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-    </div>
-  );
+              </>}
+              {req.admin_note&&<p className="text-sm text-gray-300">管理者コメント：{req.admin_note}</p>}
+              {req.user_id&&<Link href={'/admin/users?user='+req.user_id} className="inline-block text-sm text-sky-300 underline">申請者の詳細を見る →</Link>}
+            </div></>;})()}/></div>;
 }

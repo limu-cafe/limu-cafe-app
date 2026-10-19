@@ -1,5 +1,6 @@
 'use client';
 
+import ObjectWorkspace,{useObjectSelection} from '@/components/admin/ObjectWorkspace';
 import { useState } from 'react';
 import { Plus, Trash2, RefreshCw, ExternalLink } from 'lucide-react';
 import { format } from 'date-fns';
@@ -15,6 +16,8 @@ const PLATFORM_OPTIONS = [
 ];
 
 export default function PriceWatchClient({ watches }: { watches: PriceWatch[] }) {
+  const [selectedId,select]=useObjectSelection('watch');
+  const selected=watches.find(watch=>watch.id===selectedId);
   const [form, setForm] = useState({
     item_name: '', url: '', platform: 'amazon', target_price: '',
   });
@@ -52,6 +55,7 @@ export default function PriceWatchClient({ watches }: { watches: PriceWatch[] })
         </div>
       </div>
 
+      <details className="max-w-2xl"><summary className="cursor-pointer text-sm text-gray-400">準備中の追加項目を確認</summary>
       {/* 追加フォームの枠だけ表示 */}
       <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5 space-y-4 opacity-70">
         <h2 className="font-medium text-white">新しい監視を追加</h2>
@@ -97,6 +101,8 @@ export default function PriceWatchClient({ watches }: { watches: PriceWatch[] })
         </button>
       </div>
 
+      </details>
+      <ObjectWorkspace selected={Boolean(selected)} label="価格監視の記録" onClose={()=>select(null)} collection={<div className="divide-y divide-gray-800 rounded-xl border border-gray-800 bg-gray-900">{watches.map(watch=><button key={watch.id} type="button" onClick={()=>select(watch.id)} className="flex w-full items-center gap-4 px-4 py-4 text-left"><span className="flex-1 text-sm text-white">{watch.item_name}</span><span className="font-mono text-gray-300">目標 ¥{watch.target_price.toLocaleString()}</span></button>)}{!watches.length&&<p className="p-6 text-sm text-gray-400">監視の記録はありません。正式導入は準備中です。</p>}</div>} detail={<>
       {/* 監視一覧 */}
       {watches.length === 0 ? (
         <div className="text-center py-16 text-gray-500">
@@ -105,7 +111,7 @@ export default function PriceWatchClient({ watches }: { watches: PriceWatch[] })
         </div>
       ) : (
         <div className="space-y-3">
-          {watches.map((w) => (
+          {watches.filter(w=>w.id===selectedId).map((w) => (
             <div key={w.id} className="bg-gray-900 border border-gray-800 rounded-2xl p-5 opacity-75">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex-1 min-w-0">
@@ -159,6 +165,7 @@ export default function PriceWatchClient({ watches }: { watches: PriceWatch[] })
           ))}
         </div>
       )}
+      </>}/>
     </div>
   );
 }
