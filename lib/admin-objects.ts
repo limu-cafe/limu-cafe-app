@@ -11,8 +11,9 @@ export type ObjectRecords = { rows: Record<string, any>[]; page: number; hasNext
 export type AdminOrder = {
   id: string; user_id: string; total_amount: number; points_used?: number | null;
   payment_method: string; payment_status: string; deferred_settlement_method?: string | null;
+  accounting_ready?: boolean; cash_confirmed_at?: string | null; settlement_id?: string | null;
   settled_at?: string | null; settlement_source?: string | null; created_at: string;
-  user?: { id: string; name: string; avatar_url?: string | null } | null;
+  user?: { id: string; name: string; avatar_url?: string | null; balance?: number; deferred_balance?: number } | null;
   order_items?: { id?: string; item_id?: string; item_name: string; item_price?: number; quantity: number; subtotal?: number }[];
 };
 
@@ -29,8 +30,8 @@ export function orderStateLabel(order: AdminOrder) {
 export function orderActions(order: AdminOrder) {
   const actions: { id: string; label: string; endpoint: string; method: 'POST' | 'DELETE'; danger?: boolean; success: string }[] = [];
   const add = (id: string, label: string, endpoint: string, method: 'POST' | 'DELETE', success: string, danger = false) => actions.push({ id, label, endpoint: `/api/admin/orders/${order.id}/${endpoint}`, method, success, danger });
-  if (isPendingDeferredOrder(order)) add('settle', '精算完了', 'deferred-settlement', 'POST', '精算済みにしました');
-  if (isPendingCashOrder(order)) add('settle', '精算完了', 'cash-settlement', 'POST', '精算済みにしました');
+  if (isPendingDeferredOrder(order)) add('settle', '現金を受領', 'deferred-settlement', 'POST', '精算済みにしました');
+  if (isPendingCashOrder(order)) add('settle', '現金を受領', 'cash-settlement', 'POST', '精算済みにしました');
   if (order.payment_method === 'cash' && order.payment_status === 'completed') add('unsettle', '未精算に戻す', 'cash-settlement', 'DELETE', '未精算に戻しました');
   if (!isPendingDeferredOrder(order) && order.payment_method === 'deferred' && (order.deferred_settlement_method ?? 'cash') === 'cash' && order.settlement_source === 'individual_deferred_order') add('unsettle', '未精算に戻す', 'deferred-settlement', 'DELETE', '未精算に戻しました');
   if (['pending', 'completed'].includes(order.payment_status)) add('refund', '返金', 'refund', 'POST', '返金しました', true);
