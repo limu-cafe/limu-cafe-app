@@ -152,7 +152,7 @@ export default function PointsClient({
                     is_enabled: event.target.value === 'enabled',
                   }))
                 }
-                className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:outline-none"
+                className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:outline-hidden"
               >
                 <option value="enabled">有効</option>
                 <option value="disabled">停止</option>
@@ -171,7 +171,7 @@ export default function PointsClient({
                     base_points_per_unit: Number(event.target.value || 1),
                   }))
                 }
-                className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:outline-none"
+                className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:outline-hidden"
               />
             </label>
             <label className="space-y-2 text-sm text-gray-300">
@@ -187,7 +187,7 @@ export default function PointsClient({
                     yen_per_point_unit: Number(event.target.value || 100),
                   }))
                 }
-                className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:outline-none"
+                className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:outline-hidden"
               />
             </label>
           </div>
@@ -211,7 +211,7 @@ export default function PointsClient({
               value={campaignForm.name}
               onChange={(event) => setCampaignForm((current) => ({ ...current, name: event.target.value }))}
               placeholder="キャンペーン名"
-              className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder:text-gray-500 focus:outline-none"
+              className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder:text-gray-500 focus:outline-hidden"
             />
             <div className="grid gap-4 md:grid-cols-2">
               <label className="space-y-2 text-sm text-gray-300">
@@ -227,7 +227,7 @@ export default function PointsClient({
                       multiplier: Number(event.target.value || 1),
                     }))
                   }
-                  className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:outline-none"
+                  className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:outline-hidden"
                 />
               </label>
               <label className="space-y-2 text-sm text-gray-300">
@@ -237,7 +237,7 @@ export default function PointsClient({
                   value={campaignForm.note}
                   onChange={(event) => setCampaignForm((current) => ({ ...current, note: event.target.value }))}
                   placeholder="例: 新学期キャンペーン"
-                  className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder:text-gray-500 focus:outline-none"
+                  className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder:text-gray-500 focus:outline-hidden"
                 />
               </label>
             </div>
@@ -248,7 +248,7 @@ export default function PointsClient({
                   type="datetime-local"
                   value={campaignForm.starts_at}
                   onChange={(event) => setCampaignForm((current) => ({ ...current, starts_at: event.target.value }))}
-                  className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:outline-none"
+                  className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:outline-hidden"
                 />
               </label>
               <label className="space-y-2 text-sm text-gray-300">
@@ -257,7 +257,7 @@ export default function PointsClient({
                   type="datetime-local"
                   value={campaignForm.ends_at}
                   onChange={(event) => setCampaignForm((current) => ({ ...current, ends_at: event.target.value }))}
-                  className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:outline-none"
+                  className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:outline-hidden"
                 />
               </label>
             </div>
@@ -271,7 +271,7 @@ export default function PointsClient({
                     apply_immediately: event.target.checked,
                   }))
                 }
-                className="rounded border-gray-700 bg-gray-900 text-white"
+                className="rounded-sm border-gray-700 bg-gray-900 text-white"
               />
               今すぐ適用する
             </label>
@@ -287,7 +287,7 @@ export default function PointsClient({
         </section></div>}<ObjectWorkspace selected={Boolean(selectedCampaign)} label="キャンペーンの詳細" onClose={()=>selectCampaign(null)} collection={<div className="divide-y divide-gray-800 rounded-xl border border-gray-800 bg-gray-900">{campaigns.map(campaign=><button key={campaign.id} type="button" aria-pressed={campaign.id===campaignId} onClick={()=>selectCampaign(campaign.id)} className="block w-full px-4 py-4 text-left"><span className="text-sm text-white">{campaign.name}</span><small className="mt-1 block text-gray-400">{campaign.multiplier}x · {campaign.is_enabled?'有効':'停止中'} · {campaign.apply_immediately?'即時適用':campaign.starts_at??'開始待ち'}</small></button>)}{!campaigns.length&&<p className="p-6 text-sm text-gray-400">キャンペーンはありません</p>}</div>} detail={selectedCampaign&&<section className="space-y-5">
   <h2 className="text-lg font-semibold text-white">{selectedCampaign.name}</h2>
   <dl className="grid grid-cols-[6rem_1fr] gap-3 text-sm"><dt className="text-gray-400">状態</dt><dd className="text-white">{selectedCampaign.is_enabled?'有効':'停止中'}</dd><dt className="text-gray-400">倍率</dt><dd className="font-mono text-white">{selectedCampaign.multiplier}x</dd><dt className="text-gray-400">適用期間</dt><dd className="text-white">{selectedCampaign.apply_immediately?'即時適用':selectedCampaign.starts_at?format(new Date(selectedCampaign.starts_at),'yyyy/M/d HH:mm',{locale:ja}):'開始待ち'}{!selectedCampaign.apply_immediately&&<> ～ {selectedCampaign.ends_at?format(new Date(selectedCampaign.ends_at),'yyyy/M/d HH:mm',{locale:ja}):'終了未設定'}</>}</dd></dl>
-  {selectedCampaign.note&&<p className="whitespace-pre-wrap break-words text-sm text-gray-300">{selectedCampaign.note}</p>}
+  {selectedCampaign.note&&<p className="whitespace-pre-wrap wrap-break-word text-sm text-gray-300">{selectedCampaign.note}</p>}
   <div className="flex gap-3 border-t border-gray-800 pt-5"><button type="button" onClick={()=>updateCampaign(selectedCampaign.id,{is_enabled:!selectedCampaign.is_enabled})} disabled={loading!==null} className="rounded-lg bg-white px-4 py-2 text-sm text-gray-950 disabled:opacity-50">{selectedCampaign.is_enabled?'停止':'再開'}</button><button type="button" onClick={()=>deleteCampaign(selectedCampaign.id)} disabled={loading!==null} className="rounded-lg bg-red-500/15 px-4 py-2 text-sm text-red-300 disabled:opacity-50">削除</button></div>
 </section>}/></div>}
     {view==='history'&&      <section className="rounded-2xl border border-gray-800 bg-gray-900 p-5 space-y-4">

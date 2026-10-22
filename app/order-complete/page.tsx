@@ -75,7 +75,7 @@ function OrderCompleteContent() {
       <div className="mx-auto max-w-2xl animate-fade-in space-y-6">
         <div className="hero-card px-6 py-8 text-center">
           <div className="relative z-10 space-y-4">
-            <div className="mx-auto flex h-[4.5rem] w-[4.5rem] items-center justify-center rounded-full bg-matcha/15 text-matcha-dark">
+            <div className="mx-auto flex h-18 w-18 items-center justify-center rounded-full bg-matcha/15 text-matcha-dark">
               <CheckCircle2 size={40} />
             </div>
             <div className="space-y-2">

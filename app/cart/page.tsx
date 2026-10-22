@@ -113,7 +113,7 @@ export default function CartPage() {
                 return (
                   <>
               {/* 画像 */}
-              <div className="w-16 h-16 rounded-lg overflow-hidden bg-cream-100 flex-shrink-0 flex items-center justify-center text-2xl">
+              <div className="w-16 h-16 rounded-lg overflow-hidden bg-cream-100 shrink-0 flex items-center justify-center text-2xl">
                 {item.image_url ? (
                   <Image src={item.image_url} alt={displayName} width={64} height={64} className="object-contain p-1" />
                 ) : (
@@ -135,7 +135,7 @@ export default function CartPage() {
               </div>
 
               {/* 数量コントロール */}
-              <div className="flex items-center gap-2 flex-shrink-0">
+              <div className="flex items-center gap-2 shrink-0">
                 <button
                   onClick={() => updateQuantity(item.id, quantity - 1)}
                   className="w-8 h-8 rounded-full border border-cream-200 flex items-center justify-center hover:bg-cream-100 transition-colors"
@@ -159,7 +159,7 @@ export default function CartPage() {
               </div>
 
               {/* 小計 */}
-              <div className="text-right flex-shrink-0 w-20">
+              <div className="text-right shrink-0 w-20">
                 <p className="font-display font-bold text-espresso">
                   ¥{(item.price * quantity).toLocaleString()}
                 </p>
@@ -172,7 +172,7 @@ export default function CartPage() {
         </div>
 
         {/* 合計・購入へ */}
-        <div className="rounded-[28px] bg-gradient-to-br from-espresso to-espresso-600 p-6 text-cream-50 shadow-[0_24px_60px_-32px_rgba(44,26,14,0.55)] space-y-4">
+        <div className="rounded-[28px] bg-linear-to-br from-espresso to-espresso-600 p-6 text-cream-50 shadow-[0_24px_60px_-32px_rgba(44,26,14,0.55)] space-y-4">
           <div className="flex justify-between items-center text-cream-200">
             <span>{copy.subtotal}</span>
             <span className="font-mono">¥{total().toLocaleString()}</span>

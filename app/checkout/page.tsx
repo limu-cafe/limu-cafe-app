@@ -397,7 +397,7 @@ export default function CheckoutPage() {
               }`}
             >
               <div
-                className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full ${
+                className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${
                   paymentTiming === id && !disabled ? 'bg-white/20' : 'bg-cream-100'
                 }`}
               >
@@ -455,7 +455,7 @@ export default function CheckoutPage() {
                 }`}
               >
                 <div
-                  className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full ${
+                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${
                     deferredSettlementMethod === id && !disabled ? 'bg-white/20' : 'bg-cream-100'
                   }`}
                 >

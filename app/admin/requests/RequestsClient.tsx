@@ -95,7 +95,7 @@ export default function RequestsClient({ requests }: { requests: any[] }) {
           type="checkbox"
           checked={pendingOnly}
           onChange={(e) => setPendingOnly(e.target.checked)}
-          className="rounded border-gray-700 bg-gray-900 text-white"
+          className="rounded-sm border-gray-700 bg-gray-900 text-white"
         />
         未対応だけ表示
       </label>
@@ -107,7 +107,7 @@ export default function RequestsClient({ requests }: { requests: any[] }) {
               type="checkbox"
               checked={pending.length > 0 && selectedIds.length === pending.length}
               onChange={handleToggleAllPending}
-              className="rounded border-gray-700 bg-gray-900 text-white"
+              className="rounded-sm border-gray-700 bg-gray-900 text-white"
             />
             すべて選択
           </label>
@@ -131,7 +131,7 @@ export default function RequestsClient({ requests }: { requests: any[] }) {
         </div>
       )}
 
-    <ObjectWorkspace selected={Boolean(selected)} label="要望の詳細" onClose={()=>select(null)} collection={<div className="divide-y divide-gray-800 rounded-xl border border-gray-800 bg-gray-900">{[...pending,...visibleDone].map(req=><div key={req.id} className="flex items-center gap-3 px-4 py-4">{req.status==='pending'&&<input type="checkbox" aria-label={req.item_name+'を一括操作の対象にする'} checked={selectedIds.includes(req.id)} onChange={()=>handleToggleSelection(req.id)}/>}<button type="button" aria-pressed={selectedId===req.id} onClick={()=>select(req.id)} className="min-w-0 flex-1 text-left"><span className="block break-words text-sm text-white">{req.item_name}</span><span className="mt-1 block text-xs text-gray-400">{req.user?.name} · {STATUS_LABEL[req.status]} · 賛成 {req.votes?.length??0} / コメント {req.comments?.length??0}</span></button>{req.desired_price&&<span className="shrink-0 font-mono text-sm text-gray-300">¥{req.desired_price.toLocaleString()}</span>}</div>)}{!pending.length&&!visibleDone.length&&<p className="p-6 text-sm text-gray-400">要望はありません</p>}</div>} detail={selected&&(()=>{const req=selected;return <><p className="mb-3 text-sm text-gray-400">{STATUS_LABEL[req.status]}</p>
+    <ObjectWorkspace selected={Boolean(selected)} label="要望の詳細" onClose={()=>select(null)} collection={<div className="divide-y divide-gray-800 rounded-xl border border-gray-800 bg-gray-900">{[...pending,...visibleDone].map(req=><div key={req.id} className="flex items-center gap-3 px-4 py-4">{req.status==='pending'&&<input type="checkbox" aria-label={req.item_name+'を一括操作の対象にする'} checked={selectedIds.includes(req.id)} onChange={()=>handleToggleSelection(req.id)}/>}<button type="button" aria-pressed={selectedId===req.id} onClick={()=>select(req.id)} className="min-w-0 flex-1 text-left"><span className="block wrap-break-word text-sm text-white">{req.item_name}</span><span className="mt-1 block text-xs text-gray-400">{req.user?.name} · {STATUS_LABEL[req.status]} · 賛成 {req.votes?.length??0} / コメント {req.comments?.length??0}</span></button>{req.desired_price&&<span className="shrink-0 font-mono text-sm text-gray-300">¥{req.desired_price.toLocaleString()}</span>}</div>)}{!pending.length&&!visibleDone.length&&<p className="p-6 text-sm text-gray-400">要望はありません</p>}</div>} detail={selected&&(()=>{const req=selected;return <><p className="mb-3 text-sm text-gray-400">{STATUS_LABEL[req.status]}</p>
             <div key={req.id} className="bg-gray-900 border border-gray-800 rounded-2xl p-5 space-y-3">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-2">
@@ -148,7 +148,7 @@ export default function RequestsClient({ requests }: { requests: any[] }) {
                   </div>
                 </div>
                 {req.desired_price && (
-                  <span className="text-amber-400 font-mono text-sm flex-shrink-0">
+                  <span className="text-amber-400 font-mono text-sm shrink-0">
                     希望 ¥{req.desired_price.toLocaleString()}
                   </span>
                 )}
@@ -175,7 +175,7 @@ export default function RequestsClient({ requests }: { requests: any[] }) {
                   onChange={(e) => setAdminNote({ ...adminNote, [req.id]: e.target.value })}
                   placeholder="コメント（任意）"
                   rows={2}
-                  className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none resize-none"
+                  className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-hidden resize-none"
                 />
               )}
 

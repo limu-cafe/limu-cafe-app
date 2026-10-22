@@ -125,7 +125,7 @@ export default function SettlementClient({
             <select
               value={scheduleEnabled ? 'enabled' : 'disabled'}
               onChange={(e) => setScheduleEnabled(e.target.value === 'enabled')}
-              className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white focus:outline-none"
+              className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white focus:outline-hidden"
             >
               <option value="enabled">有効</option>
               <option value="disabled">停止</option>
@@ -138,7 +138,7 @@ export default function SettlementClient({
               type="date"
               value={nextNotificationOn}
               onChange={(e) => setNextNotificationOn(e.target.value)}
-              className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white focus:outline-none"
+              className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white focus:outline-hidden"
             />
           </label>
 
@@ -151,7 +151,7 @@ export default function SettlementClient({
                 max={12}
                 value={intervalMonths}
                 onChange={(e) => setIntervalMonths(Number(e.target.value || 1))}
-                className="w-16 bg-transparent text-sm text-white focus:outline-none"
+                className="w-16 bg-transparent text-sm text-white focus:outline-hidden"
               />
               <span className="text-sm text-gray-400">か月ごと</span>
             </div>
@@ -186,9 +186,9 @@ export default function SettlementClient({
           {users.map((user) => (
             <div key={user.id} className="bg-gray-900 border border-gray-800 rounded-2xl p-5 flex items-center gap-4">
               {user.avatar_url ? (
-                <img src={user.avatar_url} className="w-10 h-10 rounded-full flex-shrink-0" alt="" />
+                <img src={user.avatar_url} className="w-10 h-10 rounded-full shrink-0" alt="" />
               ) : (
-                <div className="w-10 h-10 rounded-full bg-gray-700 flex items-center justify-center text-gray-300 flex-shrink-0">
+                <div className="w-10 h-10 rounded-full bg-gray-700 flex items-center justify-center text-gray-300 shrink-0">
                   {user.name?.[0]}
                 </div>
               )}
@@ -204,7 +204,7 @@ export default function SettlementClient({
               <select
                 value={method[user.id] ?? 'cash'}
                 onChange={(e) => setMethod({ ...method, [user.id]: e.target.value })}
-                className="bg-gray-800 border border-gray-700 text-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none"
+                className="bg-gray-800 border border-gray-700 text-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-hidden"
               >
                 <option value="cash">現金</option>
                 <option value="stripe">クレカ</option>
