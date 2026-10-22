@@ -2,367 +2,49 @@ import { NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
 import { createAdminClient, createClient } from '@/lib/supabase/server';
 import { notifyCashOrderPending, notifyNewOrder, notifyLowStock } from '@/lib/slack';
-import { isMissingDeferredSettlementMethodColumn, isMissingOrderPointsColumn } from '@/lib/orders';
-import { clampPointsToUse } from '@/lib/points';
-import { isMissingItemEnhancementColumns } from '@/lib/item-select';
-
-interface OrderItemInput {
-  item_id: string;
-  item_name: string;
-  item_price: number;
-  quantity: number;
-  subtotal: number;
-}
-
-async function fetchOrderItemState(
-  client: any,
-  itemId: string
-) {
-  const enhancedQuery = await client
-    .from('items')
-    .select('stock, name, is_available, is_unlimited_stock, stock_alert_threshold')
-    .eq('id', itemId)
-    .single();
-
-  if (!isMissingItemEnhancementColumns(enhancedQuery.error)) {
-    return enhancedQuery;
-  }
-
-  const legacyQuery = await client
-    .from('items')
-    .select('stock, name, is_available, stock_alert_threshold')
-    .eq('id', itemId)
-    .single();
-
-  return {
-    ...legacyQuery,
-    data: legacyQuery.data
-      ? {
-          ...legacyQuery.data,
-          is_unlimited_stock: false,
-        }
-      : legacyQuery.data,
-  };
-}
-
-async function rollbackOrder(
-  adminSupabase: ReturnType<typeof createAdminClient>,
-  orderId: string,
-  processedItems: Array<{ itemId: string; quantity: number }>
-) {
-  for (const processedItem of processedItems) {
-    const { data: currentItem } = await fetchOrderItemState(adminSupabase, processedItem.itemId);
-
-    if (!currentItem || currentItem.is_unlimited_stock) continue;
-
-    await adminSupabase
-      .from('items')
-      .update({ stock: currentItem.stock + processedItem.quantity })
-      .eq('id', processedItem.itemId);
-  }
-
-  await adminSupabase.from('stock_history').delete().eq('order_id', orderId);
-  await adminSupabase.from('order_items').delete().eq('order_id', orderId);
-  await adminSupabase.from('orders').delete().eq('id', orderId);
-}
-
-async function notifyOrderSideEffects(params: {
-  userName: string;
-  items: OrderItemInput[];
-  totalAmount: number;
-  paymentMethod: string;
-}) {
-  try {
-    await notifyNewOrder({
-      userName: params.userName,
-      items: params.items.map((i) => ({
-        name: i.item_name,
-        quantity: i.quantity,
-        price: i.item_price,
-      })),
-      total: params.totalAmount,
-      paymentMethod: params.paymentMethod,
-    });
-
-    if (params.paymentMethod === 'cash') {
-      await notifyCashOrderPending({
-        userName: params.userName,
-        total: params.totalAmount,
-        items: params.items.map((item) => ({
-          name: item.item_name,
-          quantity: item.quantity,
-        })),
-      });
-    }
-  } catch (error) {
-    console.error('[orders] notification failed', error);
-  }
-}
+import { parseCheckout } from '@/lib/checkout';
 
 export async function POST(request: Request) {
-  const supabase = await createClient();
-  const adminSupabase = createAdminClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const origin = request.headers.get('origin');
+  if (origin && origin !== new URL(request.url).origin) {
+    return NextResponse.json({ error: '不正な送信元です' }, { status: 403 });
+  }
+  const session = await createClient();
+  const { data: { user } } = await session.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const { items, total_amount, payment_method, deferred_settlement_method, points_used } =
-    await request.json();
-
-  // ユーザー情報取得
-  const { data: profile } = await supabase
-    .from('users').select('*').eq('id', user.id).single();
-
-  if (!profile?.is_approved) {
-    return NextResponse.json({ error: 'Account not approved' }, { status: 403 });
+  let input;
+  try { input = parseCheckout(await request.json()); }
+  catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : '注文内容が不正です' }, { status: 400 });
   }
 
-  const requestedPointsUsed = clampPointsToUse(
-    Number(points_used ?? 0),
-    profile.points_balance ?? 0,
-    total_amount
-  );
-  const payableAmount = Math.max(0, total_amount - requestedPointsUsed);
-  const normalizedPaymentMethod =
-    payableAmount === 0 ? 'balance' : payment_method;
-
-  // 残高確認（残高払いの場合）
-  if (normalizedPaymentMethod === 'balance') {
-    if (profile.balance < payableAmount) {
-      return NextResponse.json({ error: '残高が不足しています' }, { status: 400 });
-    }
-  }
-
-  if (
-    normalizedPaymentMethod === 'deferred' &&
-    !['cash', 'stripe'].includes(deferred_settlement_method)
-  ) {
-    return NextResponse.json({ error: '後払い時の精算方法を選択してください' }, { status: 400 });
-  }
-
-  // 在庫確認
-  for (const item of items as OrderItemInput[]) {
-    const { data: dbItem } = await fetchOrderItemState(supabase, item.item_id);
-    if (!dbItem || !dbItem.is_available || (!dbItem.is_unlimited_stock && dbItem.stock < item.quantity)) {
-      return NextResponse.json(
-        { error: `${dbItem?.name ?? '商品'}の在庫が不足しています` },
-        { status: 400 }
-      );
-    }
-  }
-
-  // トランザクション的に処理
-  // 1. 注文作成
-  const baseOrderPayload = {
-    accounting_ready: false,
-    user_id: user.id,
-    total_amount,
-    points_used: requestedPointsUsed,
-    payment_method: normalizedPaymentMethod,
-    payment_status: normalizedPaymentMethod === 'cash' ? 'pending' : 'completed',
-  };
-
-  let orderInsert = await adminSupabase
-    .from('orders')
-    .insert({
-      ...baseOrderPayload,
-      deferred_settlement_method:
-        normalizedPaymentMethod === 'deferred' ? deferred_settlement_method : null,
-    })
-    .select()
-    .single();
-
-  if (isMissingDeferredSettlementMethodColumn(orderInsert.error) && isMissingOrderPointsColumn(orderInsert.error)) {
-    orderInsert = await adminSupabase
-      .from('orders')
-      .insert({
-        accounting_ready: false,
-        user_id: user.id,
-        total_amount,
-        payment_method: normalizedPaymentMethod,
-        payment_status: normalizedPaymentMethod === 'cash' ? 'pending' : 'completed',
-      })
-      .select()
-      .single();
-  } else if (isMissingDeferredSettlementMethodColumn(orderInsert.error)) {
-    orderInsert = await adminSupabase
-      .from('orders')
-      .insert({
-        ...baseOrderPayload,
-      })
-      .select()
-      .single();
-  } else if (isMissingOrderPointsColumn(orderInsert.error)) {
-    orderInsert = await adminSupabase
-      .from('orders')
-      .insert({
-        accounting_ready: false,
-        user_id: user.id,
-        total_amount,
-        payment_method: normalizedPaymentMethod,
-        payment_status: normalizedPaymentMethod === 'cash' ? 'pending' : 'completed',
-        deferred_settlement_method:
-          normalizedPaymentMethod === 'deferred' ? deferred_settlement_method : null,
-      })
-      .select()
-      .single();
-  }
-
-  const { data: order, error: orderError } = orderInsert;
-
-  if (orderError || !order) {
-    return NextResponse.json({ error: '注文の作成に失敗しました' }, { status: 500 });
-  }
-
-  const processedItems: Array<{ itemId: string; quantity: number }> = [];
-  let pointsDeducted = false;
-
-  try {
-    // 2. 注文明細作成
-    const { error: orderItemsError } = await adminSupabase.from('order_items').insert(
-      (items as OrderItemInput[]).map((item) => ({ ...item, order_id: order.id }))
-    );
-
-    if (orderItemsError) {
-      throw orderItemsError;
-    }
-
-    // 3. 在庫を減らす & 在庫履歴
-    for (const item of items as OrderItemInput[]) {
-      const { data: currentItem, error: currentItemError } = await fetchOrderItemState(
-        adminSupabase,
-        item.item_id
-      );
-
-      if (currentItemError || !currentItem) {
-        throw currentItemError ?? new Error('商品情報の取得に失敗しました');
-      }
-
-      if (!currentItem.is_unlimited_stock) {
-        const { error: decrementError } = await adminSupabase.rpc('decrement_stock', {
-          p_item_id: item.item_id,
-          p_quantity: item.quantity,
-        });
-
-        if (decrementError) {
-          throw decrementError;
-        }
-
-        processedItems.push({ itemId: item.item_id, quantity: item.quantity });
-
-        const { error: stockHistoryError } = await adminSupabase.from('stock_history').insert({
-          item_id: item.item_id,
-          change_amount: -item.quantity,
-          reason: 'purchase',
-          order_id: order.id,
-          created_by: user.id,
-        });
-
-        if (stockHistoryError) {
-          throw stockHistoryError;
-        }
-      }
-
-      // 在庫アラートチェック
-      const { data: updatedItem, error: updatedItemError } = await fetchOrderItemState(
-        adminSupabase,
-        item.item_id
-      );
-
-      if (updatedItemError) {
-        throw updatedItemError;
-      }
-
-      if (!updatedItem.is_unlimited_stock && updatedItem.stock <= updatedItem.stock_alert_threshold) {
-        await notifyLowStock({
-          itemName: updatedItem.name,
-          currentStock: updatedItem.stock,
-          threshold: updatedItem.stock_alert_threshold,
-        });
-      }
-    }
-
-    // 4. ポイントを使う
-    if (requestedPointsUsed > 0) {
-      const { error: pointUseError } = await adminSupabase.rpc('record_point_transaction', {
-        p_user_id: user.id,
-        p_delta: -requestedPointsUsed,
-        p_reason_type: 'order_use',
-        p_charge_request_id: null,
-        p_order_id: order.id,
-        p_note: `注文でポイント利用 ${requestedPointsUsed}pt`,
-        p_created_by: user.id,
-        p_subscription_payment_id: null,
-      });
-
-      if (pointUseError) {
-        throw pointUseError;
-      }
-
-      pointsDeducted = true;
-    }
-
-    // 5. 残高・後払い残高を更新
-    if (normalizedPaymentMethod === 'balance' && payableAmount > 0) {
-      const { error: balanceUpdateError } = await adminSupabase.rpc(
-        'decrement_user_balance_if_available',
-        {
-          p_user_id: user.id,
-          p_amount: payableAmount,
-        }
-      );
-
-      if (balanceUpdateError) {
-        throw balanceUpdateError;
-      }
-    } else if (normalizedPaymentMethod === 'deferred' && payableAmount > 0) {
-      const { error: deferredUpdateError } = await adminSupabase.rpc(
-        'increment_user_deferred_balance',
-        {
-          p_user_id: user.id,
-          p_amount: payableAmount,
-        }
-      );
-
-      if (deferredUpdateError) {
-        throw deferredUpdateError;
-      }
-    }
-  } catch (error) {
-    if (pointsDeducted) {
-      await adminSupabase.rpc('record_point_transaction', {
-        p_user_id: user.id,
-        p_delta: requestedPointsUsed,
-        p_reason_type: 'order_refund',
-        p_charge_request_id: null,
-        p_order_id: order.id,
-        p_note: `注文失敗ロールバック ${requestedPointsUsed}pt`,
-        p_created_by: user.id,
-        p_subscription_payment_id: null,
-      });
-    }
-    await rollbackOrder(adminSupabase, order.id, processedItems);
-    console.error('[orders] failed to finalize order', error);
-    return NextResponse.json({ error: '注文処理に失敗しました' }, { status: 500 });
-  }
-
-  // Receipt/wallet settlement must not race a partially finalized checkout.
-  const ready = await adminSupabase.from('orders').update({ accounting_ready: true }).eq('id', order.id);
-  if (ready.error) console.warn('[orders] accounting readiness unavailable', { code: ready.error.code });
-
-  // 注文自体は成立させ、通知失敗ではロールバックしない
-  await notifyOrderSideEffects({
-    userName: profile.name,
-    items: items as OrderItemInput[],
-    totalAmount: total_amount,
-    paymentMethod: normalizedPaymentMethod,
+  const db = createAdminClient();
+  const { data, error } = await db.rpc('checkout_order', {
+    p_user_id: user.id, p_items: input.items, p_expected_total: input.total_amount,
+    p_payment_method: input.payment_method, p_deferred_method: input.deferred_settlement_method,
+    p_requested_points: input.points_used,
   });
+  if (error || !data?.ok) {
+    const code = error?.code ?? '';
+    const status = ({ '22023': 400, '42501': 403, P0001: 409, P0002: 404 } as Record<string, number>)[code];
+    if (status) return NextResponse.json({ error: error.message }, { status });
+    console.error('[orders] checkout failed', { code });
+    return NextResponse.json({ error: '注文を完了できませんでした。履歴を確認してください' }, { status: 500 });
+  }
 
-  revalidatePath('/mypage');
-  revalidatePath('/');
-  revalidatePath('/admin');
-  revalidatePath('/admin/orders');
-  revalidatePath('/admin/stock');
-  revalidatePath('/admin/items');
-
-  return NextResponse.json({ ok: true, order_id: order.id });
+  // Notifications run only after the entire financial transaction commits.
+  try {
+    await notifyNewOrder({ userName: data.user_name, items: data.items.map((i: any) => ({ name: i.item_name, quantity: i.quantity, price: i.item_price })), total: data.total_amount, paymentMethod: data.payment_method });
+    if (data.payment_method === 'cash') {
+      await notifyCashOrderPending({ userName: data.user_name, total: data.total_amount, items: data.items.map((i: any) => ({ name: i.item_name, quantity: i.quantity })) });
+    }
+    for (const item of data.low_stock_items) {
+      await notifyLowStock({ itemName: item.name, currentStock: item.stock, threshold: item.stock_alert_threshold });
+    }
+  } catch (notificationError) {
+    console.error('[orders] notification failed', notificationError);
+  }
+  for (const path of ['/', '/mypage', '/admin', '/admin/orders', '/admin/transactions', '/admin/stock', '/admin/items', '/admin/users', '/admin/points']) revalidatePath(path);
+  return NextResponse.json({ ok: true, order_id: data.order_id });
 }

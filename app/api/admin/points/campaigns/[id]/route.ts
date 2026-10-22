@@ -12,8 +12,9 @@ function normalizeDateTime(value: unknown) {
 
 export async function PATCH(
   request: Request,
-  { params }: { params: { id: string } }
+  { params: pendingParams }: { params: Promise<{ id: string }> }
 ) {
+  const params = await pendingParams;
   const adminSession = await requireAdminSession();
   if (!adminSession.user) {
     return NextResponse.json({ error: adminSession.error }, { status: adminSession.status });
@@ -49,8 +50,9 @@ export async function PATCH(
 
 export async function DELETE(
   _request: Request,
-  { params }: { params: { id: string } }
+  { params: pendingParams }: { params: Promise<{ id: string }> }
 ) {
+  const params = await pendingParams;
   const adminSession = await requireAdminSession();
   if (!adminSession.user) {
     return NextResponse.json({ error: adminSession.error }, { status: adminSession.status });

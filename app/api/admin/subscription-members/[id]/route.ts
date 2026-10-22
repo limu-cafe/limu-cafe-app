@@ -11,8 +11,9 @@ import { recomputeUserSubscriptionState } from '@/lib/subscription-service';
 
 export async function PATCH(
   request: Request,
-  { params }: { params: { id: string } }
+  { params: pendingParams }: { params: Promise<{ id: string }> }
 ) {
+  const params = await pendingParams;
   const adminSession = await requireAdminSession();
   if (!adminSession.user) {
     return NextResponse.json({ error: adminSession.error }, { status: adminSession.status });

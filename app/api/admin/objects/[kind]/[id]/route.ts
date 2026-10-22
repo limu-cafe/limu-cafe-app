@@ -6,7 +6,8 @@ import { isObjectId, OBJECT_RELATIONS, type ObjectKind } from '@/lib/admin-objec
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(request: Request, { params }: { params: { kind: string; id: string } }) {
+export async function GET(request: Request, { params: pendingParams }: { params: Promise<{ kind: string; id: string }> }) {
+  const params = await pendingParams;
   const session = await requireAdminSession();
   if (!session.user) return NextResponse.json({ error: session.error }, { status: session.status });
   const search = new URL(request.url).searchParams;
