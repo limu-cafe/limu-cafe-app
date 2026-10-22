@@ -2,7 +2,8 @@ import { runAdminPayment } from '@/lib/payment-api';
 import { isObjectId } from '@/lib/admin-objects';
 import { parseBatchBalancePayment } from '@/lib/order-balance-payment';
 
-export function POST(request: Request, { params }: { params: { id: string } }) {
+export async function POST(request: Request, { params: pendingParams }: { params: Promise<{ id: string }> }) {
+  const params = await pendingParams;
   return runAdminPayment(request, 'admin_pay_orders_from_balance', async actor => {
     if (!isObjectId(params.id)) throw new Error('invalid user');
     const batch = parseBatchBalancePayment(await request.json());
