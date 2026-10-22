@@ -184,7 +184,7 @@ export default function StockClient({ items, history }: Props) {
             value={miscExpenseName}
             onChange={(e) => setMiscExpenseName(e.target.value)}
             placeholder="雑費名（例: ティッシュ、紙コップ）"
-            className="w-full rounded-lg border border-gray-700 bg-gray-800 px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-white/20"
+            className="w-full rounded-lg border border-gray-700 bg-gray-800 px-4 py-3 text-white focus:outline-hidden focus:ring-2 focus:ring-white/20"
           />
           <input
             type="number"
@@ -192,14 +192,14 @@ export default function StockClient({ items, history }: Props) {
             value={miscExpenseAmount}
             onChange={(e) => setMiscExpenseAmount(e.target.value ? Number(e.target.value) : '')}
             placeholder="金額"
-            className="w-full rounded-lg border border-gray-700 bg-gray-800 px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-white/20"
+            className="w-full rounded-lg border border-gray-700 bg-gray-800 px-4 py-3 text-white focus:outline-hidden focus:ring-2 focus:ring-white/20"
           />
           <textarea
             value={miscExpenseNote}
             onChange={(e) => setMiscExpenseNote(e.target.value)}
             placeholder="補足（例: 研究室共有用、ドラッグストア購入）"
             rows={3}
-            className="w-full resize-none rounded-lg border border-gray-700 bg-gray-800 px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-white/20"
+            className="w-full resize-none rounded-lg border border-gray-700 bg-gray-800 px-4 py-3 text-white focus:outline-hidden focus:ring-2 focus:ring-white/20"
           />
           <button
             onClick={handleMiscExpense}
@@ -216,7 +216,7 @@ export default function StockClient({ items, history }: Props) {
           type="checkbox"
           checked={pendingOnly}
           onChange={(e) => setPendingOnly(e.target.checked)}
-          className="rounded border-gray-700 bg-gray-900 text-white"
+          className="rounded-sm border-gray-700 bg-gray-900 text-white"
         />
         要対応の在庫だけ表示
       </label>
@@ -275,7 +275,7 @@ export default function StockClient({ items, history }: Props) {
                           placeholder="個数"
                           value={quantities[item.id] ?? ''}
                           onChange={(e) => setQuantities({ ...quantities, [item.id]: e.target.value })}
-                          className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-white/20 text-sm font-mono"
+                          className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 focus:outline-hidden focus:ring-2 focus:ring-white/20 text-sm font-mono"
                         />
                       )}
                     </td>
@@ -323,7 +323,7 @@ export default function StockClient({ items, history }: Props) {
                               placeholder="例: ドラッグストア / コンビニ"
                               value={draft.vendor}
                               onChange={(e) => updateDraft(item.id, { vendor: e.target.value })}
-                              className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-white/20"
+                              className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white focus:outline-hidden focus:ring-2 focus:ring-white/20"
                             />
                           </div>
 
@@ -335,7 +335,7 @@ export default function StockClient({ items, history }: Props) {
                               placeholder="例: 480"
                               value={draft.total_amount}
                               onChange={(e) => updateDraft(item.id, { total_amount: e.target.value })}
-                              className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm font-mono text-white focus:outline-none focus:ring-2 focus:ring-white/20"
+                              className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm font-mono text-white focus:outline-hidden focus:ring-2 focus:ring-white/20"
                             />
                             <p className="text-[11px] text-gray-500">
                               追加数量 {qty > 0 ? `${qty}個` : '未入力'} に対する合計額を入力します
@@ -381,7 +381,7 @@ export default function StockClient({ items, history }: Props) {
                               placeholder="例: 金庫から支出 / 自腹で購入"
                               value={draft.note}
                               onChange={(e) => updateDraft(item.id, { note: e.target.value })}
-                              className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-white/20"
+                              className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white focus:outline-hidden focus:ring-2 focus:ring-white/20"
                             />
                           </div>
                           <div className="rounded-xl border border-gray-800 bg-gray-900 px-4 py-3">

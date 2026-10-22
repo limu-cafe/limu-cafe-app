@@ -29,7 +29,7 @@ export default function AdminShell({ sidebar, children }: { sidebar: ReactNode; 
     return () => window.removeEventListener('keydown', escape);
   }, [open]);
 
-  return <div className="flex h-[100dvh] overflow-hidden bg-gray-950">
+  return <div className="flex h-dvh overflow-hidden bg-gray-950">
     <header className="fixed inset-x-0 top-0 z-30 flex h-14 items-center gap-3 border-b border-gray-800 bg-gray-950 px-4 lg:hidden">
       <button ref={menuButton} type="button" onClick={() => setOpen(true)} aria-label="管理メニューを開く" aria-expanded={open} className="rounded-lg p-2 text-white"><Menu size={22} /></button>
       <span className="font-display font-bold text-white">☕ LIMU喫茶 管理者</span>

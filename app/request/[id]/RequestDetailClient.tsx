@@ -283,7 +283,7 @@ export default function RequestDetailClient({
             value={commentDraft}
             onChange={(event) => setCommentDraft(event.target.value)}
             placeholder={copy.commentPlaceholder}
-            className="w-full resize-none border-0 bg-transparent px-2 py-2 text-sm leading-6 text-espresso placeholder:text-espresso-300 focus:outline-none"
+            className="w-full resize-none border-0 bg-transparent px-2 py-2 text-sm leading-6 text-espresso placeholder:text-espresso-300 focus:outline-hidden"
           />
           <div className="mt-2 flex justify-end">
             <button

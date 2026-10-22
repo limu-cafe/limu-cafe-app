@@ -123,7 +123,7 @@ export default function OrdersClient({ orders }: { orders: any[] }) {
                   onClick={() => setExpanded(expanded === order.id ? null : order.id)}
                 >
                   {/* ユーザー */}
-                  <div className="flex items-center gap-2 w-32 flex-shrink-0">
+                  <div className="flex items-center gap-2 w-32 shrink-0">
                     {order.user?.avatar_url ? (
                       <img src={order.user.avatar_url} className="w-7 h-7 rounded-full" alt="" />
                     ) : (
@@ -135,29 +135,29 @@ export default function OrdersClient({ orders }: { orders: any[] }) {
                   </div>
 
                   {/* 日時 */}
-                  <span className="text-gray-400 text-xs w-24 flex-shrink-0">
+                  <span className="text-gray-400 text-xs w-24 shrink-0">
                     {format(new Date(order.created_at), 'M/d HH:mm', { locale: ja })}
                   </span>
 
                   {/* 支払い方法 */}
-                    <span className="text-xs bg-gray-700 text-gray-300 px-2 py-0.5 rounded-full flex-shrink-0">
+                    <span className="text-xs bg-gray-700 text-gray-300 px-2 py-0.5 rounded-full shrink-0">
                       {order.payment_method === 'deferred' && order.deferred_settlement_method
                         ? `${METHOD_LABEL[order.payment_method]} / ${DEFERRED_SETTLEMENT_LABEL[order.deferred_settlement_method] ?? order.deferred_settlement_method}`
                         : METHOD_LABEL[order.payment_method]}
                     </span>
 
                   {/* ステータス */}
-                  <span className={`text-xs px-2 py-0.5 rounded-full flex-shrink-0 ${STATUS_COLOR[order.payment_status]}`}>
+                  <span className={`text-xs px-2 py-0.5 rounded-full shrink-0 ${STATUS_COLOR[order.payment_status]}`}>
                     {STATUS_LABEL[order.payment_status]}
                   </span>
 
                   {/* 金額 */}
-                  <span className="font-mono text-white ml-auto flex-shrink-0">
+                  <span className="font-mono text-white ml-auto shrink-0">
                     ¥{order.total_amount.toLocaleString()}
                   </span>
 
                   {/* 展開アイコン */}
-                  <span className="text-gray-500 flex-shrink-0">
+                  <span className="text-gray-500 shrink-0">
                     {expanded === order.id ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                   </span>
                 </div>

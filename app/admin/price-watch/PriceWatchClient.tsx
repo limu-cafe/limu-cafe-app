@@ -64,13 +64,13 @@ export default function PriceWatchClient({ watches }: { watches: PriceWatch[] })
             <label className="text-xs text-gray-400">商品名</label>
             <input type="text" placeholder="コカコーラ 500ml" value={form.item_name}
               onChange={e => setForm({ ...form, item_name: e.target.value })}
-              className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none"
+              className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-hidden"
               disabled />
           </div>
           <div className="space-y-1">
             <label className="text-xs text-gray-400">プラットフォーム</label>
             <select value={form.platform} onChange={e => setForm({ ...form, platform: e.target.value })}
-              className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none"
+              className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-hidden"
               disabled>
               {PLATFORM_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
@@ -79,7 +79,7 @@ export default function PriceWatchClient({ watches }: { watches: PriceWatch[] })
             <label className="text-xs text-gray-400">商品URL</label>
             <input type="url" placeholder="https://www.amazon.co.jp/..." value={form.url}
               onChange={e => setForm({ ...form, url: e.target.value })}
-              className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none"
+              className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-hidden"
               disabled />
           </div>
           <div className="space-y-1">
@@ -88,7 +88,7 @@ export default function PriceWatchClient({ watches }: { watches: PriceWatch[] })
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">¥</span>
               <input type="number" placeholder="100" value={form.target_price}
                 onChange={e => setForm({ ...form, target_price: e.target.value })}
-                className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg pl-7 pr-3 py-2 text-sm font-mono focus:outline-none"
+                className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg pl-7 pr-3 py-2 text-sm font-mono focus:outline-hidden"
                 disabled />
             </div>
           </div>
@@ -141,7 +141,7 @@ export default function PriceWatchClient({ watches }: { watches: PriceWatch[] })
                     </p>
                   )}
                 </div>
-                <div className="flex items-center gap-1 flex-shrink-0">
+                <div className="flex items-center gap-1 shrink-0">
                   <a href={w.url} target="_blank" rel="noopener noreferrer"
                     className="p-1.5 rounded-lg hover:bg-gray-700 text-gray-500 hover:text-gray-300 transition-colors">
                     <ExternalLink size={15} />

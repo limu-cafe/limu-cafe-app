@@ -26,7 +26,7 @@ export default function AdminSidebar({ notifications = {}, status = 'ready' }: {
   };
 
   return (
-    <aside className="h-full max-h-[100dvh] w-72 shrink-0 overflow-y-auto border-r border-gray-800 bg-gray-950">
+    <aside className="h-full max-h-dvh w-72 shrink-0 overflow-y-auto border-r border-gray-800 bg-gray-950">
       <div className="border-b border-gray-800 px-5 py-5">
         <div className="flex items-center gap-3">
           <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/10 text-xl">
