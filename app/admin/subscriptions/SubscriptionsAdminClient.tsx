@@ -289,7 +289,7 @@ export default function SubscriptionsAdminClient({
             value={createForm.name}
             onChange={(event) => setCreateForm((current) => ({ ...current, name: event.target.value }))}
             aria-label="サブスク名" placeholder="サブスク名"
-            className="min-w-0 w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder:text-gray-500 focus:outline-none"
+            className="min-w-0 w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder:text-gray-500 focus:outline-hidden"
           />
           <input
             type="text"
@@ -298,7 +298,7 @@ export default function SubscriptionsAdminClient({
               setCreateForm((current) => ({ ...current, english_name: event.target.value }))
             }
             aria-label="英語名" placeholder="英語名"
-            className="min-w-0 w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder:text-gray-500 focus:outline-none"
+            className="min-w-0 w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder:text-gray-500 focus:outline-hidden"
           />
           <input
             type="number"
@@ -306,7 +306,7 @@ export default function SubscriptionsAdminClient({
             value={createForm.price}
             onChange={(event) => setCreateForm((current) => ({ ...current, price: event.target.value }))}
             aria-label="価格" placeholder="価格"
-            className="min-w-0 w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:outline-none"
+            className="min-w-0 w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:outline-hidden"
           />
           <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] gap-2">
             <input
@@ -316,7 +316,7 @@ export default function SubscriptionsAdminClient({
               onChange={(event) =>
                 setCreateForm((current) => ({ ...current, billing_interval_count: event.target.value }))
               }
-              className="min-w-0 w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:outline-none"
+              className="min-w-0 w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:outline-hidden"
             />
             <select
               aria-label="請求単位" value={createForm.billing_interval_unit}
@@ -326,7 +326,7 @@ export default function SubscriptionsAdminClient({
                   billing_interval_unit: event.target.value as SubscriptionBillingIntervalUnit,
                 }))
               }
-              className="min-w-0 w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:outline-none"
+              className="min-w-0 w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:outline-hidden"
             >
               <option value="day">日</option>
               <option value="week">週</option>
@@ -349,7 +349,7 @@ export default function SubscriptionsAdminClient({
             onChange={(event) => setCreateForm((current) => ({ ...current, description: event.target.value }))}
             aria-label="説明" placeholder="説明"
             rows={3}
-            className="min-w-0 w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder:text-gray-500 focus:outline-none"
+            className="min-w-0 w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder:text-gray-500 focus:outline-hidden"
           />
           <div className="grid gap-2 text-sm text-gray-300">
             <label className="inline-flex items-center gap-2 rounded-lg border border-gray-800 bg-gray-950/40 px-3 py-2">
@@ -403,7 +403,7 @@ export default function SubscriptionsAdminClient({
                       [product.id]: { ...draft, name: event.target.value },
                     }))
                   }
-                  className="min-w-0 w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:outline-none"
+                  className="min-w-0 w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:outline-hidden"
                 />
                 <input
                   type="text"
@@ -414,7 +414,7 @@ export default function SubscriptionsAdminClient({
                       [product.id]: { ...draft, english_name: event.target.value },
                     }))
                   }
-                  className="min-w-0 w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:outline-none"
+                  className="min-w-0 w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:outline-hidden"
                 />
                 <input
                   type="number"
@@ -426,7 +426,7 @@ export default function SubscriptionsAdminClient({
                       [product.id]: { ...draft, price: event.target.value },
                     }))
                   }
-                  className="min-w-0 w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:outline-none"
+                  className="min-w-0 w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:outline-hidden"
                 />
                 <div className="grid grid-cols-2 gap-2">
                   <input
@@ -439,7 +439,7 @@ export default function SubscriptionsAdminClient({
                         [product.id]: { ...draft, billing_interval_count: event.target.value },
                       }))
                     }
-                    className="min-w-0 w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:outline-none"
+                    className="min-w-0 w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:outline-hidden"
                   />
                   <select
                     aria-label="請求単位" value={draft.billing_interval_unit}
@@ -452,7 +452,7 @@ export default function SubscriptionsAdminClient({
                         },
                       }))
                     }
-                    className="min-w-0 w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:outline-none"
+                    className="min-w-0 w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:outline-hidden"
                   >
                     <option value="day">日</option>
                     <option value="week">週</option>
@@ -479,7 +479,7 @@ export default function SubscriptionsAdminClient({
                     }))
                   }
                   rows={3}
-                  className="min-w-0 w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:outline-none"
+                  className="min-w-0 w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:outline-hidden"
                 />
                 <div className="grid gap-2 text-sm text-gray-300">
                   <div className="rounded-lg border border-gray-800 bg-gray-950/40 px-3 py-2 text-white">
@@ -576,7 +576,7 @@ export default function SubscriptionsAdminClient({
                                     },
                                   }))
                                 }
-                                className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white focus:outline-none"
+                                className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white focus:outline-hidden"
                               >
                                 <option value="active">{SUBSCRIPTION_STATUS_LABELS.active}</option>
                                 <option value="cancel_at_period_end">{SUBSCRIPTION_STATUS_LABELS.cancel_at_period_end}</option>
@@ -597,7 +597,7 @@ export default function SubscriptionsAdminClient({
                                     },
                                   }))
                                 }
-                                className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white focus:outline-none"
+                                className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white focus:outline-hidden"
                               />
                             </label>
                             <div className="grid grid-cols-3 gap-2"><p className="col-span-3 text-xs text-gray-400">支払いの優先順位（左から1・2・3）</p>
@@ -612,7 +612,7 @@ export default function SubscriptionsAdminClient({
                                       event.target.value as SubscriptionPaymentPriority
                                     )
                                   }
-                                  className="min-w-0 w-full rounded-lg border border-gray-700 bg-gray-800 px-2 py-2 text-sm text-white focus:outline-none"
+                                  className="min-w-0 w-full rounded-lg border border-gray-700 bg-gray-800 px-2 py-2 text-sm text-white focus:outline-hidden"
                                 >
                                   {SUBSCRIPTION_PRIORITY_OPTIONS.map((method) => (
                                     <option key={method} value={method}>

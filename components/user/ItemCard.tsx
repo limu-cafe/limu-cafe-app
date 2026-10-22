@@ -116,8 +116,8 @@ export default function ItemCard({
           </button>
         )}
 
-        <div className="grid grid-cols-[64px,minmax(0,1fr)] gap-3 pr-8">
-          <div className="relative h-16 w-16 flex-shrink-0 overflow-hidden rounded-[18px] bg-cream-50">
+        <div className="grid grid-cols-[64px_minmax(0,1fr)] gap-3 pr-8">
+          <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-[18px] bg-cream-50">
             {item.image_url ? (
               <Image
                 src={item.image_url}

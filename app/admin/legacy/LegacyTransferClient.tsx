@@ -168,7 +168,7 @@ export default function LegacyTransferClient({
                         [request.id]: event.target.value,
                       }))
                     }
-                    className="w-full rounded-lg border border-gray-700 bg-gray-800 px-4 py-3 text-sm text-white focus:outline-none"
+                    className="w-full rounded-lg border border-gray-700 bg-gray-800 px-4 py-3 text-sm text-white focus:outline-hidden"
                   >
                     <option value="">選択してください</option>
                     {unmatchedLegacyUsers.map((legacyUser) => (
@@ -232,7 +232,7 @@ export default function LegacyTransferClient({
                       }))
                     }
                     rows={4}
-                    className="w-full rounded-lg border border-gray-700 bg-gray-800 px-4 py-3 text-sm text-white focus:outline-none resize-none"
+                    className="w-full rounded-lg border border-gray-700 bg-gray-800 px-4 py-3 text-sm text-white focus:outline-hidden resize-none"
                   />
                 </div>
               </div>

@@ -253,14 +253,14 @@ export default function CashboxClient({
             value={adjustmentAmount}
             onChange={(e) => setAdjustmentAmount(e.target.value)}
             aria-label="金額" placeholder="金額"
-            className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-white/20"
+            className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-4 py-3 focus:outline-hidden focus:ring-2 focus:ring-white/20"
           />
           <textarea
             value={adjustmentNote}
             onChange={(e) => setAdjustmentNote(e.target.value)}
             aria-label="メモ（例: 金庫からつり銭を補充）" placeholder="メモ（例: 金庫からつり銭を補充）"
             rows={3}
-            className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-white/20 resize-none"
+            className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-4 py-3 focus:outline-hidden focus:ring-2 focus:ring-white/20 resize-none"
           />
           <button
             onClick={handleAdjustment}
@@ -270,7 +270,7 @@ export default function CashboxClient({
             {loading === 'adjustment' ? '記録中...' : '台帳に記録する'}
           </button>
         </div>:<section className="space-y-4 rounded-xl border border-gray-800 bg-gray-900 p-5"><h2 className="font-semibold text-white">雑費の出金</h2><label className="block text-sm text-gray-300">雑費名<input value={miscExpenseName} onChange={event=>setMiscExpenseName(event.target.value)} className="mt-2 block w-full rounded-lg bg-gray-800 p-3"/></label><label className="block text-sm text-gray-300">金額<input type="number" min={1} value={miscExpenseAmount} onChange={event=>setMiscExpenseAmount(event.target.value?Number(event.target.value):'')} className="mt-2 block w-full rounded-lg bg-gray-800 p-3"/></label><label className="block text-sm text-gray-300">メモ<textarea value={miscExpenseNote} onChange={event=>setMiscExpenseNote(event.target.value)} className="mt-2 block w-full rounded-lg bg-gray-800 p-3"/></label><button type="button" disabled={loading!==null} onClick={handleMiscExpense} className="rounded-lg bg-white px-4 py-2 text-sm text-gray-950">雑費を記録</button></section>}</section>}
-      <ObjectWorkspace selected={Boolean(selectedEntry)} label="出納記録の詳細" onClose={()=>selectEntry(null)} collection={<div className="divide-y divide-gray-800 rounded-xl border border-gray-800 bg-gray-900">{entries.map(entry=><button key={entry.id} type="button" aria-pressed={entry.id===entryId} onClick={()=>selectEntry(entry.id)} className="flex w-full items-center gap-4 px-4 py-4 text-left text-sm hover:bg-gray-800"><span className="min-w-0 flex-1 text-white">{cashboxEntryLabels[entry.entry_type]}<small className="mt-1 block text-gray-400">{format(new Date(entry.created_at),'M/d HH:mm',{locale:ja})} · {entry.created_by_user?.name}</small></span><span className={`font-mono ${entry.direction==='in'?'text-emerald-300':'text-gray-200'}`}>{entry.direction==='in'?'+':'−'}¥{entry.amount.toLocaleString()}</span></button>)}{!entries.length&&<p className="p-6 text-sm text-gray-400">記録はまだありません</p>}</div>} detail={selectedEntry&&<><h2 className="text-lg font-semibold text-white">{cashboxEntryLabels[selectedEntry.entry_type]}</h2><p className="mt-3 font-mono text-2xl text-white">{selectedEntry.direction==='in'?'+':'−'}¥{selectedEntry.amount.toLocaleString()}</p><p className="mt-3 text-sm text-gray-400">{format(new Date(selectedEntry.created_at),'yyyy/M/d HH:mm',{locale:ja})} · {selectedEntry.created_by_user?.name}</p><p className="mt-4 whitespace-pre-wrap break-words text-sm text-gray-300">{selectedEntry.note||'メモなし'}</p>{selectedEntry.order_id&&<Link href={`/admin/orders/${selectedEntry.order_id}?from=${encodeURIComponent(`/admin/cashbox?view=ledger&entry=${selectedEntry.id}`)}`} className="mt-5 block text-sm text-sky-300 underline">この出納の注文を見る →</Link>}{selectedEntry.purchase_run_id&&<Link href={`/admin/reimbursements?run=${selectedEntry.purchase_run_id}&from=cashbox`} className="mt-5 block text-sm text-sky-300 underline">この出納の立替記録を見る →</Link>}</>}/>
+      <ObjectWorkspace selected={Boolean(selectedEntry)} label="出納記録の詳細" onClose={()=>selectEntry(null)} collection={<div className="divide-y divide-gray-800 rounded-xl border border-gray-800 bg-gray-900">{entries.map(entry=><button key={entry.id} type="button" aria-pressed={entry.id===entryId} onClick={()=>selectEntry(entry.id)} className="flex w-full items-center gap-4 px-4 py-4 text-left text-sm hover:bg-gray-800"><span className="min-w-0 flex-1 text-white">{cashboxEntryLabels[entry.entry_type]}<small className="mt-1 block text-gray-400">{format(new Date(entry.created_at),'M/d HH:mm',{locale:ja})} · {entry.created_by_user?.name}</small></span><span className={`font-mono ${entry.direction==='in'?'text-emerald-300':'text-gray-200'}`}>{entry.direction==='in'?'+':'−'}¥{entry.amount.toLocaleString()}</span></button>)}{!entries.length&&<p className="p-6 text-sm text-gray-400">記録はまだありません</p>}</div>} detail={selectedEntry&&<><h2 className="text-lg font-semibold text-white">{cashboxEntryLabels[selectedEntry.entry_type]}</h2><p className="mt-3 font-mono text-2xl text-white">{selectedEntry.direction==='in'?'+':'−'}¥{selectedEntry.amount.toLocaleString()}</p><p className="mt-3 text-sm text-gray-400">{format(new Date(selectedEntry.created_at),'yyyy/M/d HH:mm',{locale:ja})} · {selectedEntry.created_by_user?.name}</p><p className="mt-4 whitespace-pre-wrap wrap-break-word text-sm text-gray-300">{selectedEntry.note||'メモなし'}</p>{selectedEntry.order_id&&<Link href={`/admin/orders/${selectedEntry.order_id}?from=${encodeURIComponent(`/admin/cashbox?view=ledger&entry=${selectedEntry.id}`)}`} className="mt-5 block text-sm text-sky-300 underline">この出納の注文を見る →</Link>}{selectedEntry.purchase_run_id&&<Link href={`/admin/reimbursements?run=${selectedEntry.purchase_run_id}&from=cashbox`} className="mt-5 block text-sm text-sky-300 underline">この出納の立替記録を見る →</Link>}</>}/>
     </div>}
     {view==='counts'&&<div className="space-y-5"><button type="button" onClick={()=>setAddingCount(value=>!value)} className="rounded-lg bg-white px-4 py-2 text-sm text-gray-950">{addingCount?'追加を閉じる':'金庫確認を記録'}</button>{addingCount&&<div className="max-w-xl">        <div className="bg-gray-900 rounded-2xl border border-gray-800 p-5 space-y-4">
           <div>
@@ -294,7 +294,7 @@ export default function CashboxClient({
                       [String(denomination)]: e.target.value,
                     }))
                   }
-                  className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-white/20"
+                  className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:outline-hidden focus:ring-2 focus:ring-white/20"
                 />
               </label>
             ))}
@@ -313,14 +313,14 @@ export default function CashboxClient({
             value={actualAmount}
             onChange={(e) => setActualAmount(e.target.value)}
             aria-label="実測金額（枚数を使わない場合のみ）" placeholder="実測金額（枚数を使わない場合のみ）"
-            className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-white/20"
+            className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-4 py-3 focus:outline-hidden focus:ring-2 focus:ring-white/20"
           />
           <textarea
             value={countNote}
             onChange={(e) => setCountNote(e.target.value)}
             aria-label="メモ（例: 月末確認、つり銭補充前）" placeholder="メモ（例: 月末確認、つり銭補充前）"
             rows={3}
-            className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-white/20 resize-none"
+            className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-4 py-3 focus:outline-hidden focus:ring-2 focus:ring-white/20 resize-none"
           />
           <button
             onClick={handleCount}
@@ -329,6 +329,6 @@ export default function CashboxClient({
           >
             {loading === 'count' ? '記録中...' : '確認結果を保存する'}
           </button>
-        </div></div>}<ObjectWorkspace selected={Boolean(selectedCount)} label="金庫確認の詳細" onClose={()=>selectCount(null)} collection={<div className="divide-y divide-gray-800 rounded-xl border border-gray-800 bg-gray-900">{counts.map(count=><button key={count.id} type="button" aria-pressed={count.id===countId} onClick={()=>selectCount(count.id)} className="flex w-full items-center gap-4 px-4 py-4 text-left text-sm hover:bg-gray-800"><span className="flex-1 text-white">{format(new Date(count.counted_at),'yyyy/M/d HH:mm',{locale:ja})}<small className="mt-1 block text-gray-400">{count.counted_by_user?.name}</small></span><span className={`font-mono ${count.difference_amount===0?'text-emerald-300':'text-amber-300'}`}>差額 {count.difference_amount>0?'+':''}¥{count.difference_amount.toLocaleString()}</span></button>)}{!counts.length&&<p className="p-6 text-sm text-gray-400">確認履歴はまだありません</p>}</div>} detail={selectedCount&&<><h2 className="font-semibold text-white">{format(new Date(selectedCount.counted_at),'yyyy/M/d HH:mm',{locale:ja})}の確認</h2><dl className="mt-5 grid grid-cols-[7rem_1fr] gap-3 text-sm"><dt className="text-gray-400">台帳の金額</dt><dd className="font-mono text-white">¥{selectedCount.expected_amount.toLocaleString()}</dd><dt className="text-gray-400">実測金額</dt><dd className="font-mono text-white">¥{selectedCount.actual_amount.toLocaleString()}</dd><dt className="text-gray-400">差額</dt><dd className="font-mono text-amber-300">¥{selectedCount.difference_amount.toLocaleString()}</dd></dl><p className="mt-4 text-sm text-gray-400">{selectedCount.counted_by_user?.name}</p><p className="mt-3 whitespace-pre-wrap break-words text-sm text-gray-300">{selectedCount.note||'メモなし'}</p></>}/></div>}
+        </div></div>}<ObjectWorkspace selected={Boolean(selectedCount)} label="金庫確認の詳細" onClose={()=>selectCount(null)} collection={<div className="divide-y divide-gray-800 rounded-xl border border-gray-800 bg-gray-900">{counts.map(count=><button key={count.id} type="button" aria-pressed={count.id===countId} onClick={()=>selectCount(count.id)} className="flex w-full items-center gap-4 px-4 py-4 text-left text-sm hover:bg-gray-800"><span className="flex-1 text-white">{format(new Date(count.counted_at),'yyyy/M/d HH:mm',{locale:ja})}<small className="mt-1 block text-gray-400">{count.counted_by_user?.name}</small></span><span className={`font-mono ${count.difference_amount===0?'text-emerald-300':'text-amber-300'}`}>差額 {count.difference_amount>0?'+':''}¥{count.difference_amount.toLocaleString()}</span></button>)}{!counts.length&&<p className="p-6 text-sm text-gray-400">確認履歴はまだありません</p>}</div>} detail={selectedCount&&<><h2 className="font-semibold text-white">{format(new Date(selectedCount.counted_at),'yyyy/M/d HH:mm',{locale:ja})}の確認</h2><dl className="mt-5 grid grid-cols-[7rem_1fr] gap-3 text-sm"><dt className="text-gray-400">台帳の金額</dt><dd className="font-mono text-white">¥{selectedCount.expected_amount.toLocaleString()}</dd><dt className="text-gray-400">実測金額</dt><dd className="font-mono text-white">¥{selectedCount.actual_amount.toLocaleString()}</dd><dt className="text-gray-400">差額</dt><dd className="font-mono text-amber-300">¥{selectedCount.difference_amount.toLocaleString()}</dd></dl><p className="mt-4 text-sm text-gray-400">{selectedCount.counted_by_user?.name}</p><p className="mt-3 whitespace-pre-wrap wrap-break-word text-sm text-gray-300">{selectedCount.note||'メモなし'}</p></>}/></div>}
   </div>;
 }

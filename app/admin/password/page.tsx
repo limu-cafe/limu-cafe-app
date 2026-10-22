@@ -94,7 +94,7 @@ function AdminPasswordContent() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
-              className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg pl-10 pr-4 py-3 focus:outline-none focus:ring-2 focus:ring-white/20 placeholder:text-gray-600"
+              className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg pl-10 pr-4 py-3 focus:outline-hidden focus:ring-2 focus:ring-white/20 placeholder:text-gray-600"
             />
           </div>
 
