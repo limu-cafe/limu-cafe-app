@@ -6,7 +6,9 @@ import OrderDetailClient from './OrderDetailClient';
 
 export const dynamic = 'force-dynamic';
 
-export default async function OrderDetailPage({ params, searchParams = {} }: { params: { id: string }; searchParams?: { from?: string } }) {
+export default async function OrderDetailPage({ params: pendingParams, searchParams: pendingSearch }: { params: Promise<{ id: string }>; searchParams?: Promise<{ from?: string }> }) {
+  const params = await pendingParams;
+  const searchParams = (await pendingSearch) ?? {};
   await requireAdminPage();
   const db = createAdminClient();
   const order = await new AdminObjectReadRepository(db).order(params.id);

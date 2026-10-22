@@ -148,9 +148,9 @@ async function fetchUserChoices(supabase: any) {
   }
 }
 
-export default async function AdminTransactionsPage({ searchParams = {} }: { searchParams?: { user?: string; page?: string } }) {
+export default async function AdminTransactionsPage({ searchParams: pendingSearch }: { searchParams?: Promise<{ user?: string; page?: string }> }) {
   await requireAdminPage();
-  const filter = new TransactionFilter(searchParams);
+  const filter = new TransactionFilter((await pendingSearch) ?? {});
   const supabase = createAdminClient();
 
   const queryCharges = () =>

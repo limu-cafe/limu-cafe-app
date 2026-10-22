@@ -21,8 +21,9 @@ type PointCampaignRow = {
 
 export async function POST(
   _request: Request,
-  { params }: { params: { id: string; action: string } }
+  { params: pendingParams }: { params: Promise<{ id: string; action: string }> }
 ) {
+  const params = await pendingParams;
   const adminSession = await requireAdminSession();
   if (!adminSession.user) {
     return NextResponse.json({ error: adminSession.error }, { status: adminSession.status });

@@ -8,8 +8,9 @@ import { notifyLegacyTransferReviewed } from '@/lib/slack';
 
 export async function POST(
   request: Request,
-  { params }: { params: { id: string; action: string } }
+  { params: pendingParams }: { params: Promise<{ id: string; action: string }> }
 ) {
+  const params = await pendingParams;
   const adminSession = await requireAdminSession();
   const supabase = createAdminClient();
 

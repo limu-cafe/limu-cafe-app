@@ -5,8 +5,9 @@ import { createAdminClient } from '@/lib/supabase/server';
 
 export async function DELETE(
   _request: Request,
-  { params }: { params: { id: string } }
+  { params: pendingParams }: { params: Promise<{ id: string }> }
 ) {
+  const params = await pendingParams;
   const adminAccess = await requireAdminSession();
   if (!adminAccess.user) return NextResponse.json({ error: adminAccess.error }, { status: adminAccess.status });
 

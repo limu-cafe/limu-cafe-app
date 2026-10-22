@@ -10,8 +10,9 @@ import { recomputeUserSubscriptionState } from '@/lib/subscription-service';
 
 export async function PATCH(
   request: Request,
-  { params }: { params: { id: string } }
+  { params: pendingParams }: { params: Promise<{ id: string }> }
 ) {
+  const params = await pendingParams;
   const supabase = await createClient();
   const adminSupabase = createAdminClient();
   const {
