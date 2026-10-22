@@ -134,7 +134,7 @@ export default function ChargeClient({ requests }: { requests: any[] }) {
           type="checkbox"
           checked={pendingOnly}
           onChange={(e) => setPendingOnly(e.target.checked)}
-          className="rounded border-gray-700 bg-gray-900 text-white"
+          className="rounded-sm border-gray-700 bg-gray-900 text-white"
         />
         旧方式の未処理だけ表示
       </label>
@@ -146,7 +146,7 @@ export default function ChargeClient({ requests }: { requests: any[] }) {
               type="checkbox"
               checked={pending.length > 0 && selectedIds.length === pending.length}
               onChange={handleToggleAllPending}
-              className="rounded border-gray-700 bg-gray-900 text-white"
+              className="rounded-sm border-gray-700 bg-gray-900 text-white"
             />
             すべて選択
           </label>
@@ -180,12 +180,12 @@ export default function ChargeClient({ requests }: { requests: any[] }) {
                 type="checkbox"
                 checked={selectedIds.includes(req.id)}
                 onChange={() => handleToggleSelection(req.id)}
-                className="rounded border-gray-700 bg-gray-900 text-white"
+                className="rounded-sm border-gray-700 bg-gray-900 text-white"
               />
               {req.user?.avatar_url ? (
-                <img src={req.user.avatar_url} className="w-10 h-10 rounded-full flex-shrink-0" alt="" />
+                <img src={req.user.avatar_url} className="w-10 h-10 rounded-full shrink-0" alt="" />
               ) : (
-                <div className="w-10 h-10 rounded-full bg-gray-700 flex items-center justify-center text-gray-300 flex-shrink-0">
+                <div className="w-10 h-10 rounded-full bg-gray-700 flex items-center justify-center text-gray-300 shrink-0">
                   {req.user?.name?.[0]}
                 </div>
               )}
@@ -199,12 +199,12 @@ export default function ChargeClient({ requests }: { requests: any[] }) {
                   {req.method === 'cash' ? ' 現金' : ' クレカ'}
                 </p>
               </div>
-              <div className="text-right flex-shrink-0">
+              <div className="text-right shrink-0">
                 <p className="font-display font-bold text-2xl text-white">
                   +¥{req.amount.toLocaleString()}
                 </p>
               </div>
-              <div className="flex gap-2 flex-shrink-0">
+              <div className="flex gap-2 shrink-0">
                 <button
                   onClick={() => handleAction(req.id, 'reject')}
                   disabled={!!loading}

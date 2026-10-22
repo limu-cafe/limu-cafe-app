@@ -35,7 +35,7 @@ const EMPTY_FORM = {
 };
 
 const FIELD_CLASS =
-  'w-full rounded-xl border border-gray-700 bg-gray-800 px-4 py-3 text-sm text-white placeholder:text-gray-500 focus:outline-none';
+  'w-full rounded-xl border border-gray-700 bg-gray-800 px-4 py-3 text-sm text-white placeholder:text-gray-500 focus:outline-hidden';
 
 export default function ItemsClient({ items, categories, orderEditor }: Props) {
   const router = useRouter();
@@ -262,7 +262,7 @@ export default function ItemsClient({ items, categories, orderEditor }: Props) {
           value={search}
           onChange={(event) => setSearch(event.target.value)}
           placeholder="商品名で検索"
-          className="w-full rounded-xl border border-gray-700 bg-gray-800 px-4 py-3 text-sm text-white placeholder:text-gray-500 focus:outline-none"
+          className="w-full rounded-xl border border-gray-700 bg-gray-800 px-4 py-3 text-sm text-white placeholder:text-gray-500 focus:outline-hidden"
         />
         <select aria-label="カテゴリで絞り込む" value={categoryId} onChange={(event) => setCategoryId(event.target.value)} className="rounded-xl border border-gray-700 bg-gray-800 px-3 py-3 text-sm text-white"><option value="">全カテゴリ</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select>
         <div className="flex shrink-0 flex-wrap gap-2">
@@ -287,7 +287,7 @@ export default function ItemsClient({ items, categories, orderEditor }: Props) {
       {selectedId && !selected && <p role="status" className="text-sm text-amber-300">この商品は見つかりません。一覧から選び直してください。</p>}
       <ObjectWorkspace selected={Boolean(selected)} label="商品詳細" onClose={() => setSelectedId(null)} detail={selected && <section aria-label="選択した商品">
         <div className="flex items-start justify-between gap-4">
-          <div className="flex min-w-0 items-center gap-3">{selected.image_url && <img src={selected.image_url} alt="" className="h-16 w-16 shrink-0 rounded-xl bg-gray-800 object-contain"/>}<div><h2 className="break-words text-xl font-bold text-white">{selected.name}</h2><p className="mt-1 text-sm text-gray-400">{new Product(selected).status} · ¥{selected.price.toLocaleString()} · {selected.category?.name ?? 'カテゴリ未設定'}</p></div></div>
+          <div className="flex min-w-0 items-center gap-3">{selected.image_url && <img src={selected.image_url} alt="" className="h-16 w-16 shrink-0 rounded-xl bg-gray-800 object-contain"/>}<div><h2 className="wrap-break-word text-xl font-bold text-white">{selected.name}</h2><p className="mt-1 text-sm text-gray-400">{new Product(selected).status} · ¥{selected.price.toLocaleString()} · {selected.category?.name ?? 'カテゴリ未設定'}</p></div></div>
         </div>
         <ObjectDetailNavigation value={detailView} onChange={setDetailView} options={[{id:'overview',label:'商品情報'},{id:'stock',label:'在庫・入荷'},{id:'orders',label:'購入履歴'}]}/>
         {detailView === 'overview' && <>
@@ -311,7 +311,7 @@ export default function ItemsClient({ items, categories, orderEditor }: Props) {
         <table className="w-full text-sm">
           <thead><tr className="border-b border-gray-800 text-left text-xs text-gray-500"><th className="px-4 py-3">商品</th><th className="px-3 py-3">価格</th><th className="px-3 py-3">在庫・状態</th></tr></thead>
           <tbody>{filteredItems.map((item) => <tr key={item.id} onClick={(event) => { if (!(event.target as HTMLElement).closest('button, a, input, select')) setSelectedId(item.id); }} className={`cursor-pointer border-b border-gray-800/60 hover:bg-white/5 ${selectedId === item.id ? 'bg-white/5' : ''}`}>
-            <td className="px-4 py-3"><div className="flex items-center gap-3">{item.image_url && <img src={item.image_url} alt="" className="h-10 w-10 shrink-0 rounded-lg bg-gray-800 object-contain"/>}<div><button type="button" aria-pressed={selectedId === item.id} onClick={() => setSelectedId(item.id)} className="text-left font-medium text-white underline decoration-gray-600 underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-400">{item.name}</button><p className="mt-1 text-xs text-gray-500">{item.category?.icon} {item.category?.name ?? '未設定'}</p></div></div></td>
+            <td className="px-4 py-3"><div className="flex items-center gap-3">{item.image_url && <img src={item.image_url} alt="" className="h-10 w-10 shrink-0 rounded-lg bg-gray-800 object-contain"/>}<div><button type="button" aria-pressed={selectedId === item.id} onClick={() => setSelectedId(item.id)} className="text-left font-medium text-white underline decoration-gray-600 underline-offset-4 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-sky-400">{item.name}</button><p className="mt-1 text-xs text-gray-500">{item.category?.icon} {item.category?.name ?? '未設定'}</p></div></div></td>
             <td className="whitespace-nowrap px-3 py-3 font-mono text-white">¥{item.price.toLocaleString()}</td>
             <td className="px-3 py-3"><p className="font-mono text-white">{item.is_unlimited_stock ? '∞' : item.stock}</p><p className={`text-xs ${isItemLowStock(item) ? 'text-amber-300' : 'text-gray-400'}`}>{new Product(item).status}</p></td>
           </tr>)}</tbody>
@@ -415,7 +415,7 @@ export default function ItemsClient({ items, categories, orderEditor }: Props) {
                   onChange={(event) =>
                     setForm((current) => ({ ...current, is_available: event.target.checked }))
                   }
-                  className="rounded border-gray-700 bg-gray-900 text-white"
+                  className="rounded-sm border-gray-700 bg-gray-900 text-white"
                 />
                 ユーザー画面に表示する
               </label>
@@ -426,7 +426,7 @@ export default function ItemsClient({ items, categories, orderEditor }: Props) {
                   onChange={(event) =>
                     setForm((current) => ({ ...current, is_unlimited_stock: event.target.checked }))
                   }
-                  className="rounded border-gray-700 bg-gray-900 text-white"
+                  className="rounded-sm border-gray-700 bg-gray-900 text-white"
                 />
                 在庫を管理しない（無限在庫）
               </label>

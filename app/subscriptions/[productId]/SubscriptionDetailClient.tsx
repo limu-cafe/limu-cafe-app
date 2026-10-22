@@ -346,7 +346,7 @@ export default function SubscriptionDetailClient({
                 type="month"
                 value={endMonth}
                 onChange={(event) => setEndMonth(event.target.value)}
-                className="w-full rounded-2xl border border-cream-200 bg-white px-4 py-3 text-espresso focus:outline-none"
+                className="w-full rounded-2xl border border-cream-200 bg-white px-4 py-3 text-espresso focus:outline-hidden"
               />
             </label>
 
@@ -378,7 +378,7 @@ export default function SubscriptionDetailClient({
                     onChange={(event) =>
                       updatePriorityAt(index, event.target.value as SubscriptionPaymentPriority)
                     }
-                    className="w-full rounded-2xl border border-cream-200 bg-white px-4 py-3 text-espresso focus:outline-none"
+                    className="w-full rounded-2xl border border-cream-200 bg-white px-4 py-3 text-espresso focus:outline-hidden"
                   >
                     {enabledMethods.map((method) => (
                       <option key={method} value={method}>
@@ -396,7 +396,7 @@ export default function SubscriptionDetailClient({
               type="checkbox"
               checked={allowPartialPayment}
               onChange={(event) => setAllowPartialPayment(event.target.checked)}
-              className="h-4 w-4 rounded border-cream-300 text-espresso focus:ring-espresso"
+              className="h-4 w-4 rounded-sm border-cream-300 text-espresso focus:ring-espresso"
             />
             <span>{copy.partial}</span>
           </label>
@@ -548,7 +548,7 @@ function ConfirmDialog({
   tone?: 'default' | 'danger';
 }) {
   return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/30 px-4">
+    <div className="fixed inset-0 z-80 flex items-center justify-center bg-black/30 px-4">
       <div className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl">
         <h3 className="font-display text-2xl font-bold text-espresso">{title}</h3>
         <p className="mt-3 text-sm leading-6 text-espresso-500">{body}</p>
