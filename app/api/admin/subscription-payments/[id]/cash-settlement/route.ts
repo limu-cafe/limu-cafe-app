@@ -7,8 +7,9 @@ import { logAdminAction } from '@/lib/admin-audit';
 
 export async function POST(
   _request: Request,
-  { params }: { params: { id: string } }
+  { params: pendingParams }: { params: Promise<{ id: string }> }
 ) {
+  const params = await pendingParams;
   const adminSession = await requireAdminSession();
   if (!adminSession.user) {
     return NextResponse.json({ error: adminSession.error }, { status: adminSession.status });
@@ -73,8 +74,9 @@ export async function POST(
 
 export async function DELETE(
   _request: Request,
-  { params }: { params: { id: string } }
+  { params: pendingParams }: { params: Promise<{ id: string }> }
 ) {
+  const params = await pendingParams;
   const adminSession = await requireAdminSession();
   if (!adminSession.user) {
     return NextResponse.json({ error: adminSession.error }, { status: adminSession.status });

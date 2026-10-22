@@ -7,10 +7,11 @@ import SubscriptionDetailClient from './SubscriptionDetailClient';
 export const dynamic = 'force-dynamic';
 
 export default async function SubscriptionDetailPage({
-  params,
+  params: pendingParams,
 }: {
-  params: { productId: string };
+  params: Promise<{ productId: string }>;
 }) {
+  const params = await pendingParams;
   const supabase = await createClient();
   const {
     data: { user },

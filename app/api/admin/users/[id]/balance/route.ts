@@ -4,7 +4,8 @@ import { NextResponse } from 'next/server';
 import { paymentFailure, refreshPaymentViews } from '@/lib/payment-api';
 import { isObjectId } from '@/lib/admin-objects';
 
-export async function POST(request: Request, { params }: { params: { id: string } }) {
+export async function POST(request: Request, { params: pendingParams }: { params: Promise<{ id: string }> }) {
+  const params = await pendingParams;
   const access = await requireAdminSession();
   if (!access.user) return NextResponse.json({ error: access.error }, { status: access.status });
   const origin = request.headers.get('origin');
