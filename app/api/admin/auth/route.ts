@@ -1,5 +1,5 @@
+import { requireMemberSession } from '@/lib/member-session';
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
 import { ADMIN_PROOF_COOKIE, createAdminProof } from '@/lib/admin-proof';
 
 const ADMIN_COOKIE = 'limu_admin_auth';
@@ -8,17 +8,15 @@ const ADMIN_SESSION_DURATION = 8 * 60 * 60;
 export async function POST(request: Request) {
   const { password } = await request.json();
   const adminPassword = process.env.ADMIN_PASSWORD;
-  const sessionClient = await createClient();
-  const {
-    data: { user },
-  } = await sessionClient.auth.getUser();
+  const memberAccess = await requireMemberSession();
+  const user = memberAccess.user;
 
   if (!adminPassword) {
     return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
   }
 
   if (!user) {
-    return NextResponse.json({ error: 'Slack login required' }, { status: 401 });
+    return NextResponse.json({ error: memberAccess.error }, { status: memberAccess.status });
   }
 
   if (password === adminPassword) {

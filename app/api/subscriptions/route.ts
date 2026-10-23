@@ -1,3 +1,4 @@
+import { requireMemberSession } from '@/lib/member-session';
 import { NextResponse } from 'next/server';
 import { createAdminClient, createClient } from '@/lib/supabase/server';
 import { syncUserProfile } from '@/lib/supabase/sync-user';
@@ -6,12 +7,11 @@ import { pickLatestSubscriptionsByProduct } from '@/lib/subscriptions';
 export async function GET() {
   const supabase = await createClient();
   const adminSupabase = createAdminClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const memberAccess = await requireMemberSession();
+  const user = memberAccess.user;
 
   if (!user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return NextResponse.json({ error: memberAccess.error }, { status: memberAccess.status });
   }
 
   await syncUserProfile(user);

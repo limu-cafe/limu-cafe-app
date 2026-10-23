@@ -1,3 +1,4 @@
+import { requireMemberPage } from '@/lib/member-session';
 import { redirect } from 'next/navigation';
 import UserLayout from '@/components/layout/UserLayout';
 import { createAdminClient, createClient } from '@/lib/supabase/server';
@@ -9,9 +10,7 @@ export const dynamic = 'force-dynamic';
 
 export default async function SubscriptionsPage() {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await requireMemberPage();
 
   if (!user) {
     redirect('/login');

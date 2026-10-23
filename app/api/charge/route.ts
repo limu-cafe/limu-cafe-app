@@ -1,3 +1,4 @@
+import { requireMemberSession } from '@/lib/member-session';
 import { NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
 import { createAdminClient, createClient } from '@/lib/supabase/server';
@@ -5,12 +6,13 @@ import { createAdminClient, createClient } from '@/lib/supabase/server';
 export async function POST(request: Request) {
   const supabase = await createClient();
   const adminSupabase = createAdminClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const memberAccess = await requireMemberSession();
+  const user = memberAccess.user;
+  if (!user) return NextResponse.json({ error: memberAccess.error }, { status: memberAccess.status });
 
   const { amount, method } = await request.json();
 
-  if (!amount || amount < 100) {
+  if (!Number.isSafeInteger(amount) || amount < 100 || amount > 2147483647 || !['cash', 'stripe'].includes(method)) {
     return NextResponse.json({ error: '100円以上で入力してください' }, { status: 400 });
   }
 

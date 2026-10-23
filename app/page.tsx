@@ -1,3 +1,4 @@
+import { requireMemberPage } from '@/lib/member-session';
 import UserLayout from '@/components/layout/UserLayout';
 import { createAdminClient, createClient } from '@/lib/supabase/server';
 import { syncUserProfile } from '@/lib/supabase/sync-user';
@@ -78,7 +79,7 @@ async function HomeContent({ userId, authUser }: { userId: string; authUser: Aut
 export default async function HomePage() {
   noStore();
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await requireMemberPage();
   if (!user) redirect('/login');
   const layoutUser = {
     id: user.id,
