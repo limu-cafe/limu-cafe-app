@@ -1,4 +1,4 @@
-import { allowedSlackWorkspaceId } from '@/lib/slack-identity';
+import { verifiedSlackIdentity } from '@/lib/slack-identity';
 import crypto from 'crypto';
 import { revalidatePath } from 'next/cache';
 import { NextResponse } from 'next/server';
@@ -36,19 +36,19 @@ function verifySlackSignature(rawBody: string, timestamp: string, signature: str
 }
 
 async function findUserBySlackId(slackUserId: string) {
-  const workspace = allowedSlackWorkspaceId();
-  if (!workspace) return null;
   const supabase = createAdminClient();
   const { data: user } = await supabase
     .from('users')
     .select('id, name, slack_user_id')
     .eq('slack_user_id', slackUserId)
-    .eq('slack_workspace_id', workspace)
     .eq('is_active', true)
     .eq('is_approved', true)
     .maybeSingle();
 
-  return user;
+  if (!user) return null;
+  const { data, error } = await supabase.auth.admin.getUserById(user.id);
+  const identity = !error && verifiedSlackIdentity(data?.user);
+  return identity && identity.slackUserId === slackUserId ? user : null;
 }
 
 function extractCommentValue(payload: any) {
