@@ -1,16 +1,14 @@
+import { requireMemberSession } from '@/lib/member-session';
 import { cookies } from 'next/headers';
-import { createClient } from '@/lib/supabase/server';
 import { ADMIN_PROOF_COOKIE, verifyAdminProof } from '@/lib/admin-proof';
 import { cache } from 'react';
 
 export const requireAdminSession = cache(async () => {
-  const sessionClient = await createClient();
-  const {
-    data: { user },
-  } = await sessionClient.auth.getUser();
+  const memberAccess = await requireMemberSession();
+  const user = memberAccess.user;
 
   if (!user) {
-    return { user: null, error: 'Slack login required', status: 401 as const };
+    return { user: null, error: memberAccess.error, status: memberAccess.status };
   }
 
   const cookieStore = await cookies();

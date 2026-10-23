@@ -1,3 +1,4 @@
+import { requireMemberSession } from '@/lib/member-session';
 import { NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
 import { createAdminClient, createClient } from '@/lib/supabase/server';
@@ -12,12 +13,11 @@ import { createSubscriptionBilling } from '@/lib/subscription-service';
 export async function POST(request: Request) {
   const supabase = await createClient();
   const adminSupabase = createAdminClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const memberAccess = await requireMemberSession();
+  const user = memberAccess.user;
 
   if (!user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return NextResponse.json({ error: memberAccess.error }, { status: memberAccess.status });
   }
 
   await syncUserProfile(user);

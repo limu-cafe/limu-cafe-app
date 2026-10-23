@@ -1,3 +1,4 @@
+import { isAuthorizedCron } from '@/lib/cron-auth';
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/server';
 import { notifyPriceDrop } from '@/lib/slack';
@@ -6,8 +7,7 @@ import { notifyPriceDrop } from '@/lib/slack';
 // vercel.json で "schedule": "0 0 * * *" を設定
 export async function GET(request: Request) {
   // Cron認証（Vercel自動付与のAuthorizationヘッダーで確認）
-  const authHeader = request.headers.get('authorization');
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!isAuthorizedCron(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

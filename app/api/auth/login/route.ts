@@ -1,3 +1,4 @@
+import { safeNextPath } from '@/lib/slack-identity';
 import { NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import type { CookieOptions } from '@supabase/ssr';
@@ -6,7 +7,7 @@ import { cookies } from 'next/headers';
 export async function GET(request: Request) {
   const { origin, searchParams } = new URL(request.url);
   const next = searchParams.get('next');
-  const nextPath = next && next.startsWith('/') ? next : '/';
+  const nextPath = safeNextPath(next);
   const cookieStore = await cookies();
 
   const supabase = createServerClient(

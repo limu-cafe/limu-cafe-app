@@ -106,6 +106,7 @@ test('management login issues an HttpOnly user-bound proof, and logout removes i
   const settings = [];
   const module = load('app/api/admin/auth/route.ts', {
     'next/server': { NextResponse: { json: (body, init = {}) => ({ body, status: init.status ?? 200, cookies: { set: (...args) => settings.push(args) } }) } },
+    '@/lib/member-session': { requireMemberSession: async () => ({user:{id:'user-a'},error:null,status:200}) },
     '@/lib/supabase/server': { createClient: async () => ({ auth: { getUser: async () => ({ data: { user: { id: 'user-a' } } }) } }) },
   }, { process: { env: { ADMIN_PASSWORD: 'test-only-password' } } });
   assert.equal((await module.POST({ json: async () => ({ password: 'wrong' }) })).status, 401);
@@ -125,6 +126,7 @@ test('signed management session rejects the legacy timestamp without a valid pas
   let proof;
   const module = load('lib/admin-session.ts', {
     'next/headers': { cookies: async () => ({ get: (name) => ({ value: name === 'limu_admin_auth' ? String(future) : proof }) }) },
+    '@/lib/member-session': { requireMemberSession: async () => ({user:{id:'user-a'},error:null,status:200}) },
     '@/lib/supabase/server': { createClient: async () => ({ auth: { getUser: async () => ({ data: { user: { id: 'user-a' } } }) } }) },
   }, { process: { env: { ADMIN_PASSWORD: 'test-secret' } } });
   assert.equal((await module.requireVerifiedAdminSession()).status, 403);

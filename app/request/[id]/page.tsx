@@ -1,3 +1,4 @@
+import { requireMemberPage } from '@/lib/member-session';
 import { notFound, redirect } from 'next/navigation';
 import UserLayout from '@/components/layout/UserLayout';
 import { createAdminClient, createClient } from '@/lib/supabase/server';
@@ -51,9 +52,7 @@ export default async function RequestDetailPage({
 }) {
   const { id } = await params;
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await requireMemberPage();
 
   if (!user) redirect('/login');
 
