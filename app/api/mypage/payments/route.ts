@@ -1,3 +1,4 @@
+import { requireMemberSession } from '@/lib/member-session';
 import { NextResponse } from 'next/server';
 import { createAdminClient, createClient } from '@/lib/supabase/server';
 import { ORDER_ITEMS_SELECT_ENHANCED, ORDER_ITEMS_SELECT_LEGACY } from '@/lib/item-select';
@@ -58,12 +59,11 @@ type UnifiedPaymentEntry =
 export async function GET(request: Request) {
   const supabase = await createClient();
   const adminSupabase = createAdminClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const memberAccess = await requireMemberSession();
+  const user = memberAccess.user;
 
   if (!user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return NextResponse.json({ error: memberAccess.error }, { status: memberAccess.status });
   }
 
   const url = new URL(request.url);

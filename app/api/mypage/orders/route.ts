@@ -1,3 +1,4 @@
+import { requireMemberSession } from '@/lib/member-session';
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import {
@@ -12,12 +13,11 @@ import {
 
 export async function GET(request: Request) {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const memberAccess = await requireMemberSession();
+  const user = memberAccess.user;
 
   if (!user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return NextResponse.json({ error: memberAccess.error }, { status: memberAccess.status });
   }
 
   const { searchParams } = new URL(request.url);

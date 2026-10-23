@@ -1,3 +1,4 @@
+import { requireMemberSession } from '@/lib/member-session';
 import { NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
 import { createAdminClient, createClient } from '@/lib/supabase/server';
@@ -5,12 +6,11 @@ import { notifyRequestComment } from '@/lib/slack';
 
 export async function POST(request: Request) {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const memberAccess = await requireMemberSession();
+  const user = memberAccess.user;
 
   if (!user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return NextResponse.json({ error: memberAccess.error }, { status: memberAccess.status });
   }
 
   const { request_id, body } = await request.json();

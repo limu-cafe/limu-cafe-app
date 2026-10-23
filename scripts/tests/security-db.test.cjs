@@ -10,7 +10,7 @@ test('full schema security migration and checkout on isolated PostgreSQL', async
   const db = new PGlite(); t.after(() => db.close());
   await db.exec(`
     create role anon; create role authenticated; create role service_role bypassrls;
-    create schema auth; create table auth.users(id uuid primary key);
+    create schema auth; create table auth.users(id uuid primary key); create table auth.identities(user_id uuid,provider text,identity_data jsonb);
     create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
     grant usage on schema public,auth to anon,authenticated,service_role;
     grant execute on all functions in schema auth to anon,authenticated,service_role;
@@ -24,8 +24,10 @@ test('full schema security migration and checkout on isolated PostgreSQL', async
   }
   await db.exec(`
     insert into auth.users values ('${user}'),('${other}'),('${admin}');
+    insert into auth.identities select id,'slack_oidc',jsonb_build_object('provider_id','U_'||id::text,'custom_claims',jsonb_build_object('https://slack.com/team_id','T_FIXTURE')) from auth.users;
     insert into users(id,name,balance,points_balance,role,is_approved) values
       ('${user}','利用者',1000,80,'member',true),('${other}','別の利用者',1000,0,'member',true),('${admin}','管理者',0,0,'admin',true);
+    update users set slack_user_id='U_'||id::text;
     insert into items(id,name,price,stock,is_unlimited_stock) values ('${item}','お茶',130,10,false),('${unlimited}','コーヒー',200,0,true);
   `);
   const snapshot = async () => (await db.query(`select jsonb_build_object(

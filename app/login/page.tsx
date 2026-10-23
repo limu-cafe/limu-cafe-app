@@ -1,5 +1,7 @@
 'use client';
 
+import { safeNextPath } from '@/lib/slack-identity';
+
 import { createClient } from '@/lib/supabase/client';
 import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -19,15 +21,19 @@ function LoginContent() {
   useEffect(() => {
     const supabase = createClient();
 
+    if (error) {
+      void supabase.auth.signOut({ scope: 'local' }).finally(() => setCheckingSession(false));
+      return;
+    }
     supabase.auth.getUser().then(({ data }) => {
       if (data.user) {
-        const nextPath = next && next.startsWith('/') ? next : '/';
+        const nextPath = safeNextPath(next);
         router.replace(nextPath);
         return;
       }
       setCheckingSession(false);
     });
-  }, [next, router]);
+  }, [error, next, router]);
 
   const isWorkspaceMismatch = error === 'workspace_not_allowed';
 
@@ -36,6 +42,10 @@ function LoginContent() {
       ? locale === 'en'
         ? 'You are currently signed in to a different Slack workspace.'
         : '現在、別の Slack ワークスペースでログインされています。'
+      : error === 'access_denied'
+      ? locale === 'en'
+        ? 'This account is not active or approved. Please contact an administrator.'
+        : 'このアカウントは利用できません。管理者に確認してください。'
       : error === 'auth_failed'
       ? locale === 'en'
         ? 'Authentication failed. Please try again.'
@@ -64,8 +74,8 @@ function LoginContent() {
   const handleSlackLogin = async () => {
     setLoading(true);
     const loginUrl = new URL('/slack-signin', window.location.origin);
-    if (next?.startsWith('/')) {
-      loginUrl.searchParams.set('next', next);
+    if (safeNextPath(next) !== '/') {
+      loginUrl.searchParams.set('next', safeNextPath(next));
     }
     window.location.href = loginUrl.toString();
   };

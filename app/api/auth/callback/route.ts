@@ -1,3 +1,4 @@
+import { verifiedSlackIdentity, safeNextPath } from '@/lib/slack-identity';
 import { NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import type { CookieOptions } from '@supabase/ssr';
@@ -6,29 +7,11 @@ import { notifyBotWelcome } from '@/lib/slack';
 import { createAdminClient } from '@/lib/supabase/server';
 import { syncUserProfile } from '@/lib/supabase/sync-user';
 
-function getWorkspaceId(user: any) {
-  return (
-    user?.user_metadata?.['https://slack.com/team_id'] ??
-    user?.user_metadata?.team_id ??
-    user?.user_metadata?.team?.id ??
-    user?.user_metadata?.workspace_id ??
-    user?.app_metadata?.['https://slack.com/team_id'] ??
-    user?.app_metadata?.team_id ??
-    user?.app_metadata?.team?.id ??
-    user?.identities?.find((identity: any) => identity?.identity_data?.['https://slack.com/team_id'])
-      ?.identity_data?.['https://slack.com/team_id'] ??
-    user?.identities?.find((identity: any) => identity?.identity_data?.team_id)?.identity_data?.team_id ??
-    user?.identities?.find((identity: any) => identity?.identity_data?.team?.id)?.identity_data?.team?.id ??
-    null
-  );
-}
-
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get('code');
   const next = searchParams.get('next');
-  const redirectPath = next && next.startsWith('/') ? next : '/';
-  const allowedWorkspaceId = process.env.ALLOWED_SLACK_WORKSPACE_ID?.trim() || null;
+  const redirectPath = safeNextPath(next);
 
   if (!code) {
     return NextResponse.redirect(`${origin}/login?error=no_code`);
@@ -58,28 +41,21 @@ export async function GET(request: Request) {
   const { data, error } = await supabase.auth.exchangeCodeForSession(code);
 
   if (!error && data.user) {
-    const detectedWorkspaceId = getWorkspaceId(data.user);
-    const workspaceId = detectedWorkspaceId ?? allowedWorkspaceId;
+    const identity = verifiedSlackIdentity(data.user);
+    const rejectLogin = async (reason: string) => {
+      await supabase.auth.signOut({ scope: 'local' });
+      const rejected = NextResponse.redirect(new URL(`/login?error=${reason}`, origin));
+      for (const cookie of response.cookies.getAll()) rejected.cookies.set(cookie);
+      return rejected;
+    };
+    if (!identity) return rejectLogin('workspace_not_allowed');
+    let profile;
+    try { profile = await syncUserProfile(data.user); }
+    catch { return rejectLogin('auth_failed'); }
+    if (!profile.is_active || !profile.is_approved) return rejectLogin('access_denied');
+    const workspaceId = identity.workspaceId;
 
-    if (allowedWorkspaceId && detectedWorkspaceId && detectedWorkspaceId !== allowedWorkspaceId) {
-      await supabase.auth.signOut();
-      const loginUrl = new URL('/login', origin);
-      loginUrl.searchParams.set('error', 'workspace_not_allowed');
-      if (detectedWorkspaceId) {
-        loginUrl.searchParams.set('detected_workspace_id', detectedWorkspaceId);
-      }
-      return NextResponse.redirect(loginUrl.toString());
-    }
-
-    await syncUserProfile({
-      ...data.user,
-      user_metadata: {
-        ...data.user.user_metadata,
-        workspace_id: workspaceId,
-      },
-    });
-
-    if (workspaceId && (!allowedWorkspaceId || workspaceId === allowedWorkspaceId)) {
+    {
       const adminClient = createAdminClient();
       const { data: userRecord, error: userError } = await adminClient
         .from('users')

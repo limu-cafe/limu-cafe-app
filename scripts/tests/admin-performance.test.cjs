@@ -21,7 +21,7 @@ function load(file, mocks = {}, globals = {}) {
       if (name === 'react') return { cache: (fn) => { let result; return () => result ??= fn(); } };
       throw new Error(`Unexpected import: ${name}`);
     };
-    vm.runInNewContext(source, { module, exports: module.exports, require: localRequire, console, URL, TextEncoder, crypto: require('node:crypto').webcrypto, process: { env: {} }, ...globals }, { filename });
+    vm.runInNewContext(source, { module, exports: module.exports, require: localRequire, console, URL, TextEncoder, crypto: require('node:crypto').webcrypto, process: { env: { ALLOWED_SLACK_WORKSPACE_ID: 'team' } }, ...globals }, { filename });
     return module.exports;
   }
   return compile(path.join(root, file));
@@ -42,13 +42,13 @@ test('metadata edits discard stale stock, IDs, timestamps and financial fields',
 function profileDb(existing, error = null) {
   const writes = [];
   const db = { from() { return {
-    select() { return { eq() { return { maybeSingle: async () => ({ data: existing, error }) }; } }; },
+    select() { return { eq() { return { maybeSingle: async () => ({ data: existing ?? (writes.length ? {id:'user',is_active:true,is_approved:true} : null), error }) }; } }; },
     insert(value) { writes.push(['insert', value]); return Promise.resolve({ error: null }); },
     update(value) { writes.push(['update', value]); return { eq: async () => ({ error: null }) }; },
   }; } };
   return { db, writes };
 }
-const auth = { id: 'user', email: 'member@example.test', user_metadata: { full_name: 'Member', team_id: 'team', provider_id: 'slack', avatar_url: 'avatar' } };
+const auth = { identities:[{provider:'slack_oidc',identity_data:{provider_id:'slack',custom_claims:{'https://slack.com/team_id':'team'}}}], id: 'user', email: 'member@example.test', user_metadata: { full_name: 'Member', team_id: 'team', provider_id: 'slack', avatar_url: 'avatar' } };
 const existing = { id: 'user', email: auth.email, name: 'Member', slack_user_id: 'slack', slack_workspace_id: 'team', avatar_url: 'avatar', role: 'admin', is_approved: false, balance: 1250, deferred_balance: 520, points_balance: 80 };
 test('viewing an unchanged profile performs no write and preserves approval, role and every balance', async () => {
   const r = profileDb(existing);
@@ -60,7 +60,7 @@ test('changed profile updates metadata only; read failure never falls back to an
   await load('lib/supabase/sync-user.ts', { '@/lib/supabase/server': { createAdminClient: () => r.db } }).syncUserProfile(auth);
   assert.deepEqual(plain(r.writes), [['update', { name: 'Member' }]]);
   const failed = profileDb(null, { message: 'unavailable' });
-  await load('lib/supabase/sync-user.ts', { '@/lib/supabase/server': { createAdminClient: () => failed.db } }, { console: { error() {} } }).syncUserProfile(auth);
+  await assert.rejects(()=>load('lib/supabase/sync-user.ts', { '@/lib/supabase/server': { createAdminClient: () => failed.db } }, { console: { error() {} } }).syncUserProfile(auth));
   assert.deepEqual(failed.writes, []);
 });
 test('new users retain the existing account creation policy without writing balances', async () => {
@@ -119,9 +119,9 @@ test('middleware leaves public Slack/cron endpoints alone and rejects forged man
   let authReads = 0;
   let proof;
   const mod = load('middleware.ts', {
-    '@supabase/ssr': { createServerClient: () => ({ auth: { getUser: async () => { authReads++; return { data: { user: { id: 'member' } } }; } } }) },
+    '@supabase/ssr': { createServerClient: () => ({ auth: { getUser: async () => { authReads++; return { data: { user: { ...auth, id: 'member' } } }; } } }) },
     'next/server': { NextResponse: { next: () => ({ next: true, cookies: { set() {} } }), json: (body, options) => ({ body, status: options.status }), redirect: () => ({ redirect: true }) } },
-  }, { process: { env: { NEXT_PUBLIC_SUPABASE_URL: 'https://example.test', NEXT_PUBLIC_SUPABASE_ANON_KEY: 'public', ADMIN_PASSWORD: 'test-only' } } });
+  }, { process: { env: { NEXT_PUBLIC_SUPABASE_URL: 'https://example.test', NEXT_PUBLIC_SUPABASE_ANON_KEY: 'public', ADMIN_PASSWORD: 'test-only', ALLOWED_SLACK_WORKSPACE_ID: 'team' } } });
   const request = (pathname, method = 'POST') => ({ method, headers: new Headers(), nextUrl: { pathname, search: '' }, cookies: { get: (name) => ({ value: name === 'limu_admin_proof' ? proof : String(Date.now() + 1000000) }) } });
   assert.equal((await mod.middleware(request('/api/slack/interactions'))).next, true);
   assert.equal((await mod.middleware(request('/api/cron/check-prices'))).next, true);

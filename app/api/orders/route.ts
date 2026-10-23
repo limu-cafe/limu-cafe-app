@@ -1,6 +1,7 @@
+import { requireMemberSession } from '@/lib/member-session';
 import { NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
-import { createAdminClient, createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/server';
 import { notifyCashOrderPending, notifyNewOrder, notifyLowStock } from '@/lib/slack';
 import { parseCheckout } from '@/lib/checkout';
 
@@ -9,9 +10,9 @@ export async function POST(request: Request) {
   if (origin && origin !== new URL(request.url).origin) {
     return NextResponse.json({ error: '不正な送信元です' }, { status: 403 });
   }
-  const session = await createClient();
-  const { data: { user } } = await session.auth.getUser();
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const memberAccess = await requireMemberSession();
+  const user = memberAccess.user;
+  if (!user) return NextResponse.json({ error: memberAccess.error }, { status: memberAccess.status });
 
   let input;
   try { input = parseCheckout(await request.json()); }

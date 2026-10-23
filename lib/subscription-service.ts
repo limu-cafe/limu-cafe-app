@@ -52,7 +52,7 @@ export async function fetchSubscriptionFundingUser(
 ) {
   const { data, error } = await supabase
     .from('users')
-    .select('id, points_balance, balance')
+    .select('id, points_balance, balance, is_active, is_approved')
     .eq('id', userId)
     .single();
 
@@ -60,6 +60,7 @@ export async function fetchSubscriptionFundingUser(
     throw new Error(error?.message ?? '対象ユーザーが見つかりません');
   }
 
+  if (!data.is_active || !data.is_approved) throw new Error('このアカウントでは契約できません');
   return data as SubscriptionUserFunding;
 }
 

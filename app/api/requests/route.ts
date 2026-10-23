@@ -1,3 +1,4 @@
+import { requireMemberSession } from '@/lib/member-session';
 import { NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
 import { createAdminClient, createClient } from '@/lib/supabase/server';
@@ -10,8 +11,9 @@ type SlackRecipient = {
 export async function POST(request: Request) {
   const supabase = await createClient();
   const adminSupabase = createAdminClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const memberAccess = await requireMemberSession();
+  const user = memberAccess.user;
+  if (!user) return NextResponse.json({ error: memberAccess.error }, { status: memberAccess.status });
 
   const { item_name, reason, desired_price } = await request.json();
 
