@@ -11,6 +11,7 @@ const body = { items: [{item_id:item,quantity:2,item_price:1,item_name:'偽物',
 function fixture(options = {}) {
   const writes = [], notifications = [], refreshes = [], modules = new Map();
   const mocks = {
+    '@/lib/member-session': {requireMemberSession:async()=>({user:options.signedOut?null:{id:user},status:options.signedOut?401:200,error:'Unauthorized'})},
     'next/server': {NextResponse:{json:(body, init={})=>({body,status:init.status??200})}},
     'next/cache': {revalidatePath:p=>refreshes.push(p)},
     '@/lib/supabase/server': {

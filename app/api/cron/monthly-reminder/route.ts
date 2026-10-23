@@ -1,3 +1,4 @@
+import { isAuthorizedCron } from '@/lib/cron-auth';
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/server';
 import { notifyMonthlySettlement } from '@/lib/slack';
@@ -24,8 +25,7 @@ type ReminderUser = {
 
 // Vercel Cron: 毎日 朝9時に実行し、DB設定に合う日だけ通知する
 export async function GET(request: Request) {
-  const authHeader = request.headers.get('authorization');
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!isAuthorizedCron(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

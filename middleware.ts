@@ -1,17 +1,18 @@
+import { verifiedSlackIdentity } from '@/lib/slack-identity';
 import { createServerClient } from '@supabase/ssr';
 import type { CookieOptions } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 import { ADMIN_PROOF_COOKIE, verifyAdminProof } from '@/lib/admin-proof';
 import { isManagementApi } from '@/lib/admin-access';
 
-const USER_PROTECTED_PATHS = ['/', '/mypage', '/request', '/charge', '/cart', '/checkout', '/pending', '/order-complete'];
+const USER_PROTECTED_PATHS = ['/', '/mypage', '/request', '/charge', '/cart', '/checkout', '/pending', '/order-complete', '/subscriptions'];
 const ADMIN_PROTECTED_PREFIX = '/admin';
 const ADMIN_LOGIN_PATH = '/admin/login';
 const ADMIN_PASSWORD_PATH = '/admin/password';
 const LOGIN_PATH = '/login';
 
 function isUserProtectedPath(pathname: string) {
-  return USER_PROTECTED_PATHS.includes(pathname);
+  return USER_PROTECTED_PATHS.some(path => path === '/' ? pathname === '/' : pathname === path || pathname.startsWith(path + '/'));
 }
 
 function isAdminProtectedPath(pathname: string) {
@@ -22,12 +23,14 @@ export async function middleware(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
   const managementApi = isManagementApi(pathname, request.method);
   if (pathname.startsWith('/api/') && !managementApi) return NextResponse.next();
+  let membershipRejected = false;
   const protectedAdminPath = isAdminProtectedPath(pathname) || managementApi;
 
   const redirectToLogin = () => {
     const loginUrl = request.nextUrl.clone();
     loginUrl.pathname = LOGIN_PATH;
     loginUrl.search = '';
+    if (membershipRejected) loginUrl.searchParams.set('error', 'workspace_not_allowed');
     if (pathname !== '/') {
       loginUrl.searchParams.set('next', `${pathname}${search}`);
     }
@@ -87,7 +90,8 @@ export async function middleware(request: NextRequest) {
       data: { user: sessionUser },
     } = await supabase.auth.getUser();
 
-    user = sessionUser;
+    user = verifiedSlackIdentity(sessionUser) ? sessionUser : null;
+    membershipRejected = Boolean(sessionUser && !user);
   } catch (error) {
     console.error('middleware auth check failed', error);
     if (protectedAdminPath) {
