@@ -51,10 +51,11 @@
 基本フロー
 1. ローカルで編集する
 2. 作業ブランチへ commit する
-3. GitHub に push する
-4. Vercel Preview で確認する
-5. 問題なければ PR を出す
-6. 最終確認後に `main` へ merge する
+3. PR を出す前にローカルで `npm run verify` を実行する
+4. GitHub に push する
+5. Vercel Preview で確認する
+6. 問題なければ PR を出す（`debug` 宛ての PR では CI が自動で走る。CI が赤い PR はマージしない）
+7. 最終確認後に `main` へ merge する
 
 補足
 - `main` は branch protection で保護する前提
@@ -423,12 +424,11 @@ select count(*) from public.legacy_purchase_history;
 1. `main` を最新にする
 2. 作業ブランチを切る
 3. ローカルで修正する
-4. `npx tsc --noEmit --incremental false --skipLibCheck`
-5. PR を出す前にローカルで `npm run verify` を実行する（typecheck / test / build をまとめて確認）
-6. GitHub へ push
-7. Vercel Preview で確認
-8. 問題なければ PR を作る
-9. 最終確認後に `main` へ merge
+4. PR を出す前にローカルで `npm run verify` を実行する（typecheck / test / build をまとめて確認）
+5. GitHub へ push
+6. Vercel Preview で確認
+7. 問題なければ PR を作る
+8. 最終確認後に `main` へ merge
 
 CI
 - `debug` 宛ての PR では CI（GitHub Actions）が自動で走り、`npm run verify` を実行する
@@ -564,7 +564,6 @@ Slack
 ## 補足
 
 今後の改善余地
-- GitHub Actions に `typecheck` を追加
 - branch protection で status checks を必須化
 - 将来的に `CODEOWNERS` を team 運用へ移行
 
