@@ -586,10 +586,10 @@ Slack
 
 ```sh
 node --test scripts/tests/admin-transactions.test.cjs scripts/tests/item-order.test.cjs
-PGLITE_MODULE=/absolute/path/to/@electric-sql/pglite node --test scripts/tests/item-order-db.test.cjs
+node --test scripts/tests/item-order-db.test.cjs
 ```
 
-後者は一時インストールしたPGliteのPostgresでSQL・権限制限・監査失敗時のロールバックを確認します。実際のSupabaseには接続しません。`PGLITE_MODULE` 未指定時はDBテストをskipするため、SQLの検証済みとは扱わないでください。
+後者はPGliteのPostgresでSQL・権限制限・監査失敗時のロールバックを確認します。実際のSupabaseには接続しません。`PGLITE_MODULE` 未指定でも、devDependencies の `@electric-sql/pglite` を使ってDBテストを実行します（skipしません）。別の場所にインストールしたPGliteを使う場合だけ、`PGLITE_MODULE` にそのモジュールの絶対パスを指定してください。
 
 ## 管理画面の改善と既存データの継続利用
 
@@ -623,7 +623,7 @@ PGLITE_MODULE=/absolute/path/to/@electric-sql/pglite node --test scripts/tests/i
 
 ### 検証と残る範囲
 
-`node --test scripts/tests/*.test.cjs` でUI/認証/取得の回帰テストを実行します。DBテストは `PGLITE_MODULE` に一時インストールした `@electric-sql/pglite` の絶対パスを渡すと実行されます。実Supabaseへは接続しません。隔離PostgreSQLでは、既存全テーブルの内容ハッシュが集計関数の追加・繰り返し読取の前後で一致すること、1025件の在庫も切り捨てないこと、古い未精算取引、表示順の競合/監査失敗時のロールバック、関数の実行権限を検証します。
+`node --test scripts/tests/*.test.cjs` でUI/認証/取得の回帰テストを実行します。DBテストも同じコマンドで実行され、既定では devDependencies の `@electric-sql/pglite` を使います。`PGLITE_MODULE` に別の `@electric-sql/pglite` の絶対パスを渡すと、そちらに差し替えられます。実Supabaseへは接続しません。隔離PostgreSQLでは、既存全テーブルの内容ハッシュが集計関数の追加・繰り返し読取の前後で一致すること、1025件の在庫も切り捨てないこと、古い未精算取引、表示順の競合/監査失敗時のロールバック、関数の実行権限を検証します。
 
 在庫のDBテストでは、購入→入荷と入荷→購入の両順序、同じ操作の再送、内容を変えたID再利用、監査失敗による全記録のロールバック、現金/立替の仕入れ、利用者の各残高の不変、一般利用者の実行拒否を検証します。PGliteは一接続で処理を順番に実行するため、複数接続による同時負荷試験は別途必要です。
 
