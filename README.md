@@ -32,7 +32,7 @@
 
 | 役割 | サービス |
 |---|---|
-| フロント・バックエンド | Next.js 14 (App Router) |
+| フロント・バックエンド | Next.js 15 (App Router) |
 | データベース・認証 | Supabase (PostgreSQL / Auth) |
 | ログイン | Slack OAuth |
 | 通知 | Slack Webhook / Slack Bot |
@@ -424,10 +424,15 @@ select count(*) from public.legacy_purchase_history;
 2. 作業ブランチを切る
 3. ローカルで修正する
 4. `npx tsc --noEmit --incremental false --skipLibCheck`
-5. GitHub へ push
-6. Vercel Preview で確認
-7. 問題なければ PR を作る
-8. 最終確認後に `main` へ merge
+5. PR を出す前にローカルで `npm run verify` を実行する（typecheck / test / build をまとめて確認）
+6. GitHub へ push
+7. Vercel Preview で確認
+8. 問題なければ PR を作る
+9. 最終確認後に `main` へ merge
+
+CI
+- `debug` 宛ての PR では CI（GitHub Actions）が自動で走り、`npm run verify` を実行する
+- CI が赤い PR はマージしない
 
 例
 
