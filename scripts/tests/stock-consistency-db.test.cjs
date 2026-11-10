@@ -6,8 +6,8 @@ const path = require('node:path');
 const { test } = require('node:test');
 const ids = Array.from({ length: 30 }, (_, i) => `00000000-0000-4000-8000-${String(i + 1).padStart(12, '0')}`);
 
-test('atomic restock preserves stock, purchases, cash and audit together', { skip: !process.env.PGLITE_MODULE }, async (t) => {
-  const { PGlite } = require(process.env.PGLITE_MODULE);
+test('atomic restock preserves stock, purchases, cash and audit together', async (t) => {
+  const { PGlite } = require(process.env.PGLITE_MODULE || '@electric-sql/pglite');
   const db = new PGlite(); t.after(() => db.close());
   await db.exec(`
     CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role BYPASSRLS;

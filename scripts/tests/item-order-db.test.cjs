@@ -1,4 +1,4 @@
-// PGLITE_MODULE points to a temporary @electric-sql/pglite installation.
+// PGLITE_MODULE can point to another @electric-sql/pglite installation (default: the devDependency).
 // Nothing here connects to a Supabase project or the network.
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
@@ -6,8 +6,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const ids = [1, 2, 3, 4].map((n) => `00000000-0000-4000-8000-00000000000${n}`);
 
-test('display-order migration and atomic save on isolated Postgres', { skip: !process.env.PGLITE_MODULE }, async (t) => {
-  const { PGlite } = require(process.env.PGLITE_MODULE);
+test('display-order migration and atomic save on isolated Postgres', async (t) => {
+  const { PGlite } = require(process.env.PGLITE_MODULE || '@electric-sql/pglite');
   const db = new PGlite();
   t.after(() => db.close());
   await db.exec(`

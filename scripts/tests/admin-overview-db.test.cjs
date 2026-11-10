@@ -4,8 +4,8 @@ const { test } = require('node:test');
 const fs = require('node:fs');
 const path = require('node:path');
 
-test('read-only overview migration preserves all existing data and accounting semantics', { skip: !process.env.PGLITE_MODULE }, async (t) => {
-  const { PGlite } = require(process.env.PGLITE_MODULE);
+test('read-only overview migration preserves all existing data and accounting semantics', async (t) => {
+  const { PGlite } = require(process.env.PGLITE_MODULE || '@electric-sql/pglite');
   const db = new PGlite(); t.after(() => db.close());
   await db.exec(`
     CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role BYPASSRLS;

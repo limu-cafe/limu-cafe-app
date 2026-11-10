@@ -8,8 +8,8 @@ const ids = Array.from({ length: 20 }, (_, i) => `00000000-0000-4000-8000-${Stri
 const [user, admin, order, charge, item, other] = ids;
 const dir = path.resolve(__dirname,'../../supabase/migrations');
 
-test('order wallet payment and cash collection preserve the financial ledger', { skip: !process.env.PGLITE_MODULE }, async (t) => {
-  const { PGlite } = require(process.env.PGLITE_MODULE);
+test('order wallet payment and cash collection preserve the financial ledger', async (t) => {
+  const { PGlite } = require(process.env.PGLITE_MODULE || '@electric-sql/pglite');
   const db = new PGlite(); t.after(() => db.close());
   await db.exec(`
     CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role BYPASSRLS;

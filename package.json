@@ -10,7 +10,7 @@
     "legacy:extract": "node scripts/extract-legacy-from-emulator.mjs",
     "legacy:extract:prod": "node scripts/extract-legacy-from-firestore.mjs",
     "legacy:import": "node scripts/import-legacy-data.mjs",
-    "test": "PGLITE_MODULE=@electric-sql/pglite node --test scripts/tests/*.test.cjs",
+    "test": "node --test scripts/tests/*.test.cjs",
     "typecheck": "tsc --noEmit --incremental false",
     "verify": "npm run typecheck && npm test && npm run build"
   },
