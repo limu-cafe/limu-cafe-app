@@ -84,9 +84,9 @@ test('real API and PostgreSQL reject the previously successful attacks',async t=
  });
  await scenario('checkout rejects negative quantities, forged prices and forged owner',async()=>{
   authUser=member(ids.user);const api=load('app/api/orders/route.ts'),before=await wallet(ids.user),out=[];
-  for(const patch of [{items:[{item_id:ids.item,quantity:-1}],total_amount:-130},{items:[{item_id:ids.item,quantity:1}],total_amount:1}])out.push((await api.POST(request('/api/orders',{payment_method:'balance',points_used:0,...patch}))).status);
+  for(const patch of [{items:[{item_id:ids.item,quantity:-1}],total_amount:-130},{items:[{item_id:ids.item,quantity:1}],total_amount:1}])out.push((await api.POST(request('/api/orders',{payment_method:'balance',points_used:0,request_id:require('node:crypto').randomUUID(),...patch}))).status);
   assert.deepEqual(out,[400,409]);assert.deepEqual(await wallet(ids.user),before);
-  const r=await api.POST(request('/api/orders',{user_id:ids.other,items:[{item_id:ids.item,quantity:1,item_price:1,subtotal:1}],total_amount:130,payment_method:'balance',points_used:0}));assert.equal(r.status,200);
+  const r=await api.POST(request('/api/orders',{user_id:ids.other,items:[{item_id:ids.item,quantity:1,item_price:1,subtotal:1}],total_amount:130,payment_method:'balance',points_used:0,request_id:require('node:crypto').randomUUID()}));assert.equal(r.status,200);
   const stored=(await db.query('select user_id,total_amount from orders where id=$1',[r.body.order_id])).rows[0];assert.equal(stored.user_id,ids.user);assert.equal(stored.total_amount,130);
   return {vulnerable:false,statuses:out,wallet_unchanged_after_invalid_requests:true,forged_owner_ignored:true,stored_total:stored.total_amount};
  });

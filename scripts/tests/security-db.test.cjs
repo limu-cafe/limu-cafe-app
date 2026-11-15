@@ -55,7 +55,7 @@ test('full schema security migration and checkout on isolated PostgreSQL', async
       for (const table of ['settlements','price_watches','settlement_reminder_settings']) {
         assert.equal((await db.query('select has_table_privilege($1,$2,\'SELECT,INSERT,UPDATE,DELETE\') as allowed', [role,'public.'+table])).rows[0].allowed, false);
       }
-      assert.equal((await db.query("select has_function_privilege($1,'public.checkout_order(uuid,jsonb,integer,text,text,integer)','EXECUTE') as allowed",[role])).rows[0].allowed,false);
+      assert.equal((await db.query("select has_function_privilege($1,'public.checkout_order(uuid,jsonb,integer,text,text,integer,uuid)','EXECUTE') as allowed",[role])).rows[0].allowed,false);
       assert.equal((await db.query("select has_function_privilege($1,'public.decrement_user_balance_if_available(uuid,integer)','EXECUTE') as allowed",[role])).rows[0].allowed,false);
     }
   });
