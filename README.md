@@ -649,3 +649,19 @@ PGLITE_MODULE=/absolute/path/to/@electric-sql/pglite node --test scripts/tests/i
 `LM001` のときは、エラーの detail に `{"limit":10000,"current":9000,"requested":1500,"remaining":1000}` の形の JSON 文字列が入ります。API では 409 を返します。
 
 DBテストは `scripts/tests/deferred-limit-db.test.cjs` です。PGlite は接続が1本なので、複数の接続による同時実行は確かめていません。
+
+## 注文の上限確認と再試行ID
+
+`checkout_order` は、後払いで実際に `deferred_balance` へ足す額（ポイントを引いた残り）だけを `check_deferred_limit` で確かめます。残高払い・現金・ポイントだけの注文は上限に関係なく通ります。上限を超えると `LM001` になり、注文 API（`/api/orders`）は 409 でそのメッセージを返します。
+
+注文の送信には再試行ID（`request_id`）が付きます。仕組みは入荷（`record_stock_restock`）と同じです。
+
+- 購入手続き画面は、同じ内容の注文に同じ ID を付け、成功するまで使い回します（`lib/checkout.ts` の `CheckoutSubmission`）
+- `checkout_order` は ID を `checkout_operations` に登録してから処理します。同じ ID が2回届くと、1回目の結果に `replayed: true` を足して返し、注文・在庫・残高・後払い残高・ポイントは1回分のままです。このとき注文 API は Slack 通知を送り直しません
+- 同じ ID で内容や利用者が違う送信は `22023` で拒否します
+- 失敗した注文は ID の登録も一緒に取り消されるので、同じ ID で送り直せます
+- `request_id` のない送信を、注文 API は 400（ページの再読み込みを案内）で拒否します。DB 関数の `p_request_id` は省略できますが、これはマイグレーションを当ててからアプリが切り替わるまでの間、前のアプリの注文を止めないためのものです
+
+`checkout_order` の引数が7つになったので、6引数の関数は削除しています。マイグレーションを戻す場合は、`20261022205934_security_hardening.sql` の定義を作り直してください。
+
+DBテストは `scripts/tests/checkout-limit-idempotency-db.test.cjs` です。PGlite は接続が1本なので、同じ ID が同時に届く場合と、同じ利用者の注文とチャージが同時に走る場合は確かめていません。
