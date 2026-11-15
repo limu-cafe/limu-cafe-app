@@ -46,3 +46,16 @@ export function parseCheckout(value: unknown): CheckoutInput {
     points_used: points as number,
   };
 }
+
+export function validCheckoutRequestId(value: unknown): value is string { return typeof value === 'string' && UUID.test(value); }
+/** Retain a request ID after an uncertain response so retrying the same order cannot register it twice. */
+export class CheckoutSubmission {
+  private readonly attempts = new Map<string, string>();
+  requestId(input: unknown) {
+    const fingerprint = JSON.stringify(input);
+    let id = this.attempts.get(fingerprint);
+    if (!id) { id = crypto.randomUUID(); this.attempts.set(fingerprint, id); }
+    return id;
+  }
+  complete(input: unknown) { this.attempts.delete(JSON.stringify(input)); }
+}
