@@ -630,3 +630,22 @@ PGLITE_MODULE=/absolute/path/to/@electric-sql/pglite node --test scripts/tests/i
 本番の体感時間やLCP改善率は未計測です。ローカルの画面確認は実コンポーネントに架空データを与え、保存先APIのない別サーバーで行います。購入全体・購入失敗時の在庫復元・精算処理の複数書き込みは今回トランザクション化していません。在庫追加の保証を、これらの処理全体へ一般化しないでください。
 
 2026-10-15の本番DBの読み取り監査では、既存の `settlements` / `price_watches` / `settlement_reminder_settings` にRLS未設定が報告されています。この変更では利用中のDB権限を一括変更していません。是正時は各テーブルの利用経路を確認して個別に検証してください（[Supabaseの該当診断](https://supabase.com/docs/guides/database/database-linter?lint=0013_rls_disabled_in_public)）。
+
+## 後払いの上限
+
+`users.deferred_balance`（未精算の借り。チャージと後払いの注文の両方が増やす）には上限があります。
+
+- 上限の金額は `public.deferred_balance_limit()` が返します（当面 10,000 円）。変えるときは、この関数を `create or replace` する新しいマイグレーションを1本追加します。金額をほかの場所に書かないでください
+- `public.check_deferred_limit(p_user_id uuid, p_amount integer)` は「今の `deferred_balance` ＋ `p_amount`」が上限を超えるとエラーにします。何も書き換えません。戻り値は `p_amount` を足した後の残りの枠（円）です
+- `deferred_balance` を増やす DB 関数は、増やす前に、同じ関数の中でこれを呼びます。API から別の RPC として呼ぶと、確認と加算の間に別の処理が入り、上限をすり抜けます
+- 関数の中で `lock_user_collection_context` を呼ぶので、注文 → チャージ → 利用者の順に行が固定されます。呼び出し側は、利用者の行をほかの方法で固定する前に呼んでください
+
+| 場合 | エラーコード | メッセージ |
+|---|---|---|
+| 上限を超える | `LM001` | 後払いの上限（10,000円）を超えるため受け付けできません |
+| 金額が null・0 以下 | `22023` | 金額が不正です |
+| 利用者がいない | `P0002` | 利用者が見つかりません |
+
+`LM001` のときは、エラーの detail に `{"limit":10000,"current":9000,"requested":1500,"remaining":1000}` の形の JSON 文字列が入ります。API では 409 を返します。
+
+DBテストは `scripts/tests/deferred-limit-db.test.cjs` です。PGlite は接続が1本なので、複数の接続による同時実行は確かめていません。
