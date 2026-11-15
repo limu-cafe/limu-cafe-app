@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
@@ -20,6 +20,7 @@ import type { DeferredSettlementMethod, User } from '@/types';
 import { useUserLocale } from '@/components/user/UserLocaleProvider';
 import { getItemDisplayName } from '@/lib/item-display';
 import { clampPointsToUse } from '@/lib/points';
+import { CheckoutSubmission } from '@/lib/checkout';
 import { playSuccessSound } from '@/lib/ui-sounds';
 import { isItemLowStock, isItemOutOfStock } from '@/lib/item-stock';
 
@@ -36,6 +37,7 @@ export default function CheckoutPage() {
   const [pointsToUse, setPointsToUse] = useState('');
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [loading, setLoading] = useState(false);
+  const submission = useRef(new CheckoutSubmission());
 
   const copy =
     locale === 'en'
@@ -233,24 +235,28 @@ export default function CheckoutPage() {
     const paymentMethod =
       remainingAfterPoints <= 0 ? 'balance' : paymentTiming === 'balance' ? 'balance' : 'deferred';
 
+    const order = {
+      items: items.map(({ item, quantity }) => ({
+        item_id: item.id,
+        item_name: item.name,
+        item_price: item.price,
+        quantity,
+        subtotal: item.price * quantity,
+      })),
+      total_amount: orderTotal,
+      points_used: safePointsToUse,
+      payment_method: paymentMethod,
+      deferred_settlement_method:
+        paymentMethod === 'deferred' ? deferredSettlementMethod : null,
+    };
+
     try {
+      // The same order keeps the same request ID until it succeeds, so a retry after
+      // a lost response returns the first result instead of ordering twice.
       const res = await fetch('/api/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          items: items.map(({ item, quantity }) => ({
-            item_id: item.id,
-            item_name: item.name,
-            item_price: item.price,
-            quantity,
-            subtotal: item.price * quantity,
-          })),
-          total_amount: orderTotal,
-          points_used: safePointsToUse,
-          payment_method: paymentMethod,
-          deferred_settlement_method:
-            paymentMethod === 'deferred' ? deferredSettlementMethod : null,
-        }),
+        body: JSON.stringify({ ...order, request_id: submission.current.requestId(order) }),
       });
 
       if (!res.ok) {
@@ -260,6 +266,7 @@ export default function CheckoutPage() {
 
       const payload = await res.json();
 
+      submission.current.complete(order);
       clearCart();
       void playSuccessSound();
       toast.success(copy.orderDone);
