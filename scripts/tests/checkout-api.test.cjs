@@ -75,6 +75,12 @@ test('exceeding the deferred balance ceiling is a conflict that shows the databa
   const f=fixture({result:{error:{code:'LM001',message:'後払いの上限（10,000円）を超えるため受け付けできません'}}});
   const r=await f.POST(request({...body,payment_method:'deferred',deferred_settlement_method:'cash'}));
   assert.equal(r.status,409);assert.equal(r.body.error,'後払いの上限（10,000円）を超えるため受け付けできません');assert.equal(f.notifications.length,0);
+  assert.deepEqual(JSON.parse(JSON.stringify(r.body)),{error:'後払いの上限（10,000円）を超えるため受け付けできません',code:'deferred_limit_exceeded'});
+  const detailed=fixture({result:{error:{code:'LM001',message:'上限',details:'{"limit":10000,"current":9800,"requested":260,"remaining":200}'}}});
+  const d=await detailed.POST(request({...body,payment_method:'deferred',deferred_settlement_method:'cash'}));
+  assert.deepEqual(JSON.parse(JSON.stringify(d.body)),{error:'上限',code:'deferred_limit_exceeded',limit:10000,remaining:200});
+  const other=fixture({result:{error:{code:'P0001',message:'在庫',details:'{"limit":1,"remaining":1}'}}});
+  assert.deepEqual(JSON.parse(JSON.stringify((await other.POST(request())).body)),{error:'在庫'});
 });
 test('the browser keeps one request ID per order until that order succeeds',()=>{
   const {CheckoutSubmission,validCheckoutRequestId}=fixture().lib;
