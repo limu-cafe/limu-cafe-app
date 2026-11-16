@@ -662,6 +662,8 @@ DBテストは `scripts/tests/deferred-limit-db.test.cjs` です。PGlite は接
 - 失敗した注文は ID の登録も一緒に取り消されるので、同じ ID で送り直せます
 - `request_id` のない送信を、注文 API は 400（ページの再読み込みを案内）で拒否します。DB 関数の `p_request_id` は省略できますが、これはマイグレーションを当ててからアプリが切り替わるまでの間、前のアプリの注文を止めないためのものです
 
+注文 API は、注文が確定したらすぐ応答を返し、Slack 通知（新規注文・現金払いの受け取り待ち・在庫が少ない商品）は応答の後に送ります（`after()`）。通知に失敗しても注文は取り消されず、サーバーのログに `[orders] notification failed` が残ります。
+
 `checkout_order` の引数が7つになったので、6引数の関数は削除しています。マイグレーションを戻す場合は、`20261022205934_security_hardening.sql` の定義を作り直してください。
 
 DBテストは `scripts/tests/checkout-limit-idempotency-db.test.cjs` です。PGlite は接続が1本なので、同じ ID が同時に届く場合と、同じ利用者の注文とチャージが同時に走る場合は確かめていません。
