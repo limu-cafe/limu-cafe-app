@@ -667,3 +667,15 @@ DBテストは `scripts/tests/deferred-limit-db.test.cjs` です。PGlite は接
 `checkout_order` の引数が7つになったので、6引数の関数は削除しています。マイグレーションを戻す場合は、`20261022205934_security_hardening.sql` の定義を作り直してください。
 
 DBテストは `scripts/tests/checkout-limit-idempotency-db.test.cjs` です。PGlite は接続が1本なので、同じ ID が同時に届く場合と、同じ利用者の注文とチャージが同時に走る場合は確かめていません。
+
+## 画面に出す後払いの残りの枠
+
+`GET /api/deferred-limit` は、ログイン中の利用者の `{ limit, deferred_balance, remaining }`（上限・今の未精算額・残りの枠、円）を返します。表示のためだけのもので、上限を守るのは DB 関数です。取得に失敗した画面は枠を表示せず、判定はサーバーに任せます。
+
+購入手続き画面（`app/checkout/page.tsx`）の動き：
+
+- 後払いの選択肢に残りの枠を表示します。支払う額（ポイントを引いた残り）が枠を超えるときは、後払いを選べません
+- 利用者が選んだ支払いタイミングは、ポイント数を変えても保たれます。選んだ方法が使えない間（残高不足、枠の超過、ポイントで全額払える）だけ別の方法になり、使えるようになると元に戻ります。この判定は `lib/checkout.ts` の `resolvePaymentTiming` にまとめています
+- 残高も枠も足りないときは、確認画面へ進めません
+- 注文 API が `LM001` を返したときは、応答の `code: "deferred_limit_exceeded"` と `limit`・`remaining` を使って、日本語・英語の文言で知らせます
+- 後払いの精算方法の選択（現金／クレカ）は画面から外しました。後払いの注文は `deferred_settlement_method: "cash"` で送ります。DB の区分 `stripe` と、管理画面・注文完了画面の表示は残しています
