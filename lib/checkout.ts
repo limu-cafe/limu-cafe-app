@@ -59,3 +59,22 @@ export class CheckoutSubmission {
   }
   complete(input: unknown) { this.attempts.delete(JSON.stringify(input)); }
 }
+
+export type PaymentTiming = 'balance' | 'deferred';
+/**
+ * Which payment timing the checkout screen uses for the amount left after points.
+ * The member's own choice is kept and comes back as soon as it is possible again;
+ * it is only set aside while it cannot be used. deferredRemaining is null while the
+ * allowance is unknown, in which case the server alone decides.
+ */
+export function resolvePaymentTiming(input: { chosen: PaymentTiming | null; due: number; balance: number; deferredRemaining: number | null }) {
+  const { chosen, due, balance, deferredRemaining } = input;
+  if (due <= 0) return { timing: 'balance' as PaymentTiming, balanceAvailable: true, deferredAvailable: false, canOrder: true };
+  const balanceAvailable = balance >= due;
+  const deferredAvailable = deferredRemaining === null || due <= deferredRemaining;
+  const preferred: PaymentTiming = chosen ?? (balanceAvailable ? 'balance' : 'deferred');
+  const timing: PaymentTiming = preferred === 'balance'
+    ? (balanceAvailable || !deferredAvailable ? 'balance' : 'deferred')
+    : (deferredAvailable || !balanceAvailable ? 'deferred' : 'balance');
+  return { timing, balanceAvailable, deferredAvailable, canOrder: balanceAvailable || deferredAvailable };
+}

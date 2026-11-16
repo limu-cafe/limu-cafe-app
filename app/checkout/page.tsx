@@ -1,13 +1,12 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import {
   Wallet,
   Clock,
-  Banknote,
   CreditCard,
   ChevronRight,
   CheckCircle2,
@@ -16,24 +15,28 @@ import {
 import UserLayout from '@/components/layout/UserLayout';
 import { useCartStore } from '@/lib/store/cart';
 import { createClient } from '@/lib/supabase/client';
-import type { DeferredSettlementMethod, User } from '@/types';
+import type { User } from '@/types';
 import { useUserLocale } from '@/components/user/UserLocaleProvider';
 import { getItemDisplayName } from '@/lib/item-display';
 import { clampPointsToUse } from '@/lib/points';
-import { CheckoutSubmission } from '@/lib/checkout';
+import { CheckoutSubmission, resolvePaymentTiming, type PaymentTiming } from '@/lib/checkout';
+import type { DeferredAllowance } from '@/lib/deferred-limit';
 import { playSuccessSound } from '@/lib/ui-sounds';
 import { isItemLowStock, isItemOutOfStock } from '@/lib/item-stock';
 
-type PaymentTiming = 'balance' | 'deferred';
+// Deferred orders are settled in cash; the database still accepts the other category.
+const deferredSettlementMethod = 'cash' as const;
+const yen = (amount: number) => `¥${amount.toLocaleString()}`;
 
 export default function CheckoutPage() {
   const { items, total, hasHydrated, clearCart } = useCartStore();
   const router = useRouter();
   const { locale } = useUserLocale();
   const [user, setUser] = useState<User | null>(null);
-  const [paymentTiming, setPaymentTiming] = useState<PaymentTiming>('balance');
-  const [deferredSettlementMethod, setDeferredSettlementMethod] =
-    useState<DeferredSettlementMethod>('cash');
+  // The member's own choice. null until they pick one, so that a changed amount
+  // (for example a different number of points) never replaces what they selected.
+  const [chosenTiming, setChosenTiming] = useState<PaymentTiming | null>(null);
+  const [allowance, setAllowance] = useState<DeferredAllowance | null>(null);
   const [pointsToUse, setPointsToUse] = useState('');
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -68,11 +71,17 @@ export default function CheckoutPage() {
           balanceShortage: 'Your balance is not enough',
           deferred: 'Pay later',
           deferredDescription: 'Add the remaining amount to your deferred balance',
-          settlementMethod: 'How you plan to settle it',
+          deferredRemaining: (remaining: number, limit: number) =>
+            `You can pay later for up to ${yen(remaining)} more (limit ${yen(limit)})`,
+          deferredOverLimit: (remaining: number, limit: number) =>
+            `This would exceed the pay-later limit of ${yen(limit)}. You can pay later for up to ${yen(remaining)} more.`,
+          limitExceeded: (remaining: number | null, limit: number | null) =>
+            remaining === null || limit === null
+              ? 'This order would exceed the pay-later limit.'
+              : `This order would exceed the pay-later limit of ${yen(limit)}. You can pay later for up to ${yen(remaining)} more.`,
+          noPaymentAvailable:
+            'Your balance is not enough and this order would exceed the pay-later limit. Remove some items, use more points, or settle your deferred balance first.',
           cash: 'Cash',
-          cashDescription: 'Settle later in cash',
-          card: 'Card',
-          cardDescription: 'Card settlement is coming soon. Please choose cash for now.',
           topUpBalance: 'Top up your balance',
           balanceSummary: 'The remaining amount will be deducted from your prepaid balance immediately.',
           pointsOnlySummary: 'This order will be completed using points only.',
@@ -114,11 +123,17 @@ export default function CheckoutPage() {
           balanceShortage: '残高が不足しています',
           deferred: '後払い',
           deferredDescription: '残額を後払い残高に追加します',
-          settlementMethod: 'あとでどう支払うか',
+          deferredRemaining: (remaining: number, limit: number) =>
+            `あと ${yen(remaining)} まで後払いにできます（上限 ${yen(limit)}）`,
+          deferredOverLimit: (remaining: number, limit: number) =>
+            `後払いの上限（${yen(limit)}）を超えます。後払いにできるのはあと ${yen(remaining)} までです`,
+          limitExceeded: (remaining: number | null, limit: number | null) =>
+            remaining === null || limit === null
+              ? '後払いの上限を超えるため注文できません'
+              : `後払いの上限（${yen(limit)}）を超えるため注文できません。後払いにできるのはあと ${yen(remaining)} までです`,
+          noPaymentAvailable:
+            '残高が足りず、後払いの上限も超えるため注文できません。商品を減らすか、ポイントを使うか、後払い分を精算してください',
           cash: '現金',
-          cashDescription: 'あとで現金で精算',
-          card: 'クレカ',
-          cardDescription: 'クレカ精算は今後実装予定です。今は現金を選んでください。',
           topUpBalance: '残高をチャージする',
           balanceSummary: '今回の注文の残額は前払い残高からすぐに差し引かれます。',
           pointsOnlySummary: '今回の注文はポイントだけで完了します。',
@@ -146,28 +161,36 @@ export default function CheckoutPage() {
     });
   }, [router]);
 
+  // Display only. If this fails the option stays selectable and the server decides.
+  const loadAllowance = useCallback(async () => {
+    try {
+      const res = await fetch('/api/deferred-limit');
+      if (res.ok) setAllowance(await res.json());
+    } catch {
+      // Keep whatever was shown before.
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadAllowance();
+  }, [loadAllowance]);
+
   const orderTotal = total();
   const availablePoints = user?.points_balance ?? 0;
   const requestedPoints = Number(pointsToUse || 0);
   const safePointsToUse = clampPointsToUse(requestedPoints, availablePoints, orderTotal);
   const remainingAfterPoints = Math.max(0, orderTotal - safePointsToUse);
   const hasEnoughBalance = user ? user.balance >= remainingAfterPoints : false;
-
-  useEffect(() => {
-    if (!user) return;
-    setPaymentTiming(user.balance >= remainingAfterPoints ? 'balance' : 'deferred');
-  }, [user, remainingAfterPoints]);
-
-  useEffect(() => {
-    if (!user) return;
-    if (remainingAfterPoints <= 0) {
-      setPaymentTiming('balance');
-      return;
-    }
-    if (paymentTiming === 'balance' && user.balance < remainingAfterPoints) {
-      setPaymentTiming('deferred');
-    }
-  }, [paymentTiming, remainingAfterPoints, user]);
+  const {
+    timing: paymentTiming,
+    deferredAvailable,
+    canOrder,
+  } = resolvePaymentTiming({
+    chosen: chosenTiming,
+    due: remainingAfterPoints,
+    balance: user?.balance ?? 0,
+    deferredRemaining: allowance ? allowance.remaining : null,
+  });
 
   if (!hasHydrated) {
     return (
@@ -204,27 +227,15 @@ export default function CheckoutPage() {
     {
       id: 'deferred' as const,
       label: copy.deferred,
-      description: copy.deferredDescription,
+      description: allowance
+        ? copy.deferredRemaining(allowance.remaining, allowance.limit)
+        : copy.deferredDescription,
       icon: Clock,
-      disabled: remainingAfterPoints <= 0,
-      disabledReason: copy.pointsCoverAll,
-    },
-  ];
-
-  const deferredOptions = [
-    {
-      id: 'cash' as const,
-      label: copy.cash,
-      description: copy.cashDescription,
-      icon: Banknote,
-      disabled: false,
-    },
-    {
-      id: 'stripe' as const,
-      label: copy.card,
-      description: copy.cardDescription,
-      icon: CreditCard,
-      disabled: true,
+      disabled: remainingAfterPoints <= 0 || !deferredAvailable,
+      disabledReason:
+        remainingAfterPoints <= 0 || !allowance
+          ? copy.pointsCoverAll
+          : copy.deferredOverLimit(allowance.remaining, allowance.limit),
     },
   ];
 
@@ -261,6 +272,12 @@ export default function CheckoutPage() {
 
       if (!res.ok) {
         const err = await res.json();
+        if (err.code === 'deferred_limit_exceeded') {
+          // Another order or top-up used the allowance in the meantime: show the new figure.
+          setShowConfirmation(false);
+          void loadAllowance();
+          throw new Error(copy.limitExceeded(err.remaining ?? null, err.limit ?? null));
+        }
         throw new Error(err.error ?? copy.orderFailed);
       }
 
@@ -391,7 +408,7 @@ export default function CheckoutPage() {
               key={id}
               onClick={() => {
                 if (disabled) return;
-                setPaymentTiming(id);
+                setChosenTiming(id);
                 setShowConfirmation(false);
               }}
               disabled={disabled}
@@ -441,58 +458,10 @@ export default function CheckoutPage() {
           )}
         </div>
 
-        {paymentTiming === 'deferred' && remainingAfterPoints > 0 && (
-          <div className="space-y-3">
-            <h2 className="font-medium text-espresso">{copy.settlementMethod}</h2>
-            {deferredOptions.map(({ id, label, description, icon: Icon, disabled }) => (
-              <button
-                key={id}
-                onClick={() => {
-                  if (disabled) return;
-                  setDeferredSettlementMethod(id);
-                  setShowConfirmation(false);
-                }}
-                disabled={disabled}
-                className={`card flex w-full items-center gap-4 text-left transition-all duration-200 ${
-                  deferredSettlementMethod === id && !disabled
-                    ? 'bg-espresso text-cream-50 ring-2 ring-espresso'
-                    : disabled
-                      ? 'cursor-not-allowed opacity-60'
-                      : 'hover:border-espresso-400'
-                }`}
-              >
-                <div
-                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${
-                    deferredSettlementMethod === id && !disabled ? 'bg-white/20' : 'bg-cream-100'
-                  }`}
-                >
-                  <Icon
-                    size={20}
-                    className={
-                      deferredSettlementMethod === id && !disabled
-                        ? 'text-cream-50'
-                        : 'text-espresso-600'
-                    }
-                  />
-                </div>
-                <div className="flex-1">
-                  <p className="font-medium">{label}</p>
-                  <p
-                    className={`text-sm ${
-                      deferredSettlementMethod === id && !disabled ? 'text-cream-200' : 'text-espresso-400'
-                    }`}
-                  >
-                    {description}
-                  </p>
-                </div>
-                {deferredSettlementMethod === id && !disabled && (
-                  <div className="flex h-5 w-5 items-center justify-center rounded-full bg-white">
-                    <div className="h-2.5 w-2.5 rounded-full bg-espresso" />
-                  </div>
-                )}
-              </button>
-            ))}
-          </div>
+        {user && !canOrder && (
+          <p className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {copy.noPaymentAvailable}
+          </p>
         )}
 
         <div className="card space-y-3 border-espresso-200/70 bg-white/80">
@@ -509,14 +478,14 @@ export default function CheckoutPage() {
           </p>
           {paymentTiming === 'deferred' && remainingAfterPoints > 0 && (
             <p className="text-sm text-espresso-500">
-              {copy.plannedSettlement}: {deferredSettlementMethod === 'cash' ? copy.cash : copy.card}
+              {copy.plannedSettlement}: {copy.cash}
             </p>
           )}
         </div>
 
         <button
           onClick={() => setShowConfirmation(true)}
-          disabled={loading}
+          disabled={loading || !canOrder}
           className="btn-primary flex w-full items-center justify-center gap-2 py-4 text-base"
         >
           {copy.reviewButton}
@@ -547,7 +516,7 @@ export default function CheckoutPage() {
                   </p>
                   {paymentTiming === 'deferred' && remainingAfterPoints > 0 && (
                     <p className="mt-2 text-sm text-espresso-500">
-                      {copy.plannedSettlement}: {deferredSettlementMethod === 'cash' ? copy.cash : copy.card}
+                      {copy.plannedSettlement}: {copy.cash}
                     </p>
                   )}
                   {safePointsToUse > 0 && (
