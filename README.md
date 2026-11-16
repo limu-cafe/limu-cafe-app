@@ -679,3 +679,5 @@ DBテストは `scripts/tests/checkout-limit-idempotency-db.test.cjs` です。P
 - 残高も枠も足りないときは、確認画面へ進めません
 - 注文 API が `LM001` を返したときは、応答の `code: "deferred_limit_exceeded"` と `limit`・`remaining` を使って、日本語・英語の文言で知らせます
 - 後払いの精算方法の選択（現金／クレカ）は画面から外しました。後払いの注文は `deferred_settlement_method: "cash"` で送ります。DB の区分 `stripe` と、管理画面・注文完了画面の表示は残しています
+
+チャージ画面（`app/charge/page.tsx`）も同じ `/api/deferred-limit` で残りの枠を表示し、枠を超える金額では確認画面へ進めません。クレジットカード（Stripe 準備中）の選択肢は外しました。チャージ API に送る内容（`{ amount, method: "cash" }`）は変えていません。
