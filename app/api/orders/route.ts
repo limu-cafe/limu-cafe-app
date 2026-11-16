@@ -1,5 +1,5 @@
 import { requireMemberSession } from '@/lib/member-session';
-import { NextResponse } from 'next/server';
+import { NextResponse, after } from 'next/server';
 import { revalidatePath } from 'next/cache';
 import { createAdminClient } from '@/lib/supabase/server';
 import { notifyCashOrderPending, notifyNewOrder, notifyLowStock } from '@/lib/slack';
@@ -43,19 +43,22 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: '注文を完了できませんでした。履歴を確認してください' }, { status: 500 });
   }
 
-  // Notifications run only after the entire financial transaction commits. When the
-  // same request ID arrives again, the first attempt already sent them.
-  if (!data.replayed) try {
-    await notifyNewOrder({ userName: data.user_name, items: data.items.map((i: any) => ({ name: i.item_name, quantity: i.quantity, price: i.item_price })), total: data.total_amount, paymentMethod: data.payment_method });
-    if (data.payment_method === 'cash') {
-      await notifyCashOrderPending({ userName: data.user_name, total: data.total_amount, items: data.items.map((i: any) => ({ name: i.item_name, quantity: i.quantity })) });
+  // The order is already committed, so the response does not wait for Slack: the
+  // notifications run after it is sent. When the same request ID arrives again, the
+  // first attempt already sent them.
+  if (!data.replayed) after(async () => {
+    try {
+      await notifyNewOrder({ userName: data.user_name, items: data.items.map((i: any) => ({ name: i.item_name, quantity: i.quantity, price: i.item_price })), total: data.total_amount, paymentMethod: data.payment_method });
+      if (data.payment_method === 'cash') {
+        await notifyCashOrderPending({ userName: data.user_name, total: data.total_amount, items: data.items.map((i: any) => ({ name: i.item_name, quantity: i.quantity })) });
+      }
+      for (const item of data.low_stock_items) {
+        await notifyLowStock({ itemName: item.name, currentStock: item.stock, threshold: item.stock_alert_threshold });
+      }
+    } catch (notificationError) {
+      console.error('[orders] notification failed', notificationError);
     }
-    for (const item of data.low_stock_items) {
-      await notifyLowStock({ itemName: item.name, currentStock: item.stock, threshold: item.stock_alert_threshold });
-    }
-  } catch (notificationError) {
-    console.error('[orders] notification failed', notificationError);
-  }
+  });
   for (const path of ['/', '/mypage', '/admin', '/admin/orders', '/admin/transactions', '/admin/stock', '/admin/items', '/admin/users', '/admin/points']) revalidatePath(path);
   return NextResponse.json({ ok: true, order_id: data.order_id });
 }
