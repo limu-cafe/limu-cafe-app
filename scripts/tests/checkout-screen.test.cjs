@@ -114,3 +114,19 @@ test('the checkout page no longer offers a card option or resets the timing in a
   assert.match(source, /後払いの上限（\$\{yen\(limit\)\}）を超えるため注文できません/);
   assert.match(source, /err\.code === 'deferred_limit_exceeded'/);
 });
+
+test('the charge page shows the allowance, blocks amounts above it and offers no card option', () => {
+  const source = fs.readFileSync(path.join(root, 'app/charge/page.tsx'), 'utf8');
+  assert.doesNotMatch(source, /stripe|クレジットカード|CreditCard|開発中|setMethod/i);
+  const has = (text) => assert.ok(source.includes(text), text);
+  has("fetch('/api/deferred-limit')");
+  has('amount > allowance.remaining');
+  has('disabled={!amount || loading || overAllowance}');
+  has('disabled={allowance !== null && a > allowance.remaining}');
+  // The request the charge API receives is unchanged.
+  has('body: JSON.stringify({ amount, method })');
+  has("const method = 'cash' as const");
+  // Both languages.
+  has('You can top up ${yen(remaining)} more');
+  has('あと ${yen(remaining)} までチャージできます');
+});
