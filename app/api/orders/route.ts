@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { createAdminClient } from '@/lib/supabase/server';
 import { notifyCashOrderPending, notifyNewOrder, notifyLowStock } from '@/lib/slack';
 import { parseCheckout, validCheckoutRequestId } from '@/lib/checkout';
+import { parseDeferredLimitDetail } from '@/lib/deferred-limit';
 
 export async function POST(request: Request) {
   const origin = request.headers.get('origin');
@@ -38,6 +39,10 @@ export async function POST(request: Request) {
     const code = error?.code ?? '';
     // LM001: the order would push the unsettled debt above the deferred balance ceiling.
     const status = ({ '22023': 400, '42501': 403, P0001: 409, LM001: 409, P0002: 404 } as Record<string, number>)[code];
+    // The screen shows this one in the member's language, with the allowance that is left.
+    if (code === 'LM001') {
+      return NextResponse.json({ error: error.message, code: 'deferred_limit_exceeded', ...parseDeferredLimitDetail(error.details) }, { status });
+    }
     if (status) return NextResponse.json({ error: error.message }, { status });
     console.error('[orders] checkout failed', { code });
     return NextResponse.json({ error: '注文を完了できませんでした。履歴を確認してください' }, { status: 500 });
