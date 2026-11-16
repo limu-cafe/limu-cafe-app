@@ -10,10 +10,11 @@ const item = '20000000-0000-4000-8000-000000000002';
 const requestId = '20000000-0000-4000-8000-000000000003';
 const body = { items: [{item_id:item,quantity:2,item_price:1,item_name:'偽物',subtotal:2}], total_amount:260,payment_method:'balance',points_used:0,request_id:requestId };
 function fixture(options = {}) {
-  const writes = [], notifications = [], refreshes = [], modules = new Map();
+  const writes = [], notifications = [], refreshes = [], deferred = [], modules = new Map();
   const mocks = {
     '@/lib/member-session': {requireMemberSession:async()=>({user:options.signedOut?null:{id:user},status:options.signedOut?401:200,error:'Unauthorized'})},
-    'next/server': {NextResponse:{json:(body, init={})=>({body,status:init.status??200})}},
+    // after() only queues work; flush() plays the part of Next.js running it once the response is sent.
+    'next/server': {NextResponse:{json:(body, init={})=>({body,status:init.status??200})},after:fn=>{deferred.push(fn);}},
     'next/cache': {revalidatePath:p=>refreshes.push(p)},
     '@/lib/supabase/server': {
       createClient:async()=>({auth:{getUser:async()=>({data:{user:options.signedOut?null:{id:user}}})}}),
@@ -28,13 +29,13 @@ function fixture(options = {}) {
     vm.runInNewContext(code,{module,exports:module.exports,require:n=>mocks[n]??load(path.join(root,n.slice(2))+'.ts'),URL,crypto:require('node:crypto').webcrypto,console:{error(){}}});
     return module.exports;
   }
-  return {...load(path.join(root,'app/api/orders/route.ts')),lib:load(path.join(root,'lib/checkout.ts')),writes,notifications,refreshes};
+  return {...load(path.join(root,'app/api/orders/route.ts')),lib:load(path.join(root,'lib/checkout.ts')),writes,notifications,refreshes,deferred,flush:async()=>{for(const fn of deferred.splice(0))await fn();}};
 }
 const request = (value=body, origin='https://cafe.test') => new Request('https://cafe.test/api/orders',{method:'POST',headers:{Origin:origin,'Content-Type':'application/json'},body:JSON.stringify(value)});
 test('checkout derives user from authentication and strips browser prices and identities',async()=>{
   const f=fixture(); assert.equal((await f.POST(request({...body,user_id:'someone-else'}))).status,200);
   assert.deepEqual(f.writes,[{name:'checkout_order',args:{p_user_id:user,p_items:[{item_id:item,quantity:2}],p_expected_total:260,p_payment_method:'balance',p_deferred_method:null,p_requested_points:0,p_request_id:requestId}}]);
-  assert.equal(f.notifications[0].args.items[0].price,130);assert.equal(f.notifications[0].args.items[0].name,'お茶');
+  await f.flush();assert.equal(f.notifications[0].args.items[0].price,130);assert.equal(f.notifications[0].args.items[0].name,'お茶');
   assert.ok(f.refreshes.includes('/mypage'));assert.ok(f.refreshes.includes('/admin/transactions'));
 });
 test('authentication, cross-origin, malformed JSON and malformed carts are rejected before financial writes',async()=>{
@@ -50,7 +51,8 @@ test('price or stock conflict and database failure send no success notification'
   }
 });
 test('a notification outage never rolls back or resubmits an already committed order',async()=>{
-  const f=fixture({notificationFailure:true});const r=await f.POST(request());assert.equal(r.status,200);assert.equal(r.body.order_id,'order1');assert.equal(f.writes.length,1);
+  const f=fixture({notificationFailure:true});const r=await f.POST(request());assert.equal(r.status,200);assert.equal(r.body.order_id,'order1');
+  await f.flush();assert.equal(f.notifications.length,1);assert.equal(f.writes.length,1);
 });
 test('a missing or malformed request ID asks for a reload and reaches no financial write',async()=>{
   const f=fixture(),{request_id:_,...withoutId}=body;
@@ -65,8 +67,8 @@ test('a replayed request returns the first order without notifying again',async(
   const first={ok:true,order_id:'order1',user_name:'利用者',items:[{item_name:'お茶',item_price:130,quantity:2}],total_amount:260,payment_method:'cash',low_stock_items:[{name:'お茶',stock:1,stock_alert_threshold:3}]};
   const f=fixture({result:{data:{...first,replayed:true}}});const r=await f.POST(request());
   assert.equal(r.status,200);assert.deepEqual(JSON.parse(JSON.stringify(r.body)),{ok:true,order_id:'order1'});
-  assert.equal(f.writes.length,1);assert.equal(f.notifications.length,0);assert.ok(f.refreshes.includes('/mypage'));
-  const fresh=fixture({result:{data:first}});await fresh.POST(request());
+  assert.equal(f.writes.length,1);assert.equal(f.deferred.length,0);assert.equal(f.notifications.length,0);assert.ok(f.refreshes.includes('/mypage'));
+  const fresh=fixture({result:{data:first}});await fresh.POST(request());await fresh.flush();
   assert.deepEqual(fresh.notifications.map(n=>n.name),['notifyNewOrder','notifyCashOrderPending','notifyLowStock']);
 });
 test('exceeding the deferred balance ceiling is a conflict that shows the database message',async()=>{
@@ -81,4 +83,16 @@ test('the browser keeps one request ID per order until that order succeeds',()=>
   assert.equal(s.requestId({...order}),id);assert.notEqual(s.requestId(changed),id);assert.equal(s.requestId(order),id);
   s.complete(order);assert.notEqual(s.requestId(order),id);
   assert.notEqual(new CheckoutSubmission().requestId(changed),s.requestId(changed));
+});
+test('the response is returned before any Slack notification is sent',async()=>{
+  const f=fixture({result:{data:{ok:true,order_id:'order1',user_name:'利用者',items:[{item_name:'お茶',item_price:130,quantity:2}],total_amount:260,payment_method:'cash',low_stock_items:[{name:'お茶',stock:1,stock_alert_threshold:3}]}}});
+  const r=await f.POST(request());
+  assert.equal(r.status,200);assert.equal(r.body.order_id,'order1');assert.ok(f.refreshes.includes('/mypage'));
+  assert.equal(f.notifications.length,0);assert.equal(f.deferred.length,1);
+  await f.flush();
+  assert.deepEqual(f.notifications.map(n=>n.name),['notifyNewOrder','notifyCashOrderPending','notifyLowStock']);
+});
+test('rejected orders queue no work for after the response',async()=>{
+  const failed=fixture({result:{error:{code:'P0001',message:'fixture error'}}});await failed.POST(request());assert.equal(failed.deferred.length,0);
+  const invalid=fixture();await invalid.POST(request({...body,items:[]}));assert.equal(invalid.deferred.length,0);
 });
