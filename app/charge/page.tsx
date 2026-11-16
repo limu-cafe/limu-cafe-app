@@ -1,20 +1,24 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import UserLayout from '@/components/layout/UserLayout';
 import toast from 'react-hot-toast';
-import { Banknote, CreditCard, ChevronRight, CheckCircle2 } from 'lucide-react';
+import { Banknote, ChevronRight, CheckCircle2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useUserLocale } from '@/components/user/UserLocaleProvider';
 import { playSuccessSound } from '@/lib/ui-sounds';
+import type { DeferredAllowance } from '@/lib/deferred-limit';
 
 const PRESET_AMOUNTS = [500, 1000, 2000, 3000, 5000];
+// Top-ups are collected in cash at settlement time.
+const method = 'cash' as const;
+const yen = (value: number) => `¥${value.toLocaleString()}`;
 
 export default function ChargePage() {
   const router = useRouter();
   const { locale } = useUserLocale();
   const [amount, setAmount] = useState<number | ''>('');
-  const [method, setMethod] = useState<'cash'>('cash');
+  const [allowance, setAllowance] = useState<DeferredAllowance | null>(null);
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [loading, setLoading] = useState(false);
   const copy =
@@ -22,7 +26,6 @@ export default function ChargePage() {
       ? {
           minAmount: 'Please enter at least ¥100',
           successCash: 'Top-up reflected. The amount was added to your deferred balance.',
-          success: 'Top-up completed!',
           rewardPoints: (points: number) => `${points}pt added as a charge reward.`,
           title: 'Top up balance',
           subtitle:
@@ -32,9 +35,12 @@ export default function ChargePage() {
           paymentMethod: 'Payment method',
           cash: 'Cash',
           cashDescription: 'Available immediately and collected at settlement time',
-          card: 'Credit card',
-          inProgress: 'In progress',
-          cardDescription: 'Stripe support is being prepared. Please use cash for now.',
+          allowance: (remaining: number, limit: number) =>
+            `You can top up ${yen(remaining)} more (pay-later limit ${yen(limit)})`,
+          allowanceNote: 'The limit covers unsettled top-ups and pay-later orders together.',
+          overAllowance: (remaining: number) =>
+            `This exceeds the limit. You can top up ${yen(remaining)} more.`,
+          noAllowance: 'You have reached the pay-later limit. Settle your deferred balance before topping up.',
           confirmHeading: 'Confirmation',
           reviewButton: 'Open confirmation screen',
           reviewTitle: 'Final confirmation',
@@ -47,7 +53,6 @@ export default function ChargePage() {
       : {
           minAmount: '100円以上で入力してください',
           successCash: 'チャージを反映しました。金額は後払い残高に追加され、定期精算で回収されます。',
-          success: 'チャージが完了しました！',
           rewardPoints: (points: number) => `チャージ特典として ${points}pt を付与しました。`,
           title: '残高チャージ',
           subtitle:
@@ -57,9 +62,12 @@ export default function ChargePage() {
           paymentMethod: '支払い方法',
           cash: '現金',
           cashDescription: '残高へすぐ反映し、代金は定期精算で回収します',
-          card: 'クレジットカード',
-          inProgress: '開発中',
-          cardDescription: 'Stripe 連携は準備中です。現在は現金チャージをご利用ください。',
+          allowance: (remaining: number, limit: number) =>
+            `あと ${yen(remaining)} までチャージできます（後払いの上限 ${yen(limit)}）`,
+          allowanceNote: 'チャージと後払いの注文の、未精算分を合わせた上限です。',
+          overAllowance: (remaining: number) =>
+            `上限を超えます。チャージできるのはあと ${yen(remaining)} までです`,
+          noAllowance: '後払いの上限に達しているため、精算するまでチャージできません',
           confirmHeading: '確認内容',
           reviewButton: '確認画面へ進む',
           reviewTitle: '最終確認',
@@ -69,6 +77,22 @@ export default function ChargePage() {
           backToCharge: '戻って修正する',
           action: 'チャージする',
         };
+
+  // Display only. If this fails nothing is shown and the server decides.
+  const loadAllowance = useCallback(async () => {
+    try {
+      const res = await fetch('/api/deferred-limit');
+      if (res.ok) setAllowance(await res.json());
+    } catch {
+      // Keep whatever was shown before.
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadAllowance();
+  }, [loadAllowance]);
+
+  const overAllowance = allowance !== null && typeof amount === 'number' && amount > allowance.remaining;
 
   const handleCharge = async () => {
     if (!amount || amount < 100) {
@@ -85,17 +109,14 @@ export default function ChargePage() {
       const payload = await res.json();
       if (!res.ok) throw new Error(payload.error);
       void playSuccessSound();
-      toast.success(
-        method === 'cash'
-          ? copy.successCash
-          : copy.success
-      );
+      toast.success(copy.successCash);
       if (payload.reward_points > 0) {
         toast.success(copy.rewardPoints(payload.reward_points));
       }
       router.push('/mypage');
     } catch (e: any) {
       toast.error(e.message);
+      void loadAllowance();
     } finally {
       setLoading(false);
     }
@@ -121,7 +142,8 @@ export default function ChargePage() {
               <button
                 key={a}
                 onClick={() => setAmount(a)}
-                className={`py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                disabled={allowance !== null && a > allowance.remaining}
+                className={`py-2 rounded-lg text-sm font-medium transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-40 ${
                   amount === a
                     ? 'bg-espresso text-cream-50'
                     : 'bg-cream-100 text-espresso-600 hover:bg-cream-200'
@@ -144,49 +166,33 @@ export default function ChargePage() {
               className="input pl-8 font-mono"
             />
           </div>
+
+          {allowance && (
+            <div className="rounded-2xl border border-cream-200 bg-cream-50/70 px-4 py-3 text-sm text-espresso-500">
+              <p className="font-medium text-espresso">
+                {allowance.remaining > 0
+                  ? copy.allowance(allowance.remaining, allowance.limit)
+                  : copy.noAllowance}
+              </p>
+              <p className="mt-1 text-xs text-espresso-400">{copy.allowanceNote}</p>
+              {overAllowance && allowance.remaining > 0 && (
+                <p className="mt-2 text-red-600">{copy.overAllowance(allowance.remaining)}</p>
+              )}
+            </div>
+          )}
         </div>
 
         {/* 支払い方法 */}
         <div className="card space-y-3">
           <h2 className="font-medium text-espresso">{copy.paymentMethod}</h2>
 
-          <button
-            onClick={() => {
-              setMethod('cash');
-              setShowConfirmation(false);
-            }}
-            className={`w-full flex items-center gap-4 p-4 rounded-xl border-2 transition-all duration-200 ${
-              method === 'cash'
-                ? 'border-espresso bg-espresso text-cream-50'
-                : 'border-cream-200 hover:border-espresso-400'
-            }`}
-          >
-            <Banknote size={22} className={method === 'cash' ? 'text-cream-50' : 'text-espresso-600'} />
+          <div className="w-full flex items-center gap-4 p-4 rounded-xl border-2 border-espresso bg-espresso text-cream-50">
+            <Banknote size={22} className="text-cream-50" />
             <div className="text-left flex-1">
               <p className="font-medium">{copy.cash}</p>
-              <p className={`text-sm ${method === 'cash' ? 'text-cream-200' : 'text-espresso-400'}`}>
-                {copy.cashDescription}
-              </p>
+              <p className="text-sm text-cream-200">{copy.cashDescription}</p>
             </div>
-          </button>
-
-          <button
-            disabled
-            className="w-full flex items-center gap-4 p-4 rounded-xl border-2 border-cream-200 bg-cream-50/70 opacity-70 cursor-not-allowed"
-          >
-            <CreditCard size={22} className="text-espresso-600" />
-            <div className="text-left flex-1">
-              <div className="flex items-center gap-2">
-                <p className="font-medium">{copy.card}</p>
-                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
-                  {copy.inProgress}
-                </span>
-              </div>
-              <p className="text-sm text-espresso-400">
-                {copy.cardDescription}
-              </p>
-            </div>
-          </button>
+          </div>
         </div>
 
         {/* チャージボタン */}
@@ -201,7 +207,7 @@ export default function ChargePage() {
 
         <button
           onClick={() => setShowConfirmation(true)}
-          disabled={!amount || loading}
+          disabled={!amount || loading || overAllowance}
           className="w-full btn-primary py-4 text-base flex items-center justify-center gap-2"
         >
           {copy.reviewButton}
