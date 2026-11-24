@@ -31,6 +31,7 @@ test('partially completed rows and invalid integers never silently enter invento
 test('different stores and dates keep separate records and automatically aggregate repeated product inventory',async()=>{
  const {h,props}=editor();await two(h);h.change('買い物1の購入先','A店');h.change('買い物1の購入日','2026-10-01');h.change('買い物1の入荷日','2026-10-02');await h.click('＋ 別の店・日付の買い物');row(h,1,10,'60','5',2);h.change('買い物2の購入先','B店');h.change('買い物2の購入日','2026-10-05');h.change('買い物2の入荷日','2026-10-06');assert.ok(text(h.render()).includes('¥630'));await h.click('登録内容を確認');assert.equal(h.calls.length,0);assert.ok(text(h.render()).includes('＋7個'));assert.ok(text(h.render()).includes('A店 · 2026-10-01'));assert.ok(text(h.render()).includes('B店 · 2026-10-05'));
  h.setResponder(async call=>response(call));await h.click('まとめて登録');assert.equal(h.calls.length,1);assert.equal(h.calls[0].body.receipts.length,2);assert.equal(props.receipt.total_amount,630);assert.equal(props.receipt.stock_totals.find(r=>r.item_id===id(10)).quantity,7);
+ assert.equal(props.draft.purchases.map(purchase=>h.calls[0].body.receipts.find(receipt=>receipt.receipt_id===purchase.id).purchase.payment_source).join(','),'cashbox,personal_advance');
 });
 test('repeated products retain independent unit prices and coalesce exact costs and quantities in one receipt',async()=>{
  const {h}=editor();row(h,1,10,'50','2');await add(h);row(h,2,10,'60','3');await h.click('登録内容を確認');h.setResponder(async call=>response(call));await h.click('まとめて登録');assert.deepEqual(h.calls[0].body.receipts[0].rows,[{item_id:id(10),quantity:5,subtotal:280,stock_quantity:5}]);
@@ -59,7 +60,33 @@ test('mismatched inventory results are not treated as confirmed success',async()
 });
 test('purchase entry is centralized on reimbursements and closing retains mixed purchase drafts',async()=>{
  const h=fixture('app/admin/reimbursements/ReimbursementsClient.tsx',{items,purchaseRuns:[],miscExamples:[]});await h.click('買い物を記録');let component=h.all().find(n=>n.props?.draft&&n.props?.onRecorded);const d=component.props.draft;assert.equal(d.purchases[0].source,'personal_advance');component.props.onChange({purchases:[{...d.purchases[0],vendor:'A店',lines:[{id:id(55),itemId:id(10),quantity:'12',amount:'600'},{id:id(56),itemId:'',kind:'expense',label:'ペーパータオル',quantity:'2',amount:'100'}]},purchase(202)]});h.all().find(n=>n.props?.closeLabel==='買い物入力を閉じる').props.onClose();await h.click('買い物を記録');component=h.all().find(n=>n.props?.draft&&n.props?.onRecorded);assert.equal(component.props.draft.purchases.length,2);assert.equal(component.props.draft.purchases[0].lines[1].label,'ペーパータオル');assert.equal(h.calls.length,0);
- const product=fixture('app/admin/items/ItemsClient.tsx',{items,categories:[]});assert.equal(product.all().some(n=>n.props?.draft),false);assert.ok(product.all().some(n=>n.props?.href?.startsWith('/admin/reimbursements?record=purchase')));
+ const product=fixture('app/admin/items/ItemsClient.tsx',{items,categories:[]});
+ assert.equal(product.all().some(n=>n.props?.draft),false);
+ const entryLinks=product.all().filter(n=>n.props?.href?.startsWith('/admin/reimbursements?record=purchase'));
+ assert.equal(entryLinks.length,3);
+ for(const link of entryLinks){
+  const query=new URL(link.props.href,'http://localhost').search;
+  const target=fixture('app/admin/reimbursements/ReimbursementsClient.tsx',{items,purchaseRuns:[],miscExamples:[]},query);
+  assert.equal(target.all().find(n=>n.props?.draft)?.props.draft.purchases[0].source,'personal_advance');
+ }
+});
+test('an explicit cashbox entry seeds each new purchase independently of earlier choices',async()=>{
+ const {h,props}=editor();
+ props.defaultSource='cashbox';
+ h.change('買い物1の支払元','personal_advance');
+ await h.click('＋ 別の店・日付の買い物');
+ assert.equal(h.field('買い物2の支払元').props.value,'cashbox');
+ assert.equal(h.calls.length,0);
+});
+test('the product list opens its display-order editor in one action and restores the search on close',async()=>{
+ const h=fixture('app/admin/items/ItemsClient.tsx',{items,categories:[],orderSettings:{revision:3,available:true,verified:true}},'?q=緑茶');
+ assert.equal(h.field('商品名で検索').props.value,'緑茶');
+ await h.click('表示順を並べ替え');
+ const editor=h.all().find(node=>node.props.revision===3&&node.props.onClose);
+ assert.ok(editor);assert.equal(editor.props.items.length,2);
+ assert.equal(h.all().some(node=>node.props['aria-label']==='商品名で検索'),false);
+ editor.props.onClose();assert.equal(h.field('商品名で検索').props.value,'緑茶');
+ assert.equal(h.calls.length,0);
 });
 test('one purchase mixes product stock and named supplies with one automatic total and one request',async()=>{
  const {h,props}=editor();row(h,1,10,'１００','２');await add(h);h.change(label(2,'商品'),'__expense__');h.change(label(2,'備品・雑費名'),'ペーパータオル');h.change(label(2,'単価'),'１５０円');h.change(label(2,'個数'),'３');h.change('買い物1の支払元','personal_advance');assert.ok(text(h.render()).includes('¥650'));await h.click('登録内容を確認');assert.ok(text(h.render()).includes('ペーパータオル'));h.setResponder(async call=>response(call));await h.click('まとめて登録');assert.equal(h.calls.length,1);const saved=h.calls[0].body.receipts[0];assert.equal(h.calls[0].url,'/api/admin/purchases');assert.equal(saved.rows.length,1);assert.equal(saved.expenses[0].subtotal,450);assert.equal(saved.expenses[0].quantity,3);assert.equal(saved.purchase.total_amount,650);assert.equal(props.receipt.stock_totals.length,1);assert.equal(props.receipt.stock_totals[0].quantity,2);

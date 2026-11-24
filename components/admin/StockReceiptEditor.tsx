@@ -12,7 +12,7 @@ export type StockDraft=IntakeDraft;
 const stockColumns='sm:grid-cols-[minmax(0,1fr)_7rem]';
 const purchaseColumns='sm:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)_6.5rem]';
 const field='block w-full min-w-0 rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white disabled:opacity-40';
-export default function StockReceiptEditor({items,draft,onChange,onBusyChange,onRecorded,submission,miscExamples=[]}:{items:(Pick<Item,'id'|'name'>&{is_unlimited_stock?:boolean})[];draft:IntakeDraft;onChange:(draft:IntakeDraft)=>void;onBusyChange:(busy:boolean)=>void;onRecorded:(receipt:StockIntakeResult)=>void;submission:RestockSubmission;miscExamples?:string[]}){
+export default function StockReceiptEditor({items,draft,onChange,onBusyChange,onRecorded,submission,defaultSource,miscExamples=[]}:{items:(Pick<Item,'id'|'name'>&{is_unlimited_stock?:boolean})[];draft:IntakeDraft;onChange:(draft:IntakeDraft)=>void;onBusyChange:(busy:boolean)=>void;onRecorded:(receipt:StockIntakeResult)=>void;submission:RestockSubmission;defaultSource?:PurchaseDraft['source'];miscExamples?:string[]}){
  const panel=useRef<HTMLElement>(null),focusRequest=useRef<{lineId:string;field:string}|null>(null),busy=useRef(false),pending=useRef<StockIntakeInput|null>(null);
  const router=useRouter();
  const [review,setReview]=useState(false),[loading,setLoading]=useState(false),[uncertain,setUncertain]=useState(false),[error,setError]=useState(''),[errorOwner,setErrorOwner]=useState<string|null>(null);
@@ -40,7 +40,7 @@ export default function StockReceiptEditor({items,draft,onChange,onBusyChange,on
   change(p, { total, pricing, lines });
  }
  function appendLine(p:PurchaseDraft){if(locked)return;const next=emptyIntakeLine();focusRequest.current={lineId:next.id,field:'product'};change(p,{lines:[...p.lines,next]});}
- function appendPurchase(){if(locked)return;const next=emptyPurchase(draft.purchases[0]?.source);focusRequest.current={lineId:next.lines[0].id,field:'product'};onChange({purchases:[...draft.purchases,next]});}
+ function appendPurchase(){if(locked)return;const next=emptyPurchase(defaultSource);focusRequest.current={lineId:next.lines[0].id,field:'product'};onChange({purchases:[...draft.purchases,next]});}
  function move(p:PurchaseDraft,row:PurchaseDraft['lines'][number],fieldName:'price'|'quantity'|'next'){
   if(fieldName!=='next'){focusRequest.current={lineId:row.id,field:fieldName};const control=panel.current?.querySelector<HTMLInputElement>(`[data-line-id="${row.id}"] [data-field="${fieldName}"]`);if(control){control.focus();control.select();focusRequest.current=null;}return;}
   if((row.kind==='expense'?!row.label?.trim():!row.itemId)||!Number.isFinite(purchaseQuantity(row))||p.scope!=='stock'&&!(p.pricing==='receipt'&&!linePriceValue(p,row).trim())&&intakeLineAmount(p,row)===null){setError('買ったもの・購入数・金額を確認してください');setErrorOwner(p.id);return;}

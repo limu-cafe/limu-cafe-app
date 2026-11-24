@@ -139,7 +139,7 @@ test('signed management session rejects the legacy timestamp without a valid pas
 function editor(fetchImpl) {
   let cursor = 0; const hooks = []; let refreshed = 0;
   const react = {
-    useState: (initial) => { const i = cursor++; if (!(i in hooks)) hooks[i] = initial; return [hooks[i], (value) => { hooks[i] = typeof value === 'function' ? value(hooks[i]) : value; }]; },
+    useState: (initial) => { const i = cursor++; if (!(i in hooks)) hooks[i] = typeof initial === 'function' ? initial() : initial; return [hooks[i], (value) => { hooks[i] = typeof value === 'function' ? value(hooks[i]) : value; }]; },
     useRef: (initial) => { const i = cursor++; if (!(i in hooks)) hooks[i] = { current: initial }; return hooks[i]; },
     useMemo: (fn) => fn(), useEffect: () => {},
   };
@@ -150,7 +150,7 @@ function editor(fetchImpl) {
     'lucide-react': { ArrowDown: 'down', ArrowUp: 'up' },
     'react-hot-toast': { default: { success: () => {} } },
   }, { fetch: fetchImpl, window: { confirm: () => true } }).default;
-  const props = { items: ids.map((id, i) => ({ id, name: `item-${i}`, created_at: '', is_available: true })), revision: 3, available: true, verified: true };
+  const props = { items: ids.map((id, i) => ({ id, name: `item-${i}`, created_at: '', is_available: true })), revision: 3, available: true, verified: true, onClose() {} };
   const render = () => { cursor = 0; return component(props); };
   const nodes = (node) => !node || typeof node !== 'object' ? [] : Array.isArray(node) ? node.flatMap(nodes) : [node, ...nodes(node.props?.children)];
   const click = (label) => nodes(render()).find((node) => node.type === 'button' && (node.props['aria-label'] === label || node.props.children === label)).props.onClick();
@@ -160,7 +160,7 @@ function editor(fetchImpl) {
 test('editor previews moves, submits once, and retains the draft after a conflict', async () => {
   let calls = 0; let body;
   const e = editor(async (_, options) => { calls++; body = JSON.parse(options.body); return { ok: false, json: async () => ({ error: 'another administrator changed it' }) }; });
-  e.click('表示順を編集'); e.click('item-0 を下へ');
+  e.click('item-0 を下へ');
   assert.equal(e.nodes(e.render()).find((node) => node.type === 'select').props.value, 0);
   const firstSave = e.click('この順序で保存');
   const secondSave = e.click('保存中...');
@@ -175,7 +175,7 @@ test('editor previews moves, submits once, and retains the draft after a conflic
 test('editor refuses to save a stale product catalog', async () => {
   let calls = 0;
   const e = editor(async () => { calls++; return { ok: true, json: async () => ({ revision: 4 }) }; });
-  e.click('表示順を編集'); e.click('item-0 を下へ');
+  e.click('item-0 を下へ');
   e.props.items = e.props.items.slice(1);
   assert.equal(e.nodes(e.render()).find((node) => node.type === 'button' && node.props.children === 'この順序で保存').props.disabled, true);
   await e.click('この順序で保存'); assert.equal(calls, 0);
