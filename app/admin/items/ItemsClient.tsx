@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import {isObjectId} from '@/lib/admin-objects';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { ReactNode } from 'react';
+import ItemOrderEditor, { type ItemOrderSettings } from './ItemOrderEditor';
 import { Pencil, Plus, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -22,7 +22,7 @@ import { RestockSubmission } from '@/lib/restock';
 interface Props {
   items: Item[];
   categories: Category[];
-  orderEditor?: ReactNode;
+  orderSettings?: ItemOrderSettings;
 }
 
 type StatusFilter = 'all' | 'visible' | 'low-stock' | 'hidden';
@@ -42,11 +42,12 @@ const EMPTY_FORM = {
 const FIELD_CLASS =
   'w-full rounded-xl border border-gray-700 bg-gray-800 px-4 py-3 text-sm text-white placeholder:text-gray-500 focus:outline-hidden';
 
-export default function ItemsClient({ items, categories, orderEditor }: Props) {
+export default function ItemsClient({ items, categories, orderSettings }: Props) {
   const router = useRouter();
   const query=useSearchParams();
   const [localItems, setLocalItems] = useState<Item[]>(items);
   const [showForm, setShowForm] = useState(false);
+  const [reordering, setReordering] = useState(false);
   const [editing, setEditing] = useState<Item | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [loading, setLoading] = useState<string | null>(null);
@@ -253,21 +254,20 @@ export default function ItemsClient({ items, categories, orderEditor }: Props) {
           <h1 className="font-display text-2xl font-bold text-white">商品</h1>
           <p className="mt-1 text-sm text-gray-400">在庫・販売状態と入荷の記録を確認できます。</p>
         </div>
-        <div className="flex flex-wrap gap-2"><Link href={purchaseEntryHref({itemId:selected?.id,source:'cashbox',returnTo:'/admin/items'+(query.toString()?'?'+query.toString():'')})} className="rounded-xl bg-white px-4 py-2.5 text-sm font-medium text-gray-950">買い物を記録</Link><button
+        {!reordering && <div className="flex flex-wrap gap-2"><Link href={purchaseEntryHref({itemId:selected?.id,returnTo:'/admin/items'+(query.toString()?'?'+query.toString():'')})} className="rounded-xl bg-white px-4 py-2.5 text-sm font-medium text-gray-950">買い物を記録</Link><button
           disabled={Boolean(loading)}
           onClick={openCreate}
           className={`${selected ? 'hidden xl:inline-flex' : 'inline-flex'} items-center justify-center gap-2 rounded-xl border border-gray-700 px-4 py-2.5 text-sm font-medium text-gray-200 transition hover:bg-gray-800`}
         >
           <Plus size={16} />
           新商品追加
-        </button></div>
+        </button></div>}
       </div>
 
       {isObjectId(query.get('fromDelivery'))&&<Link href={`/admin/items?collection=deliveries&delivery=${query.get('fromDelivery')}`} className="inline-block text-sm text-sky-300 underline">元の入荷記録へ戻る →</Link>}
-      <nav aria-label="商品の一覧" className="flex gap-4 border-b border-gray-800 text-sm"><button type="button" aria-pressed={!history} onClick={()=>setCollection(null,{delivery:null,intake:null})} className={`border-b-2 px-1 pb-3 ${!history?'border-white text-white':'border-transparent text-gray-400'}`}>商品</button><button type="button" aria-pressed={history} onClick={()=>setCollection('deliveries',{item:null,view:null,intake:null})} className={`border-b-2 px-1 pb-3 ${history?'border-white text-white':'border-transparent text-gray-400'}`}>仕入れ・入荷記録</button></nav>
-      {history?<StockReceiptHistory/>:<>
-
-      {orderEditor && <details className={`${selected ? 'hidden lg:block' : ''} rounded-2xl border border-gray-800 bg-gray-900`}><summary className="cursor-pointer px-4 py-3 text-sm text-gray-300">商品一覧の表示順</summary><div className="p-3 pt-0">{orderEditor}</div></details>}
+      <nav aria-label="商品の一覧" className="flex gap-4 border-b border-gray-800 text-sm"><button type="button" aria-pressed={!history} disabled={reordering} onClick={()=>setCollection(null,{delivery:null,intake:null})} className={`border-b-2 px-1 pb-3 ${!history?'border-white text-white':'border-transparent text-gray-400'}`}>商品</button><button type="button" aria-pressed={history} disabled={reordering} onClick={()=>setCollection('deliveries',{item:null,view:null,intake:null})} className={`border-b-2 px-1 pb-3 ${history?'border-white text-white':'border-transparent text-gray-400'}`}>仕入れ・入荷記録</button></nav>
+      {history ? <StockReceiptHistory/> : reordering && orderSettings ?
+        <ItemOrderEditor items={items} {...orderSettings} onClose={() => setReordering(false)}/> : <>
 
       <div className={`${selected ? 'hidden lg:flex' : 'flex'} flex-col gap-3 rounded-2xl border border-gray-800 bg-gray-900 p-4 md:flex-row md:items-center`}>
         <input
@@ -297,7 +297,16 @@ export default function ItemsClient({ items, categories, orderEditor }: Props) {
         </div>
       </div>
 
-      <p className={`${selected ? 'hidden lg:block' : ''} text-sm text-gray-400`}>{filteredItems.length} / {localItems.length}商品</p>
+      <div className={`${selected ? 'hidden lg:flex' : 'flex'} flex-wrap items-center justify-between gap-3`}>
+        <p className="text-sm text-gray-400">{filteredItems.length} / {localItems.length}商品</p>
+        {orderSettings && (orderSettings.available && !orderSettings.verified ?
+          <Link href="/admin/password?next=%2Fadmin%2Fitems" className="text-sm text-sky-300 underline">管理者ログインを更新して表示順を変更</Link> :
+          <button type="button" disabled={!orderSettings.available || items.length < 2 || Boolean(loading)}
+            onClick={() => setReordering(true)}
+            className="rounded-lg border border-gray-700 px-3 py-2 text-sm text-gray-200 hover:bg-gray-800 disabled:opacity-50">
+            {orderSettings.available ? '表示順を並べ替え' : '表示順を取得できません'}
+          </button>)}
+      </div>
       {selectedId && !selected && <p role="status" className="text-sm text-amber-300">この商品は見つかりません。一覧から選び直してください。</p>}
       <ObjectWorkspace selected={Boolean(selected)} label="商品詳細" onClose={() => setSelectedId(null)} detail={selected && <section aria-label="選択した商品">
         <div className="flex items-start justify-between gap-4">
@@ -333,7 +342,7 @@ export default function ItemsClient({ items, categories, orderEditor }: Props) {
             <td className="whitespace-nowrap px-3 py-3 font-mono text-white">¥{item.price.toLocaleString()}</td>
             <td className="px-3 py-3"><p className="font-mono text-white">{item.is_unlimited_stock ? '∞' : <button type="button" aria-label={`${item.name}の在庫・入荷履歴`} onClick={() => setSelectedId(item.id, { view: 'stock' })} className="underline decoration-gray-600 underline-offset-4">{item.stock}</button>}</p><p className={`text-xs ${isItemLowStock(item) ? 'text-amber-300' : 'text-gray-400'}`}>{new Product(item).status}</p></td>
             <td className="px-3 py-3"><div className="flex flex-wrap justify-end gap-2">
-              {!item.is_unlimited_stock && <Link prefetch={false} aria-label={`${item.name}の入荷を記録`} href={purchaseEntryHref({ itemId: item.id, source: 'cashbox', returnTo: `/admin/items${query.toString() ? `?${query}` : ''}` })} className="rounded-lg border border-gray-600 px-3 py-2 text-xs text-white hover:bg-gray-800">入荷</Link>}
+              {!item.is_unlimited_stock && <Link prefetch={false} aria-label={`${item.name}の入荷を記録`} href={purchaseEntryHref({ itemId: item.id, returnTo: `/admin/items${query.toString() ? `?${query}` : ''}` })} className="rounded-lg border border-gray-600 px-3 py-2 text-xs text-white hover:bg-gray-800">入荷</Link>}
               <button type="button" disabled={Boolean(loading)} aria-label={`${item.name}の商品情報を編集`} onClick={() => openEdit(item)} className="rounded-lg px-2 py-2 text-xs text-gray-300 hover:bg-gray-800 disabled:opacity-50">編集</button>
             </div></td>
           </tr>)}</tbody>

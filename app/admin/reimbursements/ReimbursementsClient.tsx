@@ -30,7 +30,20 @@ export default function ReimbursementsClient({ items, purchaseRuns, miscExamples
   const [record,setRecord]=useObjectSelection('record');
   const [collection,setCollection]=useObjectSelection('collection');
   const creating=record==='purchase',history=collection==='purchases';
-  const [draft,setDraft]=useState(()=>{const seed=initialDraft??emptyIntake('personal_advance'),p=seed.purchases[0],line={...p.lines[0],itemId:isObjectId(query.get('item'))?query.get('item')!:p.lines[0].itemId,...(query.get('misc')==='1'?{kind:'expense' as const,label:''}:{})};if(items.find(item=>item.id===line.itemId)?.is_unlimited_stock)line.addStock=false;return {purchases:[{...p,source:query.get('source')==='cashbox'?'cashbox' as const:p.source,lines:[line]}]};});
+  const source = query.get('source');
+  const defaultSource = source === 'cashbox' || source === 'personal_advance' ? source : undefined;
+  const [draft,setDraft]=useState(() => {
+    const seed = initialDraft ?? emptyIntake();
+    const purchase = seed.purchases[0];
+    const itemId = query.get('item');
+    const line = {
+      ...purchase.lines[0],
+      itemId: isObjectId(itemId) ? itemId : purchase.lines[0].itemId,
+      ...(query.get('misc') === '1' ? { kind: 'expense' as const, label: '' } : {}),
+    };
+    if (items.find(item => item.id === line.itemId)?.is_unlimited_stock) line.addStock = false;
+    return { purchases: [{ ...purchase, source: defaultSource ?? purchase.source, lines: [line] }] };
+  });
   const [recorded,setRecorded]=useState<StockIntakeResult|null>(null);
   const purchaseRequests=useRef(new RestockSubmission());
   const returnHref=purchaseReturnHref(query.get('returnTo'));
@@ -90,7 +103,7 @@ export default function ReimbursementsClient({ items, purchaseRuns, miscExamples
     </>}/></>}
 
     {creating && <RecordDialog title={recorded?'登録しました':'買い物を記録'} closeLabel="買い物入力を閉じる" wide busy={Boolean(loading)} onClose={closeForm}>
-      {recorded?<StockIntakeSummary intake={recorded}/>:<StockReceiptEditor items={items} miscExamples={miscExamples} draft={draft} onChange={setDraft} onBusyChange={value=>{busy.current=value;setLoading(value?'purchase':null);}} onRecorded={result=>{setRecorded(result);setDraft(emptyIntake('personal_advance'));router.refresh();}} submission={purchaseRequests.current}/>}
+      {recorded?<StockIntakeSummary intake={recorded}/>:<StockReceiptEditor items={items} miscExamples={miscExamples} defaultSource={defaultSource} draft={draft} onChange={setDraft} onBusyChange={value=>{busy.current=value;setLoading(value?'purchase':null);}} onRecorded={result=>{setRecorded(result);setDraft(emptyIntake(defaultSource));router.refresh();}} submission={purchaseRequests.current}/>}
     </RecordDialog>}
   </div>;
 }
