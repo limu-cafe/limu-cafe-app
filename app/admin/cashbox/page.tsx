@@ -1,113 +1,26 @@
 import { requireAdminPage } from '@/lib/admin-page-session';
 import { createAdminClient } from '@/lib/supabase/server';
-import { calculateCashboxBalance } from '@/lib/cashbox';
-import {
-  buildCashCollectionEntries,
-  type DeferredCashCollectionRow,
-  type PendingCashOrderRow,
-  type PendingSubscriptionCashRow,
-} from '@/lib/cash-collection';
 import CashboxClient from './CashboxClient';
-
+import {isObjectId} from '@/lib/admin-objects';
 export const dynamic = 'force-dynamic';
-
-type BalanceRow = {
-  amount: number;
-  direction: 'in' | 'out';
-};
-
-export default async function CashboxPage() {
+const pageNumber=(value:unknown)=>{const n=Number(value);return Number.isSafeInteger(n)&&n>0&&n<=10000?n:1;};
+export default async function CashboxPage({searchParams}:{searchParams?:Promise<{ledgerPage?:string;countPage?:string;entry?:string;count?:string}>}) {
   await requireAdminPage();
-  const supabase = createAdminClient();
-
-  const [
-    { data: balanceRows },
-    { data: entries },
-    { data: counts },
-    { count: pendingCashOrdersCount },
-    { data: pendingCashOrders },
-    { data: usersWithDeferred },
-    { data: pendingSubscriptionCashPayments },
-    { data: unreimbursedPurchaseRuns },
-  ] = await Promise.all([
-    supabase
-      .from('cashbox_entries')
-      .select('amount, direction'),
-    supabase
-      .from('cashbox_entries')
-      .select('*, created_by_user:users!cashbox_entries_created_by_fkey(name)')
-      .order('created_at', { ascending: false })
-      .limit(30),
-    supabase
-      .from('cashbox_counts')
-      .select('*, counted_by_user:users!cashbox_counts_counted_by_fkey(name)')
-      .order('counted_at', { ascending: false })
-      .limit(20),
-    supabase
-      .from('orders')
-      .select('*', { count: 'exact', head: true })
-      .eq('payment_method', 'cash')
-      .eq('payment_status', 'pending'),
-    supabase
-      .from('orders')
-      .select('total_amount')
-      .eq('payment_method', 'cash')
-      .eq('payment_status', 'pending'),
-    supabase
-      .from('users')
-      .select('id, name, avatar_url, deferred_balance')
-      .gt('deferred_balance', 0)
-      .eq('is_active', true),
-    supabase
-      .from('subscription_payments')
-      .select(
-        'user_id, cash_due_amount, user:users!subscription_payments_user_id_fkey(id, name, avatar_url)'
-      )
-      .eq('payment_status', 'pending_cash_settlement')
-      .gt('cash_due_amount', 0),
-    supabase
-      .from('purchase_runs')
-      .select('id, total_amount, vendor, note, created_at, created_by_user:users!purchase_runs_created_by_fkey(name), purchase_run_items(item_name, quantity)')
-      .eq('reimbursement_status', 'pending_reimbursement')
-      .order('created_at', { ascending: false })
-      .limit(10),
+  const db=createAdminClient(),params=await searchParams??{},entryPage=pageNumber(params.ledgerPage),countPage=pageNumber(params.countPage);
+  const [summary,ledger,counts,latest]=await Promise.all([
+    db.rpc('read_cashbox_totals'),
+    db.from('cashbox_entries').select('*, created_by_user:users!cashbox_entries_created_by_fkey(name)').order('created_at',{ascending:false}).order('id',{ascending:false}).range((entryPage-1)*30,entryPage*30),
+    db.from('cashbox_counts').select('*, counted_by_user:users!cashbox_counts_counted_by_fkey(name)').order('counted_at',{ascending:false}).order('id',{ascending:false}).range((countPage-1)*20,countPage*20),
+    db.from('cashbox_counts').select('*, counted_by_user:users!cashbox_counts_counted_by_fkey(name)').order('counted_at',{ascending:false}).order('id',{ascending:false}).limit(1),
   ]);
-
-  const expectedAmount = calculateCashboxBalance((balanceRows ?? []) as BalanceRow[]);
-  const latestCount = counts?.[0] ?? null;
-  const pendingCashOrderAmount = (pendingCashOrders ?? []).reduce(
-    (sum: number, order: { total_amount: number }) => sum + order.total_amount,
-    0
-  );
-  const cashCollectionEntries = buildCashCollectionEntries({
-    deferredUsers: (usersWithDeferred ?? []) as DeferredCashCollectionRow[],
-    pendingCashOrders: ((pendingCashOrders ?? []).map((order: { total_amount: number }) => ({
-      ...order,
-      user: null,
-    })) ?? []) as PendingCashOrderRow[],
-    pendingSubscriptionPayments:
-      (pendingSubscriptionCashPayments ?? []) as PendingSubscriptionCashRow[],
-  });
-  const totalCashCollectionAmount = cashCollectionEntries.reduce(
-    (sum, entry) => sum + entry.totalAmount,
-    0
-  );
-  const unreimbursedAdvanceAmount = (unreimbursedPurchaseRuns ?? []).reduce(
-    (sum: number, purchaseRun: { total_amount: number }) => sum + purchaseRun.total_amount,
-    0
-  );
-
-  return (
-    <CashboxClient
-      expectedAmount={expectedAmount}
-      pendingCashOrderAmount={pendingCashOrderAmount}
-      pendingCashOrdersCount={pendingCashOrdersCount ?? 0}
-      totalCashCollectionAmount={totalCashCollectionAmount}
-      unreimbursedAdvanceAmount={unreimbursedAdvanceAmount}
-      unreimbursedPurchaseRuns={unreimbursedPurchaseRuns ?? []}
-      latestCount={latestCount}
-      entries={entries ?? []}
-      counts={counts ?? []}
-    />
-  );
+  for(const result of [summary,ledger,counts,latest]) if(result.error)throw result.error;
+  const entries=(ledger.data??[]).slice(0,30),countRows=(counts.data??[]).slice(0,20);
+  // An audit deep link must not disappear just because its row is on an old page.
+  await Promise.all([
+    {id:params.entry,rows:entries,table:'cashbox_entries',fields:'*, created_by_user:users!cashbox_entries_created_by_fkey(name)'},
+    {id:params.count,rows:countRows,table:'cashbox_counts',fields:'*, counted_by_user:users!cashbox_counts_counted_by_fkey(name)'},
+  ].map(async target=>{if(!isObjectId(target.id)||target.rows.some((row:{id:string})=>row.id===target.id))return;const result=await db.from(target.table).select(target.fields).eq('id',target.id).maybeSingle();if(result.error)throw result.error;if(result.data)target.rows.unshift(result.data);}));
+  const totals=summary.data;
+  for(const key of ['expectedAmount','pendingCashOrdersCount','pendingCashOrderAmount','totalCashCollectionAmount','unreimbursedAdvanceAmount']) if(!Number.isSafeInteger(totals?.[key]))throw Error('金庫の集計結果を確認できませんでした');
+  return <CashboxClient {...totals} unreimbursedPurchaseRuns={[]} latestCount={latest.data?.[0]??null} entries={entries} counts={countRows} entryPage={entryPage} hasMoreEntries={(ledger.data?.length??0)>30} countPage={countPage} hasMoreCounts={(counts.data?.length??0)>20}/>;
 }

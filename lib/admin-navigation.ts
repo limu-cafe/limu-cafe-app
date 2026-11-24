@@ -1,4 +1,4 @@
-import { ClipboardList, Coins, LayoutDashboard, MessageSquare, Package, Receipt, Search, Repeat2, ScrollText, Users, Vault, type LucideIcon } from 'lucide-react';
+import { ClipboardList, Coins, LayoutDashboard, MessageSquare, Package, Receipt, Search, Repeat2, ScrollText, Users, Vault, Warehouse, type LucideIcon } from 'lucide-react';
 
 export type NotificationKey = 'items' | 'reimbursements' | 'transactions' | 'users' | 'points' | 'requests' | 'legacy';
 export type SidebarNotifications = Record<NotificationKey, number>;
@@ -8,6 +8,7 @@ export const ADMIN_NAVIGATION: { label: string; items: AdminNavItem[] }[] = [
   { label: '基本', items: [{ href: '/admin', label: '管理トップ', icon: LayoutDashboard }] },
   { label: '商品', items: [
     { href: '/admin/items', label: '商品一覧', icon: Package, notificationKey: 'items' },
+    { href: '/admin/stock', label: '在庫・棚卸', icon: Warehouse },
     { href: '/admin/subscriptions', label: 'サブスク商品', icon: Repeat2 },
     { href: '/admin/requests', label: '商品要望', icon: MessageSquare, notificationKey: 'requests' },
     { href: '/admin/price-watch', label: '価格監視', icon: Search },

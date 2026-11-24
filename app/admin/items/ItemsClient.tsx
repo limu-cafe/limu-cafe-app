@@ -1,5 +1,7 @@
 'use client';
 
+import Link from 'next/link';
+import {isObjectId} from '@/lib/admin-objects';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Pencil, Plus, Trash2 } from 'lucide-react';
@@ -7,6 +9,9 @@ import toast from 'react-hot-toast';
 import { useRouter, useSearchParams } from 'next/navigation';
 import ObjectWorkspace, { useObjectSelection } from '@/components/admin/ObjectWorkspace';
 import ProductRestock from '@/components/admin/ProductRestock';
+import StockAdjustment from '@/components/admin/StockAdjustment';
+import StockReceiptHistory from '@/components/admin/StockReceiptHistory';
+import {purchaseEntryHref} from '@/lib/purchase-navigation';
 import ObjectRelatedRecords from '@/components/admin/ObjectRelatedRecords';
 import ObjectDetailNavigation, { useObjectDetailView } from '@/components/admin/ObjectDetailNavigation';
 import type { Category, Item } from '@/types';
@@ -45,14 +50,19 @@ export default function ItemsClient({ items, categories, orderEditor }: Props) {
   const [editing, setEditing] = useState<Item | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [loading, setLoading] = useState<string | null>(null);
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>(query.get('state')==='low-stock'?'low-stock':'all');
-  const [search, setSearch] = useState('');
-  const [categoryId, setCategoryId] = useState('');
+  const [state, setState] = useObjectSelection('state');
+  const statusFilter: StatusFilter = state === 'visible' || state === 'low-stock' || state === 'hidden' ? state : 'all';
+  const [keyword, setKeyword] = useObjectSelection('q');
+  const search = keyword ?? '';
+  const [category, setCategory] = useObjectSelection('category');
+  const categoryId = category ?? '';
   const [selectedId, setSelectedId] = useObjectSelection('item');
   const selected = localItems.find((item) => item.id === selectedId);
   const [detailView, setDetailView] = useObjectDetailView(['overview', 'stock', 'orders']);
   const busy = useRef(false);
   const restockRequests = useRef(new RestockSubmission());
+  const [collection,setCollection] = useObjectSelection('collection');
+  const history = collection === 'deliveries' || Boolean(query.get('delivery')||query.get('intake'));
   const prefillName = query.get('prefill');
   const editDialog = useRef<HTMLDivElement>(null);
 
@@ -241,36 +251,40 @@ export default function ItemsClient({ items, categories, orderEditor }: Props) {
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="font-display text-2xl font-bold text-white">商品</h1>
-          <p className="mt-1 text-sm text-gray-400">商品を選ぶと、在庫・履歴・関連注文を確認できます。</p>
+          <p className="mt-1 text-sm text-gray-400">在庫・販売状態と入荷の記録を確認できます。</p>
         </div>
-        <button
+        <div className="flex flex-wrap gap-2"><Link href={purchaseEntryHref({itemId:selected?.id,source:'cashbox',returnTo:'/admin/items'+(query.toString()?'?'+query.toString():'')})} className="rounded-xl bg-white px-4 py-2.5 text-sm font-medium text-gray-950">買い物を記録</Link><button
           disabled={Boolean(loading)}
           onClick={openCreate}
-          className={`${selected ? 'hidden xl:inline-flex' : 'inline-flex'} items-center justify-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-medium text-gray-950 transition hover:bg-gray-100`}
+          className={`${selected ? 'hidden xl:inline-flex' : 'inline-flex'} items-center justify-center gap-2 rounded-xl border border-gray-700 px-4 py-2.5 text-sm font-medium text-gray-200 transition hover:bg-gray-800`}
         >
           <Plus size={16} />
           新商品追加
-        </button>
+        </button></div>
       </div>
 
-      {orderEditor && <details className={`${selected ? 'hidden xl:block' : ''} rounded-2xl border border-gray-800 bg-gray-900`}><summary className="cursor-pointer px-4 py-3 text-sm text-gray-300">商品一覧の表示順</summary><div className="p-3 pt-0">{orderEditor}</div></details>}
+      {isObjectId(query.get('fromDelivery'))&&<Link href={`/admin/items?collection=deliveries&delivery=${query.get('fromDelivery')}`} className="inline-block text-sm text-sky-300 underline">元の入荷記録へ戻る →</Link>}
+      <nav aria-label="商品の一覧" className="flex gap-4 border-b border-gray-800 text-sm"><button type="button" aria-pressed={!history} onClick={()=>setCollection(null,{delivery:null,intake:null})} className={`border-b-2 px-1 pb-3 ${!history?'border-white text-white':'border-transparent text-gray-400'}`}>商品</button><button type="button" aria-pressed={history} onClick={()=>setCollection('deliveries',{item:null,view:null,intake:null})} className={`border-b-2 px-1 pb-3 ${history?'border-white text-white':'border-transparent text-gray-400'}`}>仕入れ・入荷記録</button></nav>
+      {history?<StockReceiptHistory/>:<>
 
-      <div className={`${selected ? 'hidden xl:flex' : 'flex'} flex-col gap-3 rounded-2xl border border-gray-800 bg-gray-900 p-4 md:flex-row md:items-center`}>
+      {orderEditor && <details className={`${selected ? 'hidden lg:block' : ''} rounded-2xl border border-gray-800 bg-gray-900`}><summary className="cursor-pointer px-4 py-3 text-sm text-gray-300">商品一覧の表示順</summary><div className="p-3 pt-0">{orderEditor}</div></details>}
+
+      <div className={`${selected ? 'hidden lg:flex' : 'flex'} flex-col gap-3 rounded-2xl border border-gray-800 bg-gray-900 p-4 md:flex-row md:items-center`}>
         <input
           type="text"
           aria-label="商品名で検索"
           value={search}
-          onChange={(event) => setSearch(event.target.value)}
+          onChange={(event) => setKeyword(event.target.value, {}, 'replace')}
           placeholder="商品名で検索"
           className="w-full rounded-xl border border-gray-700 bg-gray-800 px-4 py-3 text-sm text-white placeholder:text-gray-500 focus:outline-hidden"
         />
-        <select aria-label="カテゴリで絞り込む" value={categoryId} onChange={(event) => setCategoryId(event.target.value)} className="rounded-xl border border-gray-700 bg-gray-800 px-3 py-3 text-sm text-white"><option value="">全カテゴリ</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select>
+        <select aria-label="カテゴリで絞り込む" value={categoryId} onChange={(event) => setCategory(event.target.value)} className="rounded-xl border border-gray-700 bg-gray-800 px-3 py-3 text-sm text-white"><option value="">全カテゴリ</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select>
         <div className="flex shrink-0 flex-wrap gap-2">
           {statusOptions.map((option) => (
             <button
               key={option.id}
               aria-pressed={statusFilter === option.id}
-              onClick={() => setStatusFilter(option.id)}
+              onClick={() => setState(option.id === 'all' ? null : option.id)}
               className={`rounded-full px-3 py-2 text-xs font-medium transition-colors ${
                 statusFilter === option.id
                   ? 'bg-white text-gray-950'
@@ -283,7 +297,7 @@ export default function ItemsClient({ items, categories, orderEditor }: Props) {
         </div>
       </div>
 
-      <p className={`${selected ? 'hidden xl:block' : ''} text-sm text-gray-400`}>{filteredItems.length} / {localItems.length}商品</p>
+      <p className={`${selected ? 'hidden lg:block' : ''} text-sm text-gray-400`}>{filteredItems.length} / {localItems.length}商品</p>
       {selectedId && !selected && <p role="status" className="text-sm text-amber-300">この商品は見つかりません。一覧から選び直してください。</p>}
       <ObjectWorkspace selected={Boolean(selected)} label="商品詳細" onClose={() => setSelectedId(null)} detail={selected && <section aria-label="選択した商品">
         <div className="flex items-start justify-between gap-4">
@@ -297,28 +311,39 @@ export default function ItemsClient({ items, categories, orderEditor }: Props) {
           <button disabled={Boolean(loading)} onClick={() => handleToggleAvailability(selected)} className="rounded-xl border border-gray-600 px-4 py-2 text-sm text-white disabled:opacity-50">{selected.is_available ? '非表示にする' : '表示する'}</button>
 
         </div>
-        <section className="mt-5 border-t border-gray-800 pt-4"><h3 className="text-sm text-gray-400">在庫</h3><p className="mt-2 font-mono text-lg text-white">{selected.is_unlimited_stock ? '在庫管理なし' : `${selected.stock} 個`}</p>{isItemLowStock(selected) && <button type="button" onClick={() => setDetailView('stock')} className="mt-3 text-sm text-amber-300 underline underline-offset-4">要補充 · 在庫と入荷記録を確認 →</button>}</section>
+        <section className="mt-5 border-t border-gray-800 pt-4"><h3 className="text-sm text-gray-400">在庫</h3><p className="mt-2 font-mono text-lg text-white">{selected.is_unlimited_stock ? '在庫管理なし' : `${selected.stock} 個`}</p>{!selected.is_unlimited_stock && <button type="button" onClick={() => setDetailView('stock')} className="mt-3 text-sm text-sky-300 underline underline-offset-4">{isItemLowStock(selected) ? '要補充 · 入荷を記録する →' : '入荷・在庫履歴を見る →'}</button>}</section>
         <details className="mt-5 text-xs text-gray-400"><summary className="cursor-pointer">その他の操作</summary><p className="my-2">販売を止める場合は「非表示」を利用できます。取引に使った商品は削除できません。</p><button disabled={Boolean(loading)} onClick={() => handleDelete(selected)} className="inline-flex items-center gap-2 rounded-lg border border-red-900 px-3 py-2 text-red-300 disabled:opacity-50"><Trash2 size={14}/>商品を削除</button></details>
         </>}
         {detailView === 'stock' && <>
           <ProductRestock key={selected.id} item={selected} submission={restockRequests.current}/>
-          <ObjectRelatedRecords key={`${selected.id}:stock`} kind="items" id={selected.id} selectedView="stock" revision={selected.updated_at}/>
+          {!selected.is_unlimited_stock && <Link prefetch={false} href={`/admin/stock?item=${selected.id}`} className="mt-4 inline-block text-sm text-sky-300 underline underline-offset-4">
+            この商品の在庫を数える →
+          </Link>}
+          <StockAdjustment key={`adjustment:${selected.id}`} item={selected}/>
+          <ObjectRelatedRecords key={`${selected.id}:stock`} kind="items" id={selected.id} selectedView="stock" revision={selected.updated_at} collectionQuery={query.toString()}/>
         </>}
-        {detailView === 'orders' && <ObjectRelatedRecords key={`${selected.id}:orders`} kind="items" id={selected.id} selectedView="orders" revision={selected.updated_at}/>}
+        {detailView === 'orders' && <ObjectRelatedRecords key={`${selected.id}:orders`} kind="items" id={selected.id} selectedView="orders" revision={selected.updated_at} collectionQuery={query.toString()}/>}
 
       </section>} collection={
       <div className="overflow-x-auto rounded-2xl border border-gray-800 bg-gray-900">
         <table className="w-full text-sm">
-          <thead><tr className="border-b border-gray-800 text-left text-xs text-gray-500"><th className="px-4 py-3">商品</th><th className="px-3 py-3">価格</th><th className="px-3 py-3">在庫・状態</th></tr></thead>
+          <thead><tr className="border-b border-gray-800 text-left text-xs text-gray-500"><th className="px-4 py-3">商品</th><th className="px-3 py-3">価格</th><th className="px-3 py-3">在庫・状態</th><th className="px-3 py-3"><span className="sr-only">商品の操作</span></th></tr></thead>
           <tbody>{filteredItems.map((item) => <tr key={item.id} onClick={(event) => { if (!(event.target as HTMLElement).closest('button, a, input, select')) setSelectedId(item.id); }} className={`cursor-pointer border-b border-gray-800/60 hover:bg-white/5 ${selectedId === item.id ? 'bg-white/5' : ''}`}>
             <td className="px-4 py-3"><div className="flex items-center gap-3">{item.image_url && <img src={item.image_url} alt="" className="h-10 w-10 shrink-0 rounded-lg bg-gray-800 object-contain"/>}<div><button type="button" aria-pressed={selectedId === item.id} onClick={() => setSelectedId(item.id)} className="text-left font-medium text-white underline decoration-gray-600 underline-offset-4 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-sky-400">{item.name}</button><p className="mt-1 text-xs text-gray-500">{item.category?.icon} {item.category?.name ?? '未設定'}</p></div></div></td>
             <td className="whitespace-nowrap px-3 py-3 font-mono text-white">¥{item.price.toLocaleString()}</td>
-            <td className="px-3 py-3"><p className="font-mono text-white">{item.is_unlimited_stock ? '∞' : item.stock}</p><p className={`text-xs ${isItemLowStock(item) ? 'text-amber-300' : 'text-gray-400'}`}>{new Product(item).status}</p></td>
+            <td className="px-3 py-3"><p className="font-mono text-white">{item.is_unlimited_stock ? '∞' : <button type="button" aria-label={`${item.name}の在庫・入荷履歴`} onClick={() => setSelectedId(item.id, { view: 'stock' })} className="underline decoration-gray-600 underline-offset-4">{item.stock}</button>}</p><p className={`text-xs ${isItemLowStock(item) ? 'text-amber-300' : 'text-gray-400'}`}>{new Product(item).status}</p></td>
+            <td className="px-3 py-3"><div className="flex flex-wrap justify-end gap-2">
+              {!item.is_unlimited_stock && <Link prefetch={false} aria-label={`${item.name}の入荷を記録`} href={purchaseEntryHref({ itemId: item.id, source: 'cashbox', returnTo: `/admin/items${query.toString() ? `?${query}` : ''}` })} className="rounded-lg border border-gray-600 px-3 py-2 text-xs text-white hover:bg-gray-800">入荷</Link>}
+              <button type="button" disabled={Boolean(loading)} aria-label={`${item.name}の商品情報を編集`} onClick={() => openEdit(item)} className="rounded-lg px-2 py-2 text-xs text-gray-300 hover:bg-gray-800 disabled:opacity-50">編集</button>
+            </div></td>
           </tr>)}</tbody>
         </table>
         {filteredItems.length === 0 && <div className="px-6 py-12 text-center text-sm text-gray-500">条件に合う商品がありません</div>}
       </div>
       }/>
+      </>}
+
+
 
       {showForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">

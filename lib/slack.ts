@@ -314,7 +314,7 @@ export async function notifyLowStock(params: {
             `*商品:* ${params.itemName}\n` +
             `*現在の在庫:* ${params.currentStock}個（アラート閾値: ${params.threshold}個）\n\n` +
             `入荷の手配をご検討ください。\n` +
-            `${appLink('/admin/stock', '在庫入力を開く')}`,
+            `${appLink('/admin/items?state=low-stock', '要補充の商品を開く')}`,
         },
       },
     ],

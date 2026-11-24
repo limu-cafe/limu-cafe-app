@@ -5,7 +5,6 @@ import { createAdminClient, createClient } from '@/lib/supabase/server';
 import RequestDetailClient from './RequestDetailClient';
 import { Suspense } from 'react';
 import DeferredDataPlaceholder from '@/components/user/DeferredDataPlaceholder';
-import { syncUserProfile } from '@/lib/supabase/sync-user';
 import type { User as AuthUser } from '@supabase/supabase-js';
 
 async function RequestDetailData({
@@ -15,7 +14,6 @@ async function RequestDetailData({
   requestId: string;
   user: AuthUser;
 }) {
-  await syncUserProfile(user);
   const adminClient = createAdminClient();
 
   const { data: requestItem } = await adminClient

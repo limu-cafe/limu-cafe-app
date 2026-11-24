@@ -8,7 +8,7 @@ import toast from 'react-hot-toast';
 import type { Item } from '@/types';
 import { moveItemId } from '@/lib/item-order';
 
-type Props = { items: Item[]; revision: number; available: boolean; verified: boolean };
+type Props = { items: Pick<Item, 'id' | 'name' | 'is_available' | 'category'>[]; revision: number; available: boolean; verified: boolean };
 
 export default function ItemOrderEditor({ items, revision, available, verified }: Props) {
   const router = useRouter();

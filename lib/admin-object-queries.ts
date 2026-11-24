@@ -6,7 +6,7 @@ export class AdminObjectReadRepository {
   async read(kind: ObjectKind, id: string, relation: string, page = 1): Promise<ObjectRecords> {
     if (!isObjectId(id) || !OBJECT_RELATIONS[kind]?.some((entry) => entry.id === relation) || !Number.isSafeInteger(page) || page < 1 || page > 10000) throw new Error('Invalid object query');
     let query;
-    if (kind === 'items' && relation === 'stock') query = this.db.from('stock_history').select('id, change_amount, reason, note, order_id, created_at').eq('item_id', id);
+    if (kind === 'items' && relation === 'stock') query = this.db.from('stock_history').select('id, change_amount, reason, note, order_id, restock_batch_id, received_on, created_at').eq('item_id', id);
     else if (kind === 'items') query = this.db.from('order_items').select('id, order_id, item_name, quantity, item_price, subtotal, created_at, order:orders!order_items_order_id_fkey(id, user_id, total_amount, payment_method, payment_status, created_at, user:users!orders_user_id_fkey(id, name))').eq('item_id', id);
     else if (relation === 'orders') query = this.db.from('orders').select('id, user_id, total_amount, points_used, payment_method, payment_status, deferred_settlement_method, settled_at, settlement_source, created_at, order_items(item_name, quantity)').eq('user_id', id);
     else if (relation === 'charges') query = this.db.from('charge_requests').select('id, amount, method, status, note, created_at').eq('user_id', id);
