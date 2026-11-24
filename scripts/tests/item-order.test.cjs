@@ -139,44 +139,58 @@ test('signed management session rejects the legacy timestamp without a valid pas
 function editor(fetchImpl) {
   let cursor = 0; const hooks = []; let refreshed = 0;
   const react = {
-    useState: (initial) => { const i = cursor++; if (!(i in hooks)) hooks[i] = typeof initial === 'function' ? initial() : initial; return [hooks[i], (value) => { hooks[i] = typeof value === 'function' ? value(hooks[i]) : value; }]; },
+    useState: (initial) => { const i = cursor++; if (!(i in hooks)) hooks[i] = initial; return [hooks[i], (value) => { hooks[i] = typeof value === 'function' ? value(hooks[i]) : value; }]; },
     useRef: (initial) => { const i = cursor++; if (!(i in hooks)) hooks[i] = { current: initial }; return hooks[i]; },
-    useMemo: (fn) => fn(), useEffect: () => {},
+    useEffect: () => {},
   };
-  const jsx = (type, props) => ({ type, props });
-  const component = load('app/admin/items/ItemOrderEditor.tsx', {
-    react, 'react/jsx-runtime': { jsx, jsxs: jsx }, 'next/link': { default: 'link' },
-    'next/navigation': { useRouter: () => ({ refresh: () => { refreshed++; } }) },
-    'lucide-react': { ArrowDown: 'down', ArrowUp: 'up' },
-    'react-hot-toast': { default: { success: () => {} } },
-  }, { fetch: fetchImpl, window: { confirm: () => true } }).default;
-  const props = { items: ids.map((id, i) => ({ id, name: `item-${i}`, created_at: '', is_available: true })), revision: 3, available: true, verified: true, onClose() {} };
-  const render = () => { cursor = 0; return component(props); };
-  const nodes = (node) => !node || typeof node !== 'object' ? [] : Array.isArray(node) ? node.flatMap(nodes) : [node, ...nodes(node.props?.children)];
-  const click = (label) => nodes(render()).find((node) => node.type === 'button' && (node.props['aria-label'] === label || node.props.children === label)).props.onClick();
-  return { render, nodes, click, props, refreshed: () => refreshed };
+  const { useItemOrder } = load('app/admin/items/useItemOrder.ts', {
+    react, 'react-hot-toast': { default: { success() {} } },
+  }, { fetch: fetchImpl });
+  const props = { ids, settings: { revision: 3, available: true, verified: true } };
+  const render = () => { cursor = 0; return useItemOrder(props.ids, props.settings, () => { refreshed++; }); };
+  return { render, props, refreshed: () => refreshed };
 }
 
-test('editor previews moves, submits once, and retains the draft after a conflict', async () => {
+test('reordering is a draft until save; a concurrent conflict keeps the draft and does not duplicate requests', async () => {
   let calls = 0; let body;
   const e = editor(async (_, options) => { calls++; body = JSON.parse(options.body); return { ok: false, json: async () => ({ error: 'another administrator changed it' }) }; });
-  e.click('item-0 を下へ');
-  assert.equal(e.nodes(e.render()).find((node) => node.type === 'select').props.value, 0);
-  const firstSave = e.click('この順序で保存');
-  const secondSave = e.click('保存中...');
-  await Promise.all([firstSave, secondSave]);
+  e.render().move(ids[0], 1, ids);
+  assert.equal(calls, 0);
+  assert.deepEqual(plain(e.render().ids), [ids[1], ids[0], ids[2]]);
+  await Promise.all([e.render().save(), e.render().save()]);
   assert.equal(calls, 1);
   assert.deepEqual(body, { itemIds: [ids[1], ids[0], ids[2]], expectedRevision: 3 });
-  assert.ok(e.nodes(e.render()).some((node) => node.props?.role === 'alert' && node.props.children.includes('another administrator')));
-  assert.ok(e.nodes(e.render()).some((node) => node.type === 'ol'));
+  assert.match(e.render().error, /another administrator/);
+  assert.equal(e.render().dirty, true);
   assert.equal(e.refreshed(), 0);
 });
 
-test('editor refuses to save a stale product catalog', async () => {
+test('an order draft refuses to save a stale catalog and discarding preserves newly loaded items', async () => {
   let calls = 0;
   const e = editor(async () => { calls++; return { ok: true, json: async () => ({ revision: 4 }) }; });
-  e.click('item-0 を下へ');
-  e.props.items = e.props.items.slice(1);
-  assert.equal(e.nodes(e.render()).find((node) => node.type === 'button' && node.props.children === 'この順序で保存').props.disabled, true);
-  await e.click('この順序で保存'); assert.equal(calls, 0);
+  e.render().move(ids[0], 1, ids);
+  e.props.ids = ids.slice(1);
+  assert.equal(e.render().enabled, false);
+  await e.render().save();
+  assert.equal(calls, 0);
+  e.render().discard();
+  assert.equal(e.render().dirty, false);
+  assert.deepEqual(plain(e.render().ids), ids.slice(1));
+});
+
+test('a successful save keeps the new order and revision while a refresh is pending', async () => {
+  const submitted = [];
+  const e = editor(async (_, options) => {
+    submitted.push(JSON.parse(options.body));
+    return { ok: true, json: async () => ({ revision: 3 + submitted.length }) };
+  });
+  e.render().move(ids[0], 1, ids);
+  await e.render().save();
+  assert.equal(e.render().dirty, false);
+  assert.deepEqual(plain(e.render().ids), [ids[1], ids[0], ids[2]]);
+  e.render().move(ids[2], 0, ids);
+  await e.render().save();
+  assert.equal(submitted[1].expectedRevision, 4);
+  assert.deepEqual(submitted[1].itemIds, [ids[2], ids[1], ids[0]]);
+  assert.equal(e.refreshed(), 2);
 });

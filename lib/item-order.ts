@@ -19,6 +19,16 @@ export function moveItemId(ids: string[], id: string, to: number) {
   return next;
 }
 
+export function moveVisibleItemId(ids: string[], visibleIds: string[], id: string, position: number) {
+  const visible = new Set(visibleIds);
+  const shown = ids.filter(itemId => visible.has(itemId));
+  if (shown[position] === id) return ids;
+  const next = moveItemId(shown, id, position);
+  if (next === shown) return ids;
+  let index = 0;
+  return ids.map(itemId => visible.has(itemId) ? next[index++] : itemId);
+}
+
 export function parseItemOrderInput(body: unknown): { itemIds: string[]; expectedRevision: number } | null {
   if (!body || typeof body !== 'object') return null;
   const { itemIds, expectedRevision } = body as Record<string, unknown>;
