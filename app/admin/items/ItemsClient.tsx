@@ -3,8 +3,9 @@
 import Link from 'next/link';
 import {isObjectId} from '@/lib/admin-objects';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import ItemOrderEditor, { type ItemOrderSettings } from './ItemOrderEditor';
-import { Pencil, Plus, Trash2 } from 'lucide-react';
+import { useItemOrder, type ItemOrderSettings } from './useItemOrder';
+import { useItemOrderDrag } from './useItemOrderDrag';
+import { GripVertical, Pencil, Plus, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useRouter, useSearchParams } from 'next/navigation';
 import ObjectWorkspace, { useObjectSelection } from '@/components/admin/ObjectWorkspace';
@@ -47,7 +48,6 @@ export default function ItemsClient({ items, categories, orderSettings }: Props)
   const query=useSearchParams();
   const [localItems, setLocalItems] = useState<Item[]>(items);
   const [showForm, setShowForm] = useState(false);
-  const [reordering, setReordering] = useState(false);
   const [editing, setEditing] = useState<Item | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [loading, setLoading] = useState<string | null>(null);
@@ -223,10 +223,11 @@ export default function ItemsClient({ items, categories, orderSettings }: Props)
     { id: 'hidden' as const, label: '非表示' },
   ];
 
+  const itemIds = useMemo(() => localItems.map(item => item.id), [localItems]);
+  const order = useItemOrder(itemIds, orderSettings, router.refresh);
   const filteredItems = useMemo(() => {
     const keyword = search.trim().toLowerCase();
-
-    return localItems.filter((item) => {
+    const filtered = localItems.filter((item) => {
       const matchesSearch =
         !keyword ||
         item.name.toLowerCase().includes(keyword) ||
@@ -245,7 +246,14 @@ export default function ItemsClient({ items, categories, orderSettings }: Props)
           return true;
       }
     });
-  }, [localItems, search, statusFilter, categoryId]);
+    if (order.ids === itemIds) return filtered;
+    const positions = new Map(order.ids.map((id, index) => [id, index]));
+    return filtered.sort((a, b) => (positions.get(a.id) ?? Infinity) - (positions.get(b.id) ?? Infinity));
+  }, [localItems, search, statusFilter, categoryId, order.ids, itemIds]);
+  const visibleIds = useMemo(() => filteredItems.map(item => item.id), [filteredItems]);
+  const showGrip = Boolean(orderSettings?.available && orderSettings.verified);
+  const dragEnabled = order.enabled && !loading && !showForm && !history && visibleIds.length > 1;
+  const drag = useItemOrderDrag(visibleIds, dragEnabled, (id, position) => order.move(id, position, visibleIds));
 
   return (
     <div className={`space-y-5 ${selected ? '' : 'mx-auto max-w-3xl'}`}>
@@ -254,20 +262,19 @@ export default function ItemsClient({ items, categories, orderSettings }: Props)
           <h1 className="font-display text-2xl font-bold text-white">商品</h1>
           <p className="mt-1 text-sm text-gray-400">在庫・販売状態と入荷の記録を確認できます。</p>
         </div>
-        {!reordering && <div className="flex flex-wrap gap-2"><Link href={purchaseEntryHref({itemId:selected?.id,returnTo:'/admin/items'+(query.toString()?'?'+query.toString():'')})} className="rounded-xl bg-white px-4 py-2.5 text-sm font-medium text-gray-950">買い物を記録</Link><button
+        <div className="flex flex-wrap gap-2"><Link href={purchaseEntryHref({itemId:selected?.id,returnTo:'/admin/items'+(query.toString()?'?'+query.toString():'')})} className="rounded-xl bg-white px-4 py-2.5 text-sm font-medium text-gray-950">買い物を記録</Link><button
           disabled={Boolean(loading)}
           onClick={openCreate}
           className={`${selected ? 'hidden xl:inline-flex' : 'inline-flex'} items-center justify-center gap-2 rounded-xl border border-gray-700 px-4 py-2.5 text-sm font-medium text-gray-200 transition hover:bg-gray-800`}
         >
           <Plus size={16} />
           新商品追加
-        </button></div>}
+        </button></div>
       </div>
 
       {isObjectId(query.get('fromDelivery'))&&<Link href={`/admin/items?collection=deliveries&delivery=${query.get('fromDelivery')}`} className="inline-block text-sm text-sky-300 underline">元の入荷記録へ戻る →</Link>}
-      <nav aria-label="商品の一覧" className="flex gap-4 border-b border-gray-800 text-sm"><button type="button" aria-pressed={!history} disabled={reordering} onClick={()=>setCollection(null,{delivery:null,intake:null})} className={`border-b-2 px-1 pb-3 ${!history?'border-white text-white':'border-transparent text-gray-400'}`}>商品</button><button type="button" aria-pressed={history} disabled={reordering} onClick={()=>setCollection('deliveries',{item:null,view:null,intake:null})} className={`border-b-2 px-1 pb-3 ${history?'border-white text-white':'border-transparent text-gray-400'}`}>仕入れ・入荷記録</button></nav>
-      {history ? <StockReceiptHistory/> : reordering && orderSettings ?
-        <ItemOrderEditor items={items} {...orderSettings} onClose={() => setReordering(false)}/> : <>
+      <nav aria-label="商品の一覧" className="flex gap-4 border-b border-gray-800 text-sm"><button type="button" aria-pressed={!history} onClick={()=>setCollection(null,{delivery:null,intake:null})} className={`border-b-2 px-1 pb-3 ${!history?'border-white text-white':'border-transparent text-gray-400'}`}>商品</button><button type="button" aria-pressed={history} onClick={()=>setCollection('deliveries',{item:null,view:null,intake:null})} className={`border-b-2 px-1 pb-3 ${history?'border-white text-white':'border-transparent text-gray-400'}`}>仕入れ・入荷記録</button></nav>
+      {history ? <StockReceiptHistory/> : <>
 
       <div className={`${selected ? 'hidden lg:flex' : 'flex'} flex-col gap-3 rounded-2xl border border-gray-800 bg-gray-900 p-4 md:flex-row md:items-center`}>
         <input
@@ -299,13 +306,10 @@ export default function ItemsClient({ items, categories, orderSettings }: Props)
 
       <div className={`${selected ? 'hidden lg:flex' : 'flex'} flex-wrap items-center justify-between gap-3`}>
         <p className="text-sm text-gray-400">{filteredItems.length} / {localItems.length}商品</p>
-        {orderSettings && (orderSettings.available && !orderSettings.verified ?
-          <Link href="/admin/password?next=%2Fadmin%2Fitems" className="text-sm text-sky-300 underline">管理者ログインを更新して表示順を変更</Link> :
-          <button type="button" disabled={!orderSettings.available || items.length < 2 || Boolean(loading)}
-            onClick={() => setReordering(true)}
-            className="rounded-lg border border-gray-700 px-3 py-2 text-sm text-gray-200 hover:bg-gray-800 disabled:opacity-50">
-            {orderSettings.available ? '表示順を並べ替え' : '表示順を取得できません'}
-          </button>)}
+        {showGrip && filteredItems.length > 1 && <p id="item-order-instructions" className="text-xs text-gray-400">商品名の横の持ち手をドラッグして並べ替え</p>}
+        {orderSettings?.available && !orderSettings.verified && <Link href="/admin/password?next=%2Fadmin%2Fitems"
+          className="text-sm text-sky-300 underline">管理者ログインを更新して表示順を変更</Link>}
+        {orderSettings && !orderSettings.available && <p className="text-sm text-amber-300">表示順の保存を現在利用できません</p>}
       </div>
       {selectedId && !selected && <p role="status" className="text-sm text-amber-300">この商品は見つかりません。一覧から選び直してください。</p>}
       <ObjectWorkspace selected={Boolean(selected)} label="商品詳細" onClose={() => setSelectedId(null)} detail={selected && <section aria-label="選択した商品">
@@ -333,23 +337,59 @@ export default function ItemsClient({ items, categories, orderSettings }: Props)
         </>}
         {detailView === 'orders' && <ObjectRelatedRecords key={`${selected.id}:orders`} kind="items" id={selected.id} selectedView="orders" revision={selected.updated_at} collectionQuery={query.toString()}/>}
 
-      </section>} collection={
+      </section>} collection={<>
       <div className="overflow-x-auto rounded-2xl border border-gray-800 bg-gray-900">
         <table className="w-full text-sm">
           <thead><tr className="border-b border-gray-800 text-left text-xs text-gray-500"><th className="px-4 py-3">商品</th><th className="px-3 py-3">価格</th><th className="px-3 py-3">在庫・状態</th><th className="px-3 py-3"><span className="sr-only">商品の操作</span></th></tr></thead>
-          <tbody>{filteredItems.map((item) => <tr key={item.id} onClick={(event) => { if (!(event.target as HTMLElement).closest('button, a, input, select')) setSelectedId(item.id); }} className={`cursor-pointer border-b border-gray-800/60 hover:bg-white/5 ${selectedId === item.id ? 'bg-white/5' : ''}`}>
-            <td className="px-4 py-3"><div className="flex items-center gap-3">{item.image_url && <img src={item.image_url} alt="" className="h-10 w-10 shrink-0 rounded-lg bg-gray-800 object-contain"/>}<div><button type="button" aria-pressed={selectedId === item.id} onClick={() => setSelectedId(item.id)} className="text-left font-medium text-white underline decoration-gray-600 underline-offset-4 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-sky-400">{item.name}</button><p className="mt-1 text-xs text-gray-500">{item.category?.icon} {item.category?.name ?? '未設定'}</p></div></div></td>
+          <tbody>{filteredItems.map((item, index) => {
+            const edge = drag.indicator?.target?.itemId === item.id ? drag.indicator.target.edge : null;
+            return <tr key={item.id} data-order-id={item.id}
+              onClick={event => { if (!(event.target as HTMLElement).closest('button, a, input, select')) setSelectedId(item.id); }}
+              style={edge ? { boxShadow: `inset 0 ${edge === 'before' ? 2 : -2}px 0 var(--color-sky-400)` } : undefined}
+              className={`cursor-pointer border-b border-gray-800/60 hover:bg-white/5 ${selectedId === item.id ? 'bg-white/5' : ''} ${drag.indicator?.id === item.id ? 'bg-sky-950/50 opacity-60' : ''}`}>
+            <td className="px-4 py-3">
+              <div className="flex items-center gap-2">
+                {showGrip && <button type="button" aria-label={`${item.name}の表示順を移動（${index + 1}番目）`}
+                  aria-describedby={filteredItems.length > 1 ? 'item-order-instructions' : undefined}
+                  aria-keyshortcuts="ArrowUp ArrowDown Home End"
+                  title="ドラッグで移動（キーボードは上下キー）" disabled={!dragEnabled}
+                  onPointerDown={event => drag.start(event, item.id)}
+                  onPointerMove={drag.track} onPointerUp={drag.drop}
+                  onPointerCancel={drag.cancel} onLostPointerCapture={drag.cancel}
+                  onKeyDown={event => drag.key(event, item.id)}
+                  className={`inline-flex h-10 w-9 shrink-0 touch-none select-none items-center justify-center rounded-md transition-colors enabled:hover:bg-white/10 enabled:hover:text-white enabled:active:cursor-grabbing focus-visible:outline-2 focus-visible:outline-sky-400 disabled:cursor-default disabled:opacity-40 ${drag.indicator?.id === item.id ? 'cursor-grabbing bg-white/10 text-white' : 'cursor-grab text-gray-400'}`}>
+                  <GripVertical size={18} aria-hidden="true"/>
+                </button>}
+                {item.image_url && <img src={item.image_url} alt="" className="h-10 w-10 shrink-0 rounded-lg bg-gray-800 object-contain"/>}
+                <div className="min-w-0">
+                  <button type="button" aria-pressed={selectedId === item.id} onClick={() => setSelectedId(item.id)}
+                    className="wrap-break-word text-left font-medium text-white underline decoration-gray-600 underline-offset-4 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-sky-400">{item.name}</button>
+                  <p className="mt-1 text-xs text-gray-500">{item.category?.icon} {item.category?.name ?? '未設定'}</p>
+                </div>
+              </div>
+            </td>
             <td className="whitespace-nowrap px-3 py-3 font-mono text-white">¥{item.price.toLocaleString()}</td>
             <td className="px-3 py-3"><p className="font-mono text-white">{item.is_unlimited_stock ? '∞' : <button type="button" aria-label={`${item.name}の在庫・入荷履歴`} onClick={() => setSelectedId(item.id, { view: 'stock' })} className="underline decoration-gray-600 underline-offset-4">{item.stock}</button>}</p><p className={`text-xs ${isItemLowStock(item) ? 'text-amber-300' : 'text-gray-400'}`}>{new Product(item).status}</p></td>
             <td className="px-3 py-3"><div className="flex flex-wrap justify-end gap-2">
               {!item.is_unlimited_stock && <Link prefetch={false} aria-label={`${item.name}の入荷を記録`} href={purchaseEntryHref({ itemId: item.id, returnTo: `/admin/items${query.toString() ? `?${query}` : ''}` })} className="rounded-lg border border-gray-600 px-3 py-2 text-xs text-white hover:bg-gray-800">入荷</Link>}
               <button type="button" disabled={Boolean(loading)} aria-label={`${item.name}の商品情報を編集`} onClick={() => openEdit(item)} className="rounded-lg px-2 py-2 text-xs text-gray-300 hover:bg-gray-800 disabled:opacity-50">編集</button>
             </div></td>
-          </tr>)}</tbody>
+          </tr>;
+          })}</tbody>
         </table>
         {filteredItems.length === 0 && <div className="px-6 py-12 text-center text-sm text-gray-500">条件に合う商品がありません</div>}
       </div>
-      }/>
+      {order.dirty && <div className="sticky bottom-0 z-10 mt-2 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-700 bg-gray-950 px-3 py-2">
+        {order.error ? <p role="alert" className="text-sm text-amber-300">{order.error}</p>
+          : <p role="status" className="text-sm text-gray-300">表示順の変更は未保存です</p>}
+        <div className="flex flex-wrap items-center gap-2">
+          <button type="button" disabled={order.saving || Boolean(drag.indicator)} onClick={order.discard}
+            className="rounded-lg border border-gray-700 px-3 py-2 text-sm text-gray-200 disabled:opacity-40">変更を取り消す</button>
+          <button type="button" disabled={!order.enabled || Boolean(loading) || Boolean(drag.indicator)} onClick={order.save}
+            className="rounded-lg bg-white px-3 py-2 text-sm font-semibold text-gray-950 disabled:opacity-40">{order.saving ? '保存中…' : '表示順を保存'}</button>
+        </div>
+      </div>}
+      </>}/>
       </>}
 
 

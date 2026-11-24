@@ -78,15 +78,39 @@ test('an explicit cashbox entry seeds each new purchase independently of earlier
  assert.equal(h.field('買い物2の支払元').props.value,'cashbox');
  assert.equal(h.calls.length,0);
 });
-test('the product list opens its display-order editor in one action and restores the search on close',async()=>{
- const h=fixture('app/admin/items/ItemsClient.tsx',{items,categories:[],orderSettings:{revision:3,available:true,verified:true}},'?q=緑茶');
- assert.equal(h.field('商品名で検索').props.value,'緑茶');
- await h.click('表示順を並べ替え');
- const editor=h.all().find(node=>node.props.revision===3&&node.props.onClose);
- assert.ok(editor);assert.equal(editor.props.items.length,2);
- assert.equal(h.all().some(node=>node.props['aria-label']==='商品名で検索'),false);
- editor.props.onClose();assert.equal(h.field('商品名で検索').props.value,'緑茶');
+test('touch-dragging a product in the normal list leaves hidden products in place and requires an explicit save',async()=>{
+ const hidden={...items[0],id:id(90),name:'非表示の商品',is_available:false};
+ const h=fixture('app/admin/items/ItemsClient.tsx',{items:[items[0],hidden,items[1]],categories:[],orderSettings:{revision:3,available:true,verified:true}},'?state=visible');
+ const order=()=>h.all().filter(n=>n.type==='tr'&&n.props['data-order-id']).map(n=>n.props['data-order-id']);
+ const rows={rows:items.map((item,i)=>({dataset:{orderId:item.id},getBoundingClientRect:()=>({top:i*60,height:60})}))};
+ let captured=false;
+ const handle={
+  closest:type=>type==='tbody'?rows:null,
+  setPointerCapture(){captured=true;},
+  hasPointerCapture(){return captured;},
+  releasePointerCapture(){captured=false;}
+ };
+ const pointer=(clientY)=>({pointerType:'touch',pointerId:7,currentTarget:handle,isPrimary:true,button:0,clientY});
+ const grip=()=>h.all().find(n=>n.type==='button'&&n.props['aria-label']==='水の表示順を移動（1番目）');
+ assert.deepEqual(order(),[id(10),id(11)]);
+ assert.equal(grip().props.disabled,false);
+ grip().props.onPointerDown(pointer(30));
+ grip().props.onPointerMove(pointer(100));
+ assert.ok(h.all().some(n=>n.props.style?.boxShadow?.includes('-2px')));
+ grip().props.onPointerCancel(pointer(100));
+ assert.deepEqual(order(),[id(10),id(11)]);
+ assert.equal(captured,false);
+ grip().props.onPointerDown(pointer(30));
+ grip().props.onPointerMove(pointer(100));
+ grip().props.onPointerUp(pointer(100));
+ assert.deepEqual(order(),[id(11),id(10)]);
  assert.equal(h.calls.length,0);
+ h.setQuery('');
+ assert.deepEqual(order(),[id(11),id(90),id(10)]);
+ h.setResponder(async()=>({ok:true,status:200,json:async()=>({revision:4})}));
+ await h.click('表示順を保存');
+ assert.deepEqual(h.calls,[{url:'/api/admin/items/order',method:'PUT',body:{itemIds:[id(11),id(90),id(10)],expectedRevision:3}}]);
+ assert.deepEqual(order(),[id(11),id(90),id(10)]);
 });
 test('one purchase mixes product stock and named supplies with one automatic total and one request',async()=>{
  const {h,props}=editor();row(h,1,10,'１００','２');await add(h);h.change(label(2,'商品'),'__expense__');h.change(label(2,'備品・雑費名'),'ペーパータオル');h.change(label(2,'単価'),'１５０円');h.change(label(2,'個数'),'３');h.change('買い物1の支払元','personal_advance');assert.ok(text(h.render()).includes('¥650'));await h.click('登録内容を確認');assert.ok(text(h.render()).includes('ペーパータオル'));h.setResponder(async call=>response(call));await h.click('まとめて登録');assert.equal(h.calls.length,1);const saved=h.calls[0].body.receipts[0];assert.equal(h.calls[0].url,'/api/admin/purchases');assert.equal(saved.rows.length,1);assert.equal(saved.expenses[0].subtotal,450);assert.equal(saved.expenses[0].quantity,3);assert.equal(saved.purchase.total_amount,650);assert.equal(props.receipt.stock_totals.length,1);assert.equal(props.receipt.stock_totals[0].quantity,2);
