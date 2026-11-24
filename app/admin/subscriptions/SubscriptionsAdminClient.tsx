@@ -383,7 +383,7 @@ export default function SubscriptionsAdminClient({
           </div>
         </div>
       </section>}
-    <ObjectWorkspace selected={Boolean(selected)} label="サブスク商品の詳細" onClose={()=>selectProduct(null)} collection={<div className="overflow-hidden rounded-xl border border-gray-800 bg-gray-900"><label className="block border-b border-gray-800 p-4"><span className="sr-only">サブスク商品を検索</span><input value={search} onChange={event=>setSearch(event.target.value)} placeholder="サブスク名で検索" className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white"/></label>{products.filter(product=>product.name.includes(search)).map(product=><button key={product.id} type="button" aria-pressed={product.id===selectedId} onClick={()=>selectProduct(product.id)} className="flex w-full items-center gap-4 border-b border-gray-800 px-4 py-4 text-left hover:bg-gray-800"><span className="min-w-0 flex-1 text-white">{getSubscriptionDisplayName(product,'ja')}<small className="mt-1 block text-gray-400">{product.is_active?'表示中':'非表示'}</small></span><span className="text-sm text-gray-200">¥{product.price.toLocaleString()} / {formatSubscriptionInterval(product.billing_interval_count,product.billing_interval_unit)}</span></button>)}</div>} detail={<>
+    <ObjectWorkspace selected={Boolean(selected)} label="サブスク商品の詳細" onClose={()=>selectProduct(null)} collection={<div className="overflow-hidden rounded-xl border border-gray-800 bg-gray-900"><label className="block border-b border-gray-800 p-4"><span className="sr-only">サブスク商品を検索</span><input value={search} onChange={event=>setSearch(event.target.value)} placeholder="サブスク名で検索" className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white"/></label>{products.filter(product=>product.name.includes(search)).map(product=><div key={product.id} className="flex items-center gap-2 border-b border-gray-800 pr-3"><button key={product.id} type="button" aria-pressed={product.id===selectedId} onClick={()=>selectProduct(product.id,{view:'overview',member:null})} className="flex min-w-0 flex-1 flex-wrap items-center gap-3 px-4 py-4 text-left hover:bg-gray-800"><span className="min-w-0 flex-1 text-white">{getSubscriptionDisplayName(product,'ja')}<small className="mt-1 block text-gray-400">{product.is_active?'表示中':'非表示'}</small></span><span className="text-sm text-gray-200">¥{product.price.toLocaleString()} / {formatSubscriptionInterval(product.billing_interval_count,product.billing_interval_unit)}</span></button><button type="button" aria-label={`${product.name}の契約者を見る`} onClick={()=>selectProduct(product.id,{view:'members',member:null})} className="shrink-0 rounded-lg border border-gray-700 px-3 py-2 text-xs text-sky-300 hover:bg-gray-800">契約者</button></div>)}</div>} detail={<>
         {products.filter(product=>product.id===selectedId).map((product) => {
           const draft = productDrafts[product.id] ?? createProductDraft(product);
           const members = membersByProduct[product.id] ?? [];
@@ -392,9 +392,9 @@ export default function SubscriptionsAdminClient({
           return <section key={product.id}>
             <h2 className="text-xl font-bold text-white">{visibleName}</h2><p className="mt-2 text-sm text-gray-400">¥{product.price.toLocaleString()} / {formatSubscriptionInterval(product.billing_interval_count,product.billing_interval_unit)} · {product.is_active?'表示中':'非表示'}</p>
             <ObjectDetailNavigation value={detailView} onChange={setDetailView} options={[{id:'overview',label:'商品情報'},{id:'members',label:'契約者'}]}/>
-            {detailView==='overview'&&<><p className="mt-4 whitespace-pre-wrap text-sm text-gray-300">{product.description||'説明なし'}</p><p className="mt-3 text-sm text-gray-400">ポイント {product.points_enabled?'利用可':'利用不可'} · 残高 {product.balance_enabled?'利用可':'利用不可'}</p><details className="mt-5"><summary className="cursor-pointer text-sm text-sky-300">商品情報を編集</summary><div className="mt-4 space-y-4">
+            {detailView==='overview'&&<div className="mt-5 space-y-4">
               <div className="grid gap-4 sm:grid-cols-2">
-                <input
+                <label className="block space-y-2 text-xs text-gray-400"><span>商品名</span><input
                   type="text"
                   aria-label="商品名" value={draft.name}
                   onChange={(event) =>
@@ -404,8 +404,8 @@ export default function SubscriptionsAdminClient({
                     }))
                   }
                   className="min-w-0 w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:outline-hidden"
-                />
-                <input
+                /></label>
+                <label className="block space-y-2 text-xs text-gray-400"><span>英語名</span><input
                   type="text"
                   aria-label="英語名" value={draft.english_name}
                   onChange={(event) =>
@@ -415,8 +415,8 @@ export default function SubscriptionsAdminClient({
                     }))
                   }
                   className="min-w-0 w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:outline-hidden"
-                />
-                <input
+                /></label>
+                <label className="block space-y-2 text-xs text-gray-400"><span>価格</span><input
                   type="number"
                   min={1}
                   aria-label="価格" value={draft.price}
@@ -427,9 +427,9 @@ export default function SubscriptionsAdminClient({
                     }))
                   }
                   className="min-w-0 w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:outline-hidden"
-                />
+                /></label>
                 <div className="grid grid-cols-2 gap-2">
-                  <input
+                  <label className="block space-y-2 text-xs text-gray-400"><span>請求間隔</span><input
                     type="number"
                     min={1}
                     aria-label="請求間隔" value={draft.billing_interval_count}
@@ -440,8 +440,8 @@ export default function SubscriptionsAdminClient({
                       }))
                     }
                     className="min-w-0 w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:outline-hidden"
-                  />
-                  <select
+                  /></label>
+                  <label className="block space-y-2 text-xs text-gray-400"><span>請求単位</span><select
                     aria-label="請求単位" value={draft.billing_interval_unit}
                     onChange={(event) =>
                       setProductDrafts((current) => ({
@@ -457,20 +457,13 @@ export default function SubscriptionsAdminClient({
                     <option value="day">日</option>
                     <option value="week">週</option>
                     <option value="month">か月</option>
-                  </select>
+                  </select></label>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => saveProduct(product.id)}
-                  disabled={loading === `save-product:${product.id}`}
-                  className="rounded-lg bg-white px-4 py-2 text-sm font-medium text-gray-950 transition hover:bg-gray-200 disabled:opacity-60"
-                >
-                  {loading === `save-product:${product.id}` ? '...' : '保存'}
-                </button>
+
               </div>
 
               <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                <textarea
+                <label className="block space-y-2 text-xs text-gray-400"><span>説明</span><textarea
                   aria-label="説明" value={draft.description}
                   onChange={(event) =>
                     setProductDrafts((current) => ({
@@ -480,7 +473,7 @@ export default function SubscriptionsAdminClient({
                   }
                   rows={3}
                   className="min-w-0 w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:outline-hidden"
-                />
+                /></label>
                 <div className="grid gap-2 text-sm text-gray-300">
                   <div className="rounded-lg border border-gray-800 bg-gray-950/40 px-3 py-2 text-white">
                     ¥{product.price.toLocaleString()} / {formatSubscriptionInterval(product.billing_interval_count, product.billing_interval_unit)}
@@ -536,7 +529,15 @@ export default function SubscriptionsAdminClient({
                 </div>
               </div>
 
-            </div></details></>}
+            <button
+                  type="button"
+                  onClick={() => saveProduct(product.id)}
+                  disabled={loading === `save-product:${product.id}`}
+                  className="rounded-lg bg-white px-4 py-2 text-sm font-medium text-gray-950 transition hover:bg-gray-200 disabled:opacity-60"
+                >
+                  {loading === `save-product:${product.id}` ? '...' : '保存'}
+                </button>
+</div>}
               {detailView==='members' && (
                 <div className="mt-4 space-y-3 border-t border-gray-800 pt-4">
                   {memberErrors[product.id] ? <div role="alert" className="text-sm text-amber-300">{memberErrors[product.id]}<button type="button" onClick={()=>void toggleMembers(product.id)} className="ml-3 underline">再試行</button></div> : loading === `load-members:${product.id}` ? (

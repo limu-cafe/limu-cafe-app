@@ -25,7 +25,6 @@ export default function RequestsClient({ requests }: { requests: any[] }) {
   const searchParams = useSearchParams();
   const [loading, setLoading] = useState<string | null>(null);
   const [adminNote, setAdminNote] = useState<Record<string, string>>({});
-  const [openNote, setOpenNote] = useState<string | null>(null);
   const [pendingOnly, setPendingOnly] = useState(searchParams.get('pending') === '1');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
@@ -39,7 +38,6 @@ export default function RequestsClient({ requests }: { requests: any[] }) {
       });
       if (!res.ok) throw new Error((await res.json()).error);
       toast.success(status === 'approved' ? '採用しました' : '却下しました');
-      setOpenNote(null);
       router.refresh();
     } catch (e: any) { toast.error(e.message); }
     finally { setLoading(null); }
@@ -169,23 +167,17 @@ export default function RequestsClient({ requests }: { requests: any[] }) {
 
               {req.status==='pending'&&<>
               {/* 管理者コメント入力 */}
-              {openNote === req.id && (
+              {(
                 <textarea
                   value={adminNote[req.id] ?? ''}
                   onChange={(e) => setAdminNote({ ...adminNote, [req.id]: e.target.value })}
-                  placeholder="コメント（任意）"
+                  aria-label={`${req.item_name}への管理者コメント`} placeholder="コメント（任意）"
                   rows={2}
                   className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-hidden resize-none"
                 />
               )}
 
               <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setOpenNote(openNote === req.id ? null : req.id)}
-                  className="text-xs text-gray-500 hover:text-gray-300 transition-colors"
-                >
-                  {openNote === req.id ? 'コメントを閉じる' : 'コメントを追加'}
-                </button>
                 <div className="ml-auto flex gap-2">
                   <button
                     onClick={() => handleAction(req.id, 'rejected')}

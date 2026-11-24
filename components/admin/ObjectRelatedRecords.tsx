@@ -9,7 +9,7 @@ export const recordDate = (value: string) => new Intl.DateTimeFormat('ja-JP', { 
 export const money = (value: number) => `¥${value.toLocaleString()}`;
 const linkClass = 'text-sky-300 underline decoration-sky-800 underline-offset-4 hover:text-sky-200';
 
-export default function ObjectRelatedRecords({ kind, id, revision, selectedView }: { kind: ObjectKind; id: string; revision?: string; selectedView?: string }) {
+export default function ObjectRelatedRecords({ kind, id, revision, selectedView, collectionQuery = '' }: { kind: ObjectKind; id: string; revision?: string; selectedView?: string; collectionQuery?: string }) {
   const [localView, setView] = useState<string>(OBJECT_RELATIONS[kind][0].id);
   const view = selectedView ?? localView;
   const [page, setPage] = useState(1);
@@ -29,7 +29,10 @@ export default function ObjectRelatedRecords({ kind, id, revision, selectedView 
     return () => { current = false; controller.abort(); };
   }, [kind, id, view, page, key]);
   const current = result?.key === key ? result : null;
-  const returnTo = `/admin/${kind}?${kind === 'items' ? 'item' : 'user'}=${id}&view=${view}`;
+  const returnQuery = new URLSearchParams(collectionQuery);
+  returnQuery.set(kind === 'items' ? 'item' : 'user', id);
+  returnQuery.set('view', view);
+  const returnTo = `/admin/${kind}?${returnQuery}`;
   return <section className="mt-6 border-t border-gray-800 pt-5" aria-label="関連する記録">
     {!selectedView && <div className="flex flex-wrap gap-2" aria-label="表示する記録">
       {OBJECT_RELATIONS[kind].map((option) => <button key={option.id} type="button" aria-pressed={view === option.id} onClick={() => { setView(option.id); setPage(1); }} className={`rounded-lg px-3 py-2 text-sm ${view === option.id ? 'bg-white text-gray-950' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}>{option.label}</button>)}
@@ -49,8 +52,9 @@ export default function ObjectRelatedRecords({ kind, id, revision, selectedView 
 function RelatedRecord({ kind, view, row, returnTo }: { kind: ObjectKind; view: string; row: Record<string, any>; returnTo: string }) {
   if (view === 'stock') return <>
     <div className="grid grid-cols-[minmax(0,16rem)_auto] justify-start gap-6"><span className="text-gray-200">{({ restock: '入荷', purchase: '購入', adjustment: '調整', discard: '廃棄' } as Record<string, string>)[row.reason] ?? row.reason}</span><span className={`font-mono ${row.change_amount > 0 ? 'text-emerald-300' : 'text-gray-200'}`}>{row.change_amount > 0 ? '+' : ''}{row.change_amount}</span></div>
-    <p className="text-xs text-gray-400">{recordDate(row.created_at)}</p>{row.note && <p className="whitespace-pre-wrap wrap-break-word text-gray-400">{row.note}</p>}
+    <p className="text-xs text-gray-400">{row.received_on&&`入荷日 ${row.received_on} · `}登録 {recordDate(row.created_at)}</p>{row.note && <p className="whitespace-pre-wrap wrap-break-word text-gray-400">{row.note}</p>}
     {row.order_id && <Link prefetch={false} href={`/admin/orders/${row.order_id}?from=${encodeURIComponent(returnTo)}`} className={linkClass}>この購入の注文を見る →</Link>}
+    {row.restock_batch_id && <Link prefetch={false} href={`/admin/items?collection=deliveries&delivery=${row.restock_batch_id}`} className={linkClass}>この入荷の明細を見る →</Link>}
   </>;
   if (view === 'orders') {
     const order = kind === 'items' ? row.order : row;

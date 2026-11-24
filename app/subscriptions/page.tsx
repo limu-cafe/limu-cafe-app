@@ -1,25 +1,21 @@
 import { requireMemberPage } from '@/lib/member-session';
 import { redirect } from 'next/navigation';
 import UserLayout from '@/components/layout/UserLayout';
-import { createAdminClient, createClient } from '@/lib/supabase/server';
-import { syncUserProfile } from '@/lib/supabase/sync-user';
+import { createAdminClient } from '@/lib/supabase/server';
 import { pickLatestSubscriptionsByProduct } from '@/lib/subscriptions';
 import SubscriptionsClient from './SubscriptionsClient';
 
 export const dynamic = 'force-dynamic';
 
 export default async function SubscriptionsPage() {
-  const supabase = await createClient();
   const user = await requireMemberPage();
 
   if (!user) {
     redirect('/login');
   }
 
-  await syncUserProfile(user);
-
   const adminSupabase = createAdminClient();
-  const [{ data: profile }, { data: subscriptions }] = await Promise.all([
+  const [{ data: profile }, { data: subscriptions }, { data: activeProducts }] = await Promise.all([
     adminSupabase
       .from('users')
       .select('id, name, balance')
@@ -30,16 +26,15 @@ export default async function SubscriptionsPage() {
       .select('*')
       .eq('user_id', user.id)
       .order('created_at', { ascending: false }),
+    adminSupabase
+      .from('subscription_products')
+      .select('*')
+      .eq('is_active', true)
+      .order('created_at', { ascending: true }),
   ]);
 
   const latestByProduct = pickLatestSubscriptionsByProduct((subscriptions ?? []) as any[]);
   const subscribedProductIds = Array.from(latestByProduct.keys());
-
-  const { data: activeProducts } = await adminSupabase
-    .from('subscription_products')
-    .select('*')
-    .eq('is_active', true)
-    .order('created_at', { ascending: true });
 
   const { data: subscribedInactiveProducts } =
     subscribedProductIds.length > 0

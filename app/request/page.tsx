@@ -5,7 +5,6 @@ import { createAdminClient, createClient } from '@/lib/supabase/server';
 import { Suspense } from 'react';
 import DeferredDataPlaceholder from '@/components/user/DeferredDataPlaceholder';
 import RequestPageContent from './RequestPageContent';
-import { syncUserProfile } from '@/lib/supabase/sync-user';
 import type { User as AuthUser } from '@supabase/supabase-js';
 
 type RequestUser = {
@@ -34,7 +33,6 @@ async function RequestPageData({
 }: {
   user: AuthUser;
 }) {
-  const profileSync = syncUserProfile(user);
   const adminClient = createAdminClient();
 
   const [{ data: requests }] = await Promise.all([adminClient
@@ -43,7 +41,7 @@ async function RequestPageData({
       'id, user_id, item_name, reason, desired_price, status, admin_note, created_at, updated_at, user:users!item_requests_user_id_fkey(id, name, avatar_url)'
     )
     .order('created_at', { ascending: false })
-    .limit(24), profileSync]);
+    .limit(24)]);
 
   const requestIds = (requests ?? []).map((request: { id: string }) => request.id);
 

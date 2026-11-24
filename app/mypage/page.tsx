@@ -1,7 +1,6 @@
 import { requireMemberPage } from '@/lib/member-session';
 import UserLayout from '@/components/layout/UserLayout';
-import { createAdminClient, createClient } from '@/lib/supabase/server';
-import { syncUserProfile } from '@/lib/supabase/sync-user';
+import { createAdminClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import MyPageClient from './MyPageClient';
 import { Suspense } from 'react';
@@ -14,7 +13,6 @@ import {
 } from '@/lib/item-select';
 
 async function MyPageContent({ user, profile }: { user: AuthUser; profile: any }) {
-  const profileSync = syncUserProfile(user);
   const adminClient = createAdminClient();
 
   const [
@@ -32,7 +30,6 @@ async function MyPageContent({ user, profile }: { user: AuthUser; profile: any }
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
       .limit(1),
-    profileSync,
   ]);
 
   let favorites = initialFavoritesQuery.data;
@@ -66,7 +63,6 @@ async function MyPageContent({ user, profile }: { user: AuthUser; profile: any }
 }
 
 export default async function MyPage() {
-  const supabase = await createClient();
   const user = await requireMemberPage();
   if (!user) redirect('/login');
 

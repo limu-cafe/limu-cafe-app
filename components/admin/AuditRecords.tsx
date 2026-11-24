@@ -2,7 +2,7 @@
 import {useState} from 'react';
 import Link from 'next/link';
 import ObjectWorkspace,{useObjectSelection} from './ObjectWorkspace';
-const targets:Record<string,(id:string)=>string>={order:id=>'/admin/orders/'+id,orders:id=>'/admin/orders/'+id,item:id=>'/admin/items?item='+id,items:id=>'/admin/items?item='+id,user:id=>'/admin/users?user='+id,users:id=>'/admin/users?user='+id,purchase_run:id=>'/admin/reimbursements?run='+id,cashbox_entry:id=>'/admin/cashbox?view=ledger&entry='+id};
+const targets:Record<string,(id:string)=>string>={order:id=>'/admin/orders/'+id,orders:id=>'/admin/orders/'+id,item:id=>'/admin/items?item='+id,items:id=>'/admin/items?item='+id,user:id=>'/admin/users?user='+id,users:id=>'/admin/users?user='+id,purchase_run:id=>'/admin/reimbursements?run='+id,stocktake:id=>'/admin/stock?view=history&record='+id,stock_intake:id=>'/admin/items?collection=deliveries&intake='+id,stock_batch:id=>'/admin/items?collection=deliveries&delivery='+id,reimbursement_batch:id=>'/admin/reimbursements?state=pending&receipt='+id,cashbox_entry:id=>'/admin/cashbox?view=ledger&entry='+id};
 export default function AuditRecords({logs}:{logs:any[]}){
  const [id,select]=useObjectSelection('log'),[search,setSearch]=useState('');const selected=logs.find(log=>log.id===id);
  const targetLink=selected&&Object.prototype.hasOwnProperty.call(targets,selected.target_type)?targets[selected.target_type]:null;

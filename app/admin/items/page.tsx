@@ -22,5 +22,5 @@ export default async function AdminItemsPage() {
   if (categoriesQuery.error) throw categoriesQuery.error;
   const items = sortItemsByDisplayOrder((itemsQuery.data ?? []) as Item[], displayOrder.itemIds);
   return <ItemsClient items={items} categories={categoriesQuery.data ?? []}
-    orderEditor={<ItemOrderEditor items={items} revision={displayOrder.revision} available={displayOrder.available} verified={!session.error} />} />;
+    orderEditor={<ItemOrderEditor items={items.map(({ id, name, is_available, category }) => ({ id, name, is_available, category }))} revision={displayOrder.revision} available={displayOrder.available} verified={!session.error} />} />;
 }

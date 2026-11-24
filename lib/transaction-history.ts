@@ -6,6 +6,7 @@ type TransactionRow = {
 type QueryResult = {
   data: unknown;
   error: unknown;
+  count?: number | null;
 };
 
 type PendingPageQuery = (from: number, to: number) => PromiseLike<QueryResult>;
@@ -23,13 +24,21 @@ async function readAllPendingRows<T>(query: PendingPageQuery): Promise<T[]> {
   let offset = 0;
 
   while (true) {
-    const page = await readRows<T>(query(offset, offset + PENDING_PAGE_SIZE - 1));
+    const result = await query(offset, offset + PENDING_PAGE_SIZE - 1);
+    if (result.error) throw result.error;
+    const page = (result.data ?? []) as T[];
     if (page.length === 0) return rows;
     rows.push(...page);
+    // An exact server count can avoid a second request just to discover an empty page.
+    // Without a count, keep paging even when the server applies a smaller row cap.
+    if (typeof result.count === 'number' && rows.length >= result.count) return rows;
     // Advance by the returned size so a lower server row cap cannot skip rows.
     offset += page.length;
   }
 }
+
+// Shared bounded-page reader for complete actionable collections and selectors.
+export { readAllPendingRows as fetchAllRows };
 
 // Keep the history window small without hiding older actionable transactions.
 export async function fetchRecentAndPendingRows<T extends TransactionRow>(params: {

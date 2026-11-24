@@ -85,16 +85,16 @@ async function fetchOrdersWithSelect(
   filter: TransactionFilter
 ) {
   const supabase = createAdminClient();
-  const queryOrders = () =>
-    filter.apply(supabase.from('orders').select(select)).order('created_at', { ascending: false }).order('id', { ascending: false });
+  const queryOrders = (withCount = false) =>
+    filter.apply(supabase.from('orders').select(select, withCount ? { count: 'exact' } : undefined)).order('created_at', { ascending: false }).order('id', { ascending: false });
 
   const orders = await fetchRecentAndPendingRows<OrderFetchRow>({
     recent: filter.recent(queryOrders()),
     pending: [
       (from, to) =>
-        queryOrders().eq('payment_method', 'cash').eq('payment_status', 'pending').range(from, to),
+        queryOrders(true).eq('payment_method', 'cash').eq('payment_status', 'pending').range(from, to),
       (from, to) => {
-        let query = queryOrders().eq('payment_method', 'deferred').eq('payment_status', 'completed');
+        let query = queryOrders(true).eq('payment_method', 'deferred').eq('payment_status', 'completed');
         if (options.deferredMethod) {
           query = query.or('deferred_settlement_method.is.null,deferred_settlement_method.eq.cash');
         }
@@ -141,10 +141,11 @@ async function fetchOrders(filter: TransactionFilter) {
 async function fetchUserChoices(supabase: any) {
   const users: { id: string; name: string }[] = [];
   while (true) {
-    const { data, error } = await supabase.from('users').select('id, name').order('name').order('id').range(users.length, users.length + 199);
+    const { data, error, count } = await supabase.from('users').select('id, name', { count: 'exact' }).order('name').order('id').range(users.length, users.length + 199);
     if (error) throw error;
     if (!data?.length) return users;
     users.push(...data);
+    if (typeof count === 'number' && users.length >= count) return users;
   }
 }
 
@@ -153,16 +154,16 @@ export default async function AdminTransactionsPage({ searchParams: pendingSearc
   const filter = new TransactionFilter((await pendingSearch) ?? {});
   const supabase = createAdminClient();
 
-  const queryCharges = () =>
+  const queryCharges = (withCount = false) =>
     filter.apply(supabase
       .from('charge_requests')
-      .select('id, user_id, amount, method, status, note, created_at, approved_at, settled_at, settlement_source, user:users!charge_requests_user_id_fkey(id, name, avatar_url)'))
+      .select('id, user_id, amount, method, status, note, created_at, approved_at, settled_at, settlement_source, user:users!charge_requests_user_id_fkey(id, name, avatar_url)', withCount ? { count: 'exact' } : undefined))
       .order('created_at', { ascending: false })
       .order('id', { ascending: false });
-  const querySubscriptionPayments = () =>
+  const querySubscriptionPayments = (withCount = false) =>
     filter.apply(supabase
       .from('subscription_payments')
-      .select('id, user_id, user_subscription_id, amount, payment_method, payment_status, points_used, balance_used, cash_due_amount, billing_period_start_at, billing_period_end_at, created_at, user:users!subscription_payments_user_id_fkey(id, name, avatar_url), subscription_product:subscription_products!subscription_payments_subscription_product_id_fkey(id, name, english_name), user_subscription:user_subscriptions!subscription_payments_user_subscription_id_fkey(status)'))
+      .select('id, user_id, user_subscription_id, amount, payment_method, payment_status, points_used, balance_used, cash_due_amount, billing_period_start_at, billing_period_end_at, created_at, user:users!subscription_payments_user_id_fkey(id, name, avatar_url), subscription_product:subscription_products!subscription_payments_subscription_product_id_fkey(id, name, english_name), user_subscription:user_subscriptions!subscription_payments_user_subscription_id_fkey(status)', withCount ? { count: 'exact' } : undefined))
       .order('created_at', { ascending: false })
       .order('id', { ascending: false });
 
@@ -172,9 +173,9 @@ export default async function AdminTransactionsPage({ searchParams: pendingSearc
       fetchRecentAndPendingRows<ChargeFetchRow>({
         recent: filter.recent(queryCharges()),
         pending: [
-          (from, to) => queryCharges().eq('status', 'pending').range(from, to),
+          (from, to) => queryCharges(true).eq('status', 'pending').range(from, to),
           (from, to) =>
-            queryCharges().eq('method', 'cash').eq('status', 'approved').is('settled_at', null).range(from, to),
+            queryCharges(true).eq('method', 'cash').eq('status', 'approved').is('settled_at', null).range(from, to),
         ],
       }),
       filter.recent(filter.apply(supabase
@@ -186,7 +187,7 @@ export default async function AdminTransactionsPage({ searchParams: pendingSearc
       fetchRecentAndPendingRows<SubscriptionPaymentFetchRow>({
         recent: filter.recent(querySubscriptionPayments()),
         pending: [
-          (from, to) => querySubscriptionPayments().eq('payment_status', 'pending_cash_settlement').range(from, to),
+          (from, to) => querySubscriptionPayments(true).eq('payment_status', 'pending_cash_settlement').range(from, to),
         ],
       }),
       fetchUserChoices(supabase),
