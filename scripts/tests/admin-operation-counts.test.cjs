@@ -58,10 +58,19 @@ test('handover acknowledgement is immediately available but any selection change
   await h.click('¥100の精算を記録'); assert.equal(h.calls.length,0);
 });
 
-test('all-order shortcut opens review once, excludes other users and paid rows, and does not bypass payment confirmation', async () => {
+test('unpaid orders begin collapsed and preserve their safe, scoped review when toggled', async () => {
   const order=(id,extra={})=>({id:uuid(id),user_id:user.id,total_amount:130,points_used:30,payment_method:'deferred',payment_status:'completed',created_at:'2026-11-20',accounting_ready:true,order_items:[],...extra});
   const h=fixture('components/admin/OrderBalanceCollection.tsx',{user,orders:[order(20),order(21),order(22,{user_id:uuid(2)}),order(23,{settled_at:'2026-11-20'})],returnTo:'/admin/transactions'});
+  const toggle = () => h.all().find(node => node.type === 'button' && node.props['aria-controls'] === `unpaid-orders-${user.id}`);
+  assert.equal(toggle().props['aria-expanded'], false);
+  assert.match(text(toggle()), /利用者Aの未精算注文2件¥200/);
+  assert.equal(h.all().some(node => text(node) === '全2件の残高精算を確認'), false);
+  toggle().props.onClick();
+  assert.equal(toggle().props['aria-expanded'], true);
   await h.click('全2件の残高精算を確認');
+  toggle().props.onClick();
+  assert.equal(h.all().some(node => node.props['aria-label'] === '選択した注文の残高精算'), false);
+  toggle().props.onClick();
   assert.ok(text(h.render()).includes('選択した2件を残高から精算'));
   assert.equal(h.button('2件・¥200を残高から精算する').props.disabled,true);
   assert.equal(h.calls.length,0);

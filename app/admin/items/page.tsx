@@ -1,7 +1,6 @@
 import { requireAdminPage } from '@/lib/admin-page-session';
 import { createAdminClient } from '@/lib/supabase/server';
 import ItemsClient from './ItemsClient';
-import ItemOrderEditor from './ItemOrderEditor';
 import { loadItemDisplayOrder } from '@/lib/item-order-server';
 import { sortItemsByDisplayOrder } from '@/lib/item-order';
 import { requireVerifiedAdminSession } from '@/lib/admin-session';
@@ -22,5 +21,5 @@ export default async function AdminItemsPage() {
   if (categoriesQuery.error) throw categoriesQuery.error;
   const items = sortItemsByDisplayOrder((itemsQuery.data ?? []) as Item[], displayOrder.itemIds);
   return <ItemsClient items={items} categories={categoriesQuery.data ?? []}
-    orderEditor={<ItemOrderEditor items={items.map(({ id, name, is_available, category }) => ({ id, name, is_available, category }))} revision={displayOrder.revision} available={displayOrder.available} verified={!session.error} />} />;
+    orderSettings={{ revision: displayOrder.revision, available: displayOrder.available, verified: !session.error }} />;
 }

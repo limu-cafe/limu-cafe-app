@@ -57,7 +57,7 @@ export default async function AdminReimbursementsPage({searchParams: pendingSear
   ).slice(0, 20);
 
   return (
-    <ReimbursementsClient initialDraft={emptyIntake('personal_advance')}
+    <ReimbursementsClient initialDraft={emptyIntake()}
       items={(items ?? []) as Array<{ id: string; name: string; category?: { name?: string; icon?: string } | null }>}
       purchaseRuns={purchaseRunData}
       miscExamples={miscExamples}

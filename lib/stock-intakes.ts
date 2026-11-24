@@ -33,8 +33,8 @@ export type PurchaseDraft={id:string;lines:PurchaseLineDraft[];scope:'both'|'sto
 export type IntakeDraft={purchases:PurchaseDraft[]};
 export const emptyIntakeLine=(itemId=''):PurchaseDraft['lines'][number]=>({id:crypto.randomUUID(),itemId,quantity:'1',amount:'',price:{mode:'total',unit:'',total:''}});
 export const isBlankIntakeLine=(r:PurchaseDraft['lines'][number])=>!r.kind&&!r.itemId&&!linePriceValue({pricing:'lines'},r).trim()&&!r.amount.trim()&&!(r.price?.unit.trim()||r.price?.total.trim())&&(!r.quantity.trim()||readIntegerInput(r.quantity)===1);
-export const emptyPurchase=(source:PurchaseDraft['source']='cashbox'):PurchaseDraft=>({id:crypto.randomUUID(),lines:[emptyIntakeLine()],scope:'both',pricing:'lines',linePricing:'lines',total:'',adjustment:'',vendor:'',purchasedOn:'',receivedOn:'',source,otherPayer:false,payer:'',note:''});
-export const emptyIntake=(source:PurchaseDraft['source']='cashbox',itemId=''):IntakeDraft=>({purchases:[{...emptyPurchase(source),lines:[emptyIntakeLine(itemId)]}]});
+export const emptyPurchase=(source:PurchaseDraft['source']='personal_advance'):PurchaseDraft=>({id:crypto.randomUUID(),lines:[emptyIntakeLine()],scope:'both',pricing:'lines',linePricing:'lines',total:'',adjustment:'',vendor:'',purchasedOn:'',receivedOn:'',source,otherPayer:false,payer:'',note:''});
+export const emptyIntake=(source?:PurchaseDraft['source'],itemId=''):IntakeDraft=>({purchases:[{...emptyPurchase(source),lines:[emptyIntakeLine(itemId)]}]});
 export const intakeLineAmount=lineSubtotal;
 export {linePrice,linePriceValue,changeLinePrice,purchaseQuantity};
 

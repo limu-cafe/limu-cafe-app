@@ -42,6 +42,7 @@ const orders=Array.from({length:5},(_,i)=>({id:`00000000-0000-4000-8000-${String
 const confirmation='本人に確認し、選択したすべての注文の現金をまだ受け取っていないことを確認しました';
 test('select all reviews five orders and the net total; returning preserves the same selection without submitting',async()=>{
  const h=fixture('components/admin/OrderBalanceCollection.tsx',{user,orders,returnTo:'/admin/transactions'});
+ await h.click('架空の利用者の未精算注文5件¥650');
  h.change('架空の利用者の未精算注文をすべて選択',true);assert.ok(h.all().some(n=>text(n).includes('5件選択 · 合計¥650')));
  await h.click('選択した注文を残高から精算');assert.ok(h.all().some(n=>text(n).includes('¥350')));assert.equal(h.calls.length,0);
  assert.equal(h.button('5件・¥650を残高から精算する').props.disabled,true);
@@ -49,6 +50,7 @@ test('select all reviews five orders and the net total; returning preserves the 
 });
 test('uncertain response retries use the same operation ID and submit exactly one batch request per click',async()=>{
  const h=fixture('components/admin/OrderBalanceCollection.tsx',{user,orders,returnTo:'/admin/transactions'});
+ await h.click('架空の利用者の未精算注文5件¥650');
  h.change('架空の利用者の未精算注文をすべて選択',true);await h.click('選択した注文を残高から精算');h.change('一括精算の理由','本人から依頼');h.change(confirmation,true);h.setOk(false);
  const b=h.button('5件・¥650を残高から精算する');b.props.onClick();b.props.onClick();await flush();assert.equal(h.calls.length,1);assert.equal(h.refreshes(),0);
  await h.click('5件・¥650を残高から精算する');assert.equal(h.calls.length,2);assert.equal(h.calls[0].body.operation_id,h.calls[1].body.operation_id);assert.equal(h.calls[1].body.orders.length,5);
@@ -57,5 +59,6 @@ test('uncertain response retries use the same operation ID and submit exactly on
 test('another person and already paid orders never enter select-all; insufficient balance prevents execution',async()=>{
  const other={...orders[0],id:'other',user_id:'another'};const paid={...orders[0],id:'paid',settled_at:'2026-10-19'};
  const h=fixture('components/admin/OrderBalanceCollection.tsx',{user:{...user,balance:100},orders:[orders[0],other,paid],returnTo:'/admin/transactions'});
+ await h.click('架空の利用者の未精算注文1件¥130');
  h.change('架空の利用者の未精算注文をすべて選択',true);await h.click('選択した注文を残高から精算');assert.ok(h.all().some(n=>text(n).includes('選択した1件')));assert.equal(h.button('1件・¥130を残高から精算する').props.disabled,true);assert.equal(h.calls.length,0);
 });
