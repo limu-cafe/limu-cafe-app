@@ -27,7 +27,7 @@ export default function AdminSidebar({ notifications = {}, status = 'ready' }: {
 
   return (
     <aside className="h-full max-h-dvh w-72 shrink-0 overflow-y-auto border-r border-gray-800 bg-gray-950">
-      <div className="border-b border-gray-800 px-5 py-5">
+      <div className="border-b border-gray-800 px-5 py-4">
         <div className="flex items-center gap-3">
           <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/10 text-xl">
             ☕
@@ -40,9 +40,9 @@ export default function AdminSidebar({ notifications = {}, status = 'ready' }: {
       </div>
 
       {status !== 'ready' && <p role="status" className="px-5 py-2 text-xs text-gray-400">{status === 'loading' ? '件数を読み込み中…' : '件数を取得できませんでした'}</p>}
-      <nav className="space-y-6 px-4 py-5">
+      <nav aria-label="管理画面" className="space-y-3 px-3 py-3">
         {sections.map((section) => (
-          <section key={section.label} className="space-y-2">
+          <section key={section.label} className="space-y-1">
             <p className="px-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-500">
               {section.label}
             </p>
@@ -59,7 +59,7 @@ export default function AdminSidebar({ notifications = {}, status = 'ready' }: {
                     href={item.href}
                     prefetch={false}
                     aria-current={active ? 'page' : undefined}
-                    className={`flex items-center justify-between rounded-2xl px-3 py-3 text-sm transition-colors ${
+                    className={`flex items-center justify-between rounded-xl px-3 py-2 text-sm transition-colors ${
                       active
                         ? 'bg-white text-gray-950'
                         : 'text-gray-300 hover:bg-gray-900 hover:text-white'
@@ -86,17 +86,17 @@ export default function AdminSidebar({ notifications = {}, status = 'ready' }: {
         ))}
       </nav>
 
-      <div className="space-y-2 border-t border-gray-800 px-4 py-4">
+      <div className="space-y-1 border-t border-gray-800 px-3 py-2">
         <Link
           href="/"
-          className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-sm text-gray-400 transition-colors hover:bg-gray-900 hover:text-white"
+          className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-sm text-gray-400 transition-colors hover:bg-gray-900 hover:text-white"
         >
           <ArrowLeft size={16} />
           ユーザー画面へ戻る
         </Link>
         <button
           onClick={handleLogout}
-          className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-sm text-gray-400 transition-colors hover:bg-gray-900 hover:text-white"
+          className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-sm text-gray-400 transition-colors hover:bg-gray-900 hover:text-white"
         >
           <LogOut size={16} />
           管理者ログアウト

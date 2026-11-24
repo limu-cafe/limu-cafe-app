@@ -136,7 +136,7 @@ export default function PointsClient({
 
   if(searchParams.get('user')&&selectedUser)return <div className="mx-auto max-w-2xl space-y-5"><Link href={'/admin/users?user='+selectedUser.id+'&view=points'} className="text-sm text-sky-300 underline">この利用者のポイントへ戻る →</Link><h1 className="text-2xl font-bold text-white">{selectedUser.name}のポイント</h1><UserPointAdjustment key={selectedUser.id} user={selectedUser}/></div>;
   return <div className="mx-auto max-w-5xl space-y-5"><header><h1 className="text-2xl font-bold text-white">ポイント制度</h1><p className="mt-1 text-sm text-gray-400">全体の付与ルールとキャンペーンを管理します。個人の調整は利用者の詳細で行います。</p></header><ObjectDetailNavigation value={view} onChange={setView} options={[{id:'policy',label:'付与ルール'},{id:'campaigns',label:'キャンペーン'},{id:'history',label:'付与履歴'}]}/>
-    {view==='policy'&&<section className="max-w-2xl space-y-5 rounded-xl border border-gray-800 bg-gray-900 p-5"><h2 className="font-semibold text-white">基本付与ルール</h2><p className="text-lg text-white">{formatPointRule(settings)}</p><p className="text-sm text-gray-400">{settings.is_enabled?'有効':'停止中'} · 現在の倍率 {currentMultiplier}x · {activeCampaign?.name??'通常時'}</p><p className="text-sm text-gray-400">即時キャンペーン {campaigns.filter(campaign=>campaign.apply_immediately&&campaign.is_enabled).length}件</p><details><summary className="cursor-pointer text-sm text-sky-300">付与ルールを編集</summary><div className="mt-4">        <section className="rounded-2xl border border-gray-800 bg-gray-900 p-5 space-y-4">
+    {view==='policy'&&<section className="max-w-2xl space-y-5 rounded-xl border border-gray-800 bg-gray-900 p-5"><h2 className="font-semibold text-white">基本付与ルール</h2><p className="text-lg text-white">{formatPointRule(settings)}</p><p className="text-sm text-gray-400">{settings.is_enabled?'有効':'停止中'} · 現在の倍率 {currentMultiplier}x · {activeCampaign?.name??'通常時'}</p><p className="text-sm text-gray-400">即時キャンペーン {campaigns.filter(campaign=>campaign.apply_immediately&&campaign.is_enabled).length}件</p><div className="mt-4">        <section className="rounded-2xl border border-gray-800 bg-gray-900 p-5 space-y-4">
           <div>
             <h2 className="text-lg font-semibold text-white">基本付与率</h2>
             <p className="mt-1 text-sm text-gray-400">購入利用レートは 1pt = 1円 固定です。</p>
@@ -199,7 +199,7 @@ export default function PointsClient({
           >
             {loading === 'settings' ? '保存中...' : '付与率を保存'}
           </button>
-        </section></div></details></section>}
+        </section></div></section>}
     {view==='campaigns'&&<div className="space-y-4"><button type="button" onClick={()=>setCreating(value=>!value)} className="rounded-lg bg-white px-4 py-2 text-sm text-gray-950">{creating?'追加を閉じる':'キャンペーンを追加'}</button>{creating&&<div className="max-w-2xl">        <section className="rounded-2xl border border-gray-800 bg-gray-900 p-5 space-y-4">
           <div>
             <h2 className="text-lg font-semibold text-white">キャンペーン追加</h2>

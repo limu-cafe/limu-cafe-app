@@ -18,7 +18,7 @@ export async function syncUserProfile(authUser: any) {
   };
 
   const { data: existing, error: readError } = await adminClient.from('users')
-    .select('id, slack_user_id, slack_workspace_id, name, avatar_url, email, is_active, is_approved').eq('id', authUser.id).maybeSingle();
+    .select('id, slack_user_id, slack_workspace_id, name, avatar_url, email, is_active, is_approved, balance').eq('id', authUser.id).maybeSingle();
   if (readError) {
     console.error('failed to read user profile', readError);
     throw new Error('Profile unavailable');
@@ -27,7 +27,7 @@ export async function syncUserProfile(authUser: any) {
     // Preserve the established new-member policy. Never upsert approval/role over an existing user.
     const { error } = await adminClient.from('users').insert({ ...payload, is_approved: true, role: 'member' });
     if (error && error.code !== '23505') throw new Error('Profile creation failed');
-    const { data: created, error: createReadError } = await adminClient.from('users').select('id, is_active, is_approved').eq('id', authUser.id).maybeSingle();
+    const { data: created, error: createReadError } = await adminClient.from('users').select('id, is_active, is_approved, balance').eq('id', authUser.id).maybeSingle();
     if (createReadError || !created) throw new Error('Profile unavailable');
     return { ...payload, ...created };
   }

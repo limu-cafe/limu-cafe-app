@@ -21,7 +21,7 @@ function load(file, mocks = {}, globals = {}) {
       if (name === 'react') return { cache: (fn) => { let result; return () => result ??= fn(); } };
       throw new Error(`Unexpected import: ${name}`);
     };
-    vm.runInNewContext(source, { module, exports: module.exports, require: localRequire, console, URL, TextEncoder, crypto: require('node:crypto').webcrypto, process: { env: { ALLOWED_SLACK_WORKSPACE_ID: 'team' } }, ...globals }, { filename });
+    vm.runInNewContext(source, { module, exports: module.exports, require: localRequire, console, URL, URLSearchParams, TextEncoder, crypto: require('node:crypto').webcrypto, process: { env: { ALLOWED_SLACK_WORKSPACE_ID: 'team' } }, ...globals }, { filename });
     return module.exports;
   }
   return compile(path.join(root, file));
