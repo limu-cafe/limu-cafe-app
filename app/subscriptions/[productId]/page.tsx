@@ -1,8 +1,7 @@
 import { requireMemberPage } from '@/lib/member-session';
 import { notFound, redirect } from 'next/navigation';
 import UserLayout from '@/components/layout/UserLayout';
-import { createAdminClient, createClient } from '@/lib/supabase/server';
-import { syncUserProfile } from '@/lib/supabase/sync-user';
+import { createAdminClient } from '@/lib/supabase/server';
 import SubscriptionDetailClient from './SubscriptionDetailClient';
 
 export const dynamic = 'force-dynamic';
@@ -13,14 +12,11 @@ export default async function SubscriptionDetailPage({
   params: Promise<{ productId: string }>;
 }) {
   const params = await pendingParams;
-  const supabase = await createClient();
   const user = await requireMemberPage();
 
   if (!user) {
     redirect('/login');
   }
-
-  await syncUserProfile(user);
 
   const adminSupabase = createAdminClient();
   const [{ data: profile }, { data: product }, { data: subscriptions }] = await Promise.all([

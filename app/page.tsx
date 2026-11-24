@@ -1,14 +1,12 @@
-import { requireMemberPage } from '@/lib/member-session';
+import { requireMemberPageSession } from '@/lib/member-session';
 import UserLayout from '@/components/layout/UserLayout';
-import { createAdminClient, createClient } from '@/lib/supabase/server';
-import { syncUserProfile } from '@/lib/supabase/sync-user';
+import { createAdminClient } from '@/lib/supabase/server';
 import { unstable_noStore as noStore } from 'next/cache';
 import { redirect } from 'next/navigation';
 import type { Item, Category } from '@/types';
 import ItemListClient from './ItemListClient';
 import { Suspense } from 'react';
 import DeferredDataPlaceholder from '@/components/user/DeferredDataPlaceholder';
-import type { User as AuthUser } from '@supabase/supabase-js';
 import { loadItemDisplayOrder } from '@/lib/item-order-server';
 import { sortItemsByDisplayOrder } from '@/lib/item-order';
 import {
@@ -18,8 +16,7 @@ import {
   normalizeItem,
 } from '@/lib/item-select';
 
-async function HomeContent({ userId, authUser }: { userId: string; authUser: AuthUser }) {
-  const profileSync = syncUserProfile(authUser);
+async function HomeContent({ userId }: { userId: string }) {
   const adminClient = createAdminClient();
 
   const [
@@ -39,7 +36,6 @@ async function HomeContent({ userId, authUser }: { userId: string; authUser: Aut
       .order('sort_order'),
     adminClient.from('favorite_items').select('item_id').eq('user_id', userId),
     loadItemDisplayOrder(adminClient),
-    profileSync,
   ]);
 
   let items = initialItemsQuery.data;
@@ -78,19 +74,18 @@ async function HomeContent({ userId, authUser }: { userId: string; authUser: Aut
 
 export default async function HomePage() {
   noStore();
-  const supabase = await createClient();
-  const user = await requireMemberPage();
+  const { user, profile } = await requireMemberPageSession();
   if (!user) redirect('/login');
   const layoutUser = {
     id: user.id,
     name: user.user_metadata?.full_name ?? user.user_metadata?.name ?? user.email ?? 'LIMU Member',
-    balance: null,
+    balance: profile.balance ?? null,
   };
 
   return (
     <UserLayout initialUser={layoutUser}>
       <Suspense fallback={<DeferredDataPlaceholder blocks={4} titleWidthClassName="w-44" />}>
-        <HomeContent userId={user.id} authUser={user} />
+        <HomeContent userId={user.id} />
       </Suspense>
     </UserLayout>
   );

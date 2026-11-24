@@ -310,8 +310,8 @@ export default function TransactionsClient({
       <form action="/admin/transactions" className="flex flex-wrap items-center gap-3 rounded-2xl border border-gray-800 bg-gray-900 p-4">
         {pendingOnly && <input type="hidden" name="state" value="pending"/>}
         <label htmlFor="transaction-user" className="text-sm text-gray-300">ユーザー</label>
-        <select key={selectedUserId ?? 'all'} id="transaction-user" name="user" defaultValue={selectedUserId ?? ''} className="max-w-full rounded-xl border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white"><option value="">全員</option>{people.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}{selectedUserId && !people.some((person) => person.id === selectedUserId) && <option value={selectedUserId}>選択中のユーザー</option>}</select>
-        <button className="rounded-xl bg-white px-4 py-2 text-sm text-gray-950">絞り込む</button>
+        <select key={selectedUserId ?? 'all'} id="transaction-user" name="user" defaultValue={selectedUserId ?? ''} onChange={event => event.currentTarget.form?.requestSubmit()} className="max-w-full rounded-xl border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white"><option value="">全員</option>{people.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}{selectedUserId && !people.some((person) => person.id === selectedUserId) && <option value={selectedUserId}>選択中のユーザー</option>}</select>
+        <noscript><button className="rounded-xl bg-white px-4 py-2 text-sm text-gray-950">絞り込む</button></noscript>
         {selectedUserId && <Link prefetch={false} href="/admin/transactions" className="text-sm text-gray-300 underline">全員に戻す</Link>}
         <p className="w-full text-xs text-gray-400">{selectedUserId ? '選択したユーザーの取引を表示中。' : '全員の取引を表示中。'}未処理の取引は期間に関係なく表示します。</p>
       </form>

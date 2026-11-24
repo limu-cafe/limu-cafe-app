@@ -208,8 +208,8 @@ export interface PurchaseRunItem {
   item_id: string;
   item_name: string;
   quantity: number;
-  unit_price: number;
-  subtotal: number;
+  unit_price: number | null;
+  subtotal: number | null;
   created_at: string;
 }
 

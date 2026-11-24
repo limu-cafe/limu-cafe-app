@@ -42,7 +42,10 @@ export default function AdminShell({ sidebar, children }: { sidebar: ReactNode; 
         {sidebar}
       </div>
     </div>}
-    <main id="admin-content" className="min-w-0 flex-1 overflow-y-auto pt-14 lg:pt-0">
+    <main id="admin-content" onFocusCapture={event => {
+      const input = event.target;
+      if (input instanceof HTMLInputElement && (input.type === 'number' || input.inputMode === 'numeric')) input.select();
+    }} className="min-w-0 flex-1 overflow-y-auto pt-14 lg:pt-0">
       <div className="mx-auto max-w-7xl p-4 sm:p-6"><AdminLocation/>{children}</div>
     </main>
   </div>;
